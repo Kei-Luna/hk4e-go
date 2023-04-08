@@ -167,7 +167,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 					Z: float64(motionInfo.Pos.Z),
 				})
 				// 场景区域触发器检测
-				g.SceneRegionTriggerCheck(player, scene, player.Pos, &model.Vector{
+				g.SceneRegionTriggerCheck(player, player.Pos, &model.Vector{
 					X: float64(motionInfo.Pos.X),
 					Y: float64(motionInfo.Pos.Y),
 					Z: float64(motionInfo.Pos.Z),

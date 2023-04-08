@@ -523,27 +523,33 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	}
 	entity.lifeState = constant.LIFE_STATE_DEAD
 	ntf := &proto.LifeStateChangeNotify{
-		EntityId:        entity.id,
-		LifeState:       uint32(entity.lifeState),
+		EntityId:        entity.GetId(),
+		LifeState:       uint32(entity.GetLifeState()),
 		DieType:         dieType,
-		MoveReliableSeq: entity.lastMoveReliableSeq,
+		MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 	}
 	g.SendToWorldA(scene.world, cmd.LifeStateChangeNotify, 0, ntf)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.id})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()})
 	// 删除实体
 	scene.DestroyEntity(entity.GetId())
-	group := scene.GetGroupById(entity.groupId)
+	group := scene.GetGroupById(entity.GetGroupId())
 	if group == nil {
 		return
 	}
+
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	dbSceneGroup := dbScene.GetSceneGroupById(entity.GetGroupId())
+	dbSceneGroup.AddKill(entity.GetConfigId())
+
 	group.DestroyEntity(entity.GetId())
 	// 怪物死亡触发器检测
 	if entity.GetEntityType() == constant.ENTITY_TYPE_MONSTER {
-		g.MonsterDieTriggerCheck(player, entity.GetGroupId(), group)
+		g.MonsterDieTriggerCheck(player, group)
 	}
 }
 
-// ChangeGadgetState 改变物件实体状态
+// ChangeGadgetState 改变物件状态
 func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state uint32) {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
@@ -568,6 +574,21 @@ func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state ui
 		IsEnableInteract: true,
 	}
 	g.SendMsg(cmd.GadgetStateNotify, player.PlayerID, player.ClientSeq, ntf)
+
+	groupId := entity.GetGroupId()
+	group := scene.GetGroupById(groupId)
+	if group == nil {
+		logger.Error("group not exist, groupId: %v, uid: %v", groupId, player.PlayerID)
+		return
+	}
+
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	dbSceneGroup.ChangeGadgetState(entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
+
+	// 物件状态变更触发器检测
+	g.GadgetStateChangeTriggerCheck(player, group, entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
 }
 
 // GetVisionEntity 获取某位置视野内的全部实体
@@ -614,12 +635,31 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 		logger.Error("invalid init suite id: %v, uid: %v", initSuiteId, player.PlayerID)
 		return
 	}
-	scene.AddGroupSuite(uint32(groupConfig.Id), uint8(initSuiteId))
+	g.AddSceneGroupSuiteCore(player, scene, uint32(groupConfig.Id), uint8(initSuiteId))
 	ntf := &proto.GroupSuiteNotify{
 		GroupMap: make(map[uint32]uint32),
 	}
 	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
 	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerID, player.ClientSeq, ntf)
+
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupConfig.Id))
+	for _, variable := range groupConfig.VariableMap {
+		exist := dbSceneGroup.CheckVariableExist(variable.Name)
+		if exist && variable.NoRefresh {
+			continue
+		}
+		dbSceneGroup.SetVariable(variable.Name, variable.Value)
+	}
+
+	group := scene.GetGroupById(uint32(groupConfig.Id))
+	if group == nil {
+		logger.Error("group not exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerID)
+		return
+	}
+	// 场景组加载触发器检测
+	g.GroupLoadTriggerCheck(player, group)
 }
 
 // RemoveSceneGroup 卸载场景组
@@ -637,6 +677,152 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 	}
 	ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
 	g.SendMsg(cmd.GroupUnloadNotify, player.PlayerID, player.ClientSeq, ntf)
+}
+
+func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupId uint32, suiteId uint8) {
+	groupConfig := gdconf.GetSceneGroup(int32(groupId))
+	if groupConfig == nil {
+		logger.Error("get scene group config is nil, groupId: %v", groupId)
+		return
+	}
+	suiteConfig, exist := groupConfig.SuiteMap[int32(suiteId)]
+	if !exist {
+		logger.Error("invalid suiteId: %v", suiteId)
+		return
+	}
+	entityMap := make(map[uint32]*Entity)
+	for _, monsterConfigId := range suiteConfig.MonsterConfigIdList {
+		monsterConfig, exist := groupConfig.MonsterMap[monsterConfigId]
+		if !exist {
+			logger.Error("monster config not exist, monsterConfigId: %v", monsterConfigId)
+			continue
+		}
+		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), monsterConfig)
+		if entityId == 0 {
+			continue
+		}
+		entity := scene.GetEntity(entityId)
+		entityMap[entityId] = entity
+	}
+	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
+		gadgetConfig, exist := groupConfig.GadgetMap[gadgetConfigId]
+		if !exist {
+			logger.Error("gadget config not exist, gadgetConfigId: %v", gadgetConfigId)
+			continue
+		}
+		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), gadgetConfig)
+		if entityId == 0 {
+			continue
+		}
+		entity := scene.GetEntity(entityId)
+		entityMap[entityId] = entity
+	}
+	for _, npcConfig := range groupConfig.NpcMap {
+		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), npcConfig)
+		if entityId == 0 {
+			continue
+		}
+		entity := scene.GetEntity(entityId)
+		entityMap[entityId] = entity
+	}
+	scene.AddGroupSuite(groupId, suiteId, entityMap)
+	group := scene.GetGroupById(groupId)
+	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
+		// 物件创建触发器检测
+		GAME.GadgetCreateTriggerCheck(player, group, uint32(gadgetConfigId))
+	}
+}
+
+// CreateConfigEntity 创建配置表里的实体
+func (g *Game) CreateConfigEntity(player *model.Player, scene *Scene, groupId uint32, entityConfig any) uint32 {
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	switch entityConfig.(type) {
+	case *gdconf.Monster:
+		monster := entityConfig.(*gdconf.Monster)
+		isKill := dbSceneGroup.CheckIsKill(uint32(monster.ConfigId))
+		if isKill {
+			return 0
+		}
+		return scene.CreateEntityMonster(
+			&model.Vector{X: float64(monster.Pos.X), Y: float64(monster.Pos.Y), Z: float64(monster.Pos.Z)},
+			&model.Vector{X: float64(monster.Rot.X), Y: float64(monster.Rot.Y), Z: float64(monster.Rot.Z)},
+			uint32(monster.MonsterId), uint8(monster.Level), getTempFightPropMap(), uint32(monster.ConfigId), groupId,
+		)
+	case *gdconf.Npc:
+		npc := entityConfig.(*gdconf.Npc)
+		return scene.CreateEntityNpc(
+			&model.Vector{X: float64(npc.Pos.X), Y: float64(npc.Pos.Y), Z: float64(npc.Pos.Z)},
+			&model.Vector{X: float64(npc.Rot.X), Y: float64(npc.Rot.Y), Z: float64(npc.Rot.Z)},
+			uint32(npc.NpcId), 0, 0, 0, uint32(npc.ConfigId), groupId,
+		)
+	case *gdconf.Gadget:
+		gadget := entityConfig.(*gdconf.Gadget)
+		isKill := dbSceneGroup.CheckIsKill(uint32(gadget.ConfigId))
+		if isKill {
+			return 0
+		}
+		// 70500000并不是实际的物件id 根据节点类型对应采集物配置表
+		if gadget.PointType != 0 && gadget.GadgetId == 70500000 {
+			gatherDataConfig := gdconf.GetGatherDataByPointType(gadget.PointType)
+			if gatherDataConfig == nil {
+				return 0
+			}
+			return scene.CreateEntityGadgetNormal(
+				&model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
+				&model.Vector{X: float64(gadget.Rot.X), Y: float64(gadget.Rot.Y), Z: float64(gadget.Rot.Z)},
+				uint32(gatherDataConfig.GadgetId),
+				uint32(constant.GADGET_STATE_DEFAULT),
+				&GadgetNormalEntity{
+					isDrop: false,
+					itemId: uint32(gatherDataConfig.ItemId),
+					count:  1,
+				},
+				uint32(gadget.ConfigId),
+				groupId,
+			)
+		} else {
+			state := uint8(gadget.State)
+			exist := dbSceneGroup.CheckGadgetExist(uint32(gadget.ConfigId))
+			if exist {
+				state = dbSceneGroup.GetGadgetState(uint32(gadget.ConfigId))
+			}
+			return scene.CreateEntityGadgetNormal(
+				&model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
+				&model.Vector{X: float64(gadget.Rot.X), Y: float64(gadget.Rot.Y), Z: float64(gadget.Rot.Z)},
+				uint32(gadget.GadgetId),
+				uint32(state),
+				new(GadgetNormalEntity),
+				uint32(gadget.ConfigId),
+				groupId,
+			)
+		}
+	default:
+		return 0
+	}
+}
+
+// TODO 临时写死
+func getTempFightPropMap() map[uint32]float32 {
+	fpm := map[uint32]float32{
+		constant.FIGHT_PROP_BASE_ATTACK:       float32(50.0),
+		constant.FIGHT_PROP_CUR_ATTACK:        float32(50.0),
+		constant.FIGHT_PROP_BASE_DEFENSE:      float32(500.0),
+		constant.FIGHT_PROP_CUR_DEFENSE:       float32(500.0),
+		constant.FIGHT_PROP_BASE_HP:           float32(50.0),
+		constant.FIGHT_PROP_CUR_HP:            float32(50.0),
+		constant.FIGHT_PROP_MAX_HP:            float32(50.0),
+		constant.FIGHT_PROP_PHYSICAL_SUB_HURT: float32(0.1),
+		constant.FIGHT_PROP_ICE_SUB_HURT:      float32(0.1),
+		constant.FIGHT_PROP_FIRE_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_ELEC_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_WIND_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_ROCK_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_GRASS_SUB_HURT:    float32(0.1),
+		constant.FIGHT_PROP_WATER_SUB_HURT:    float32(0.1),
+	}
+	return fpm
 }
 
 // TODO Group和Suite的初始化和加载卸载逻辑还没完全理清 所以现在这里写得略答辩
@@ -657,7 +843,7 @@ func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId 
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	scene.AddGroupSuite(uint32(groupConfig.Id), suiteId)
+	g.AddSceneGroupSuiteCore(player, scene, groupId, suiteId)
 	ntf := &proto.GroupSuiteNotify{
 		GroupMap: make(map[uint32]uint32),
 	}
@@ -672,7 +858,7 @@ func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId 
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, entityIdList, true, false)
 }
 
-func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, monsterConfigId uint32) {
+func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, configId uint32) {
 	groupConfig := gdconf.GetSceneGroup(int32(groupId))
 	if groupConfig == nil {
 		logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
@@ -690,12 +876,39 @@ func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, monste
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	entityId := scene.AddGroupSuiteMonster(groupId, uint8(initSuiteId), monsterConfigId)
+	group, exist := scene.groupMap[groupId]
+	if !exist {
+		logger.Error("group not exist, groupId: %v", groupId)
+		return
+	}
+	suite, exist := group.suiteMap[uint8(initSuiteId)]
+	if !exist {
+		logger.Error("suite not exist, suiteId: %v", initSuiteId)
+		return
+	}
+	monsterConfig, exist := groupConfig.MonsterMap[int32(configId)]
+	if !exist {
+		logger.Error("monster config not exist, configId: %v", configId)
+		return
+	}
+	entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), monsterConfig)
+	if entityId == 0 {
+		return
+	}
+	entity := scene.GetEntity(entityId)
+	suite.entityMap[entityId] = entity
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
 }
 
-// CreateDropGadget 创建掉落物的物件实体
-func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetId, itemId, count uint32) {
+// CreateGadget 创建物件实体
+func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId uint32, normalEntity *GadgetNormalEntity) {
+	if normalEntity == nil {
+		normalEntity = &GadgetNormalEntity{
+			isDrop: false,
+			itemId: 0,
+			count:  0,
+		}
+	}
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
 		logger.Error("get world is nil, worldId: %v", player.WorldId)
@@ -708,14 +921,19 @@ func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetI
 		pos, rot,
 		gadgetId,
 		constant.GADGET_STATE_DEFAULT,
-		&GadgetNormalEntity{
-			isDrop: true,
-			itemId: itemId,
-			count:  count,
-		},
+		normalEntity,
 		0, 0,
 	)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
+}
+
+// CreateDropGadget 创建掉落物的物件实体
+func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetId, itemId, count uint32) {
+	g.CreateGadget(player, pos, gadgetId, &GadgetNormalEntity{
+		isDrop: true,
+		itemId: itemId,
+		count:  count,
+	})
 }
 
 // 打包相关封装函数

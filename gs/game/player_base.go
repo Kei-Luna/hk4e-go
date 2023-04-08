@@ -19,7 +19,7 @@ func (g *Game) HandlePlayerExpAdd(userId uint32) {
 	for {
 		playerLevel := player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL]
 		// 读取玩家等级配置表
-		playerLevelConfig := gdconf.GetPlayerLevelDataById(int32(playerLevel))
+		playerLevelConfig := gdconf.GetPlayerLevelDataByLevel(int32(playerLevel))
 		if playerLevelConfig == nil {
 			// 获取不到代表已经到达最大等级
 			break

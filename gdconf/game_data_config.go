@@ -65,6 +65,7 @@ type GameDataConfig struct {
 	ChestDropDataMap        map[string]map[int32]*ChestDropData     // 宝箱掉落
 	DungeonDataMap          map[int32]*DungeonData                  // 地牢
 	GadgetDataMap           map[int32]*GadgetData                   // 物件
+	RefreshPolicyDataMap    map[int32]*RefreshPolicyData            // 刷新策略
 	GCGCharDataMap          map[int32]*GCGCharData                  // 七圣召唤角色卡牌
 	GCGSkillDataMap         map[int32]*GCGSkillData                 // 七圣召唤卡牌技能
 	GachaDropGroupDataMap   map[int32]*GachaDropGroupData           // 卡池掉落组 临时的
@@ -166,6 +167,7 @@ func (g *GameDataConfig) load() {
 	g.loadChestDropData()        // 宝箱掉落
 	g.loadDungeonData()          // 地牢
 	g.loadGadgetData()           // 物件
+	g.loadRefreshPolicyData()    // 刷新策略
 	g.loadGCGCharData()          // 七圣召唤角色卡牌
 	g.loadGCGSkillData()         // 七圣召唤卡牌技能
 	g.loadGachaDropGroupData()   // 卡池掉落组 临时的
@@ -291,6 +293,9 @@ func initLuaState(luaState *lua.LState) {
 	luaState.SetField(eventType, "EVENT_ANY_MONSTER_DIE", lua.LNumber(constant.LUA_EVENT_ANY_MONSTER_DIE))
 	luaState.SetField(eventType, "EVENT_ANY_MONSTER_LIVE", lua.LNumber(constant.LUA_EVENT_ANY_MONSTER_LIVE))
 	luaState.SetField(eventType, "EVENT_QUEST_START", lua.LNumber(constant.LUA_EVENT_QUEST_START))
+	luaState.SetField(eventType, "EVENT_GADGET_CREATE", lua.LNumber(constant.LUA_EVENT_GADGET_CREATE))
+	luaState.SetField(eventType, "EVENT_GADGET_STATE_CHANGE", lua.LNumber(constant.LUA_EVENT_GADGET_STATE_CHANGE))
+	luaState.SetField(eventType, "EVENT_GROUP_LOAD", lua.LNumber(constant.LUA_EVENT_GROUP_LOAD))
 
 	entityType := luaState.NewTable()
 	luaState.SetGlobal("EntityType", entityType)

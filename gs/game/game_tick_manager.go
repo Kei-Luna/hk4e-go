@@ -119,10 +119,10 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 	case UserTimerActionTest:
 		logger.Debug("UserTimerActionTest, data: %v, uid: %v", data[0], userId)
 	case UserTimerActionLuaCreateMonster:
-		logger.Debug("UserTimerActionLuaCreateMonster, groupId: %v, monsterConfigId: %v, uid: %v", data[0], data[1], userId)
+		logger.Debug("UserTimerActionLuaCreateMonster, groupId: %v, configId: %v, uid: %v", data[0], data[1], userId)
 		groupId := data[0].(uint32)
-		monsterConfigId := data[1].(uint32)
-		GAME.AddSceneGroupMonster(player, groupId, monsterConfigId)
+		configId := data[1].(uint32)
+		GAME.AddSceneGroupMonster(player, groupId, configId)
 	}
 }
 

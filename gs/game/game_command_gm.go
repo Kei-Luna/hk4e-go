@@ -26,21 +26,24 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId, dungeonId uint32, posX, posY, 
 		return
 	}
 	dungeonPointId := uint32(0)
-	end := false
-	for _, pointData := range gdconf.GetScenePointMapBySceneId(int32(sceneId)) {
-		if end {
-			break
-		}
-		for _, v := range pointData.DungeonIds {
-			if uint32(v) == dungeonId {
-				dungeonPointId = uint32(pointData.Id)
-				end = true
+	if dungeonId != 0 {
+		end := false
+		for _, pointData := range gdconf.GetScenePointMapBySceneId(int32(sceneId)) {
+			if end {
 				break
 			}
+			for _, v := range pointData.DungeonIds {
+				if uint32(v) == dungeonId {
+					dungeonPointId = uint32(pointData.Id)
+					end = true
+					break
+				}
+			}
 		}
-	}
-	if dungeonPointId == 0 {
-		return
+		if dungeonPointId == 0 {
+			logger.Error("dungeon pointid not found, dungeonId: %v, uid: %v", dungeonId, userId)
+			return
+		}
 	}
 	GAME.TeleportPlayer(
 		player,
@@ -230,17 +233,17 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 }
 
 // GMCreateGadget 在玩家附近创建物件实体
-func (g *GMCmd) GMCreateGadget(userId uint32, posX, posY, posZ float64, gadgetId, itemId, count uint32) {
+func (g *GMCmd) GMCreateGadget(userId uint32, posX, posY, posZ float64, gadgetId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	GAME.CreateDropGadget(player, &model.Vector{
+	GAME.CreateGadget(player, &model.Vector{
 		X: posX,
 		Y: posY,
 		Z: posZ,
-	}, gadgetId, itemId, count)
+	}, gadgetId, nil)
 }
 
 // 系统级GM指令

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"hk4e/common/constant"
-	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
@@ -304,80 +303,19 @@ func (s *Scene) GetEntity(entityId uint32) *Entity {
 	return s.entityMap[entityId]
 }
 
-func (s *Scene) AddGroupSuiteMonster(groupId uint32, suiteId uint8, monsterConfigId uint32) uint32 {
-	group, exist := s.groupMap[groupId]
-	if !exist {
-		logger.Error("group not exist, groupId: %v", groupId)
-		return 0
-	}
-	suite, exist := group.suiteMap[suiteId]
-	if !exist {
-		logger.Error("suite not exist, suiteId: %v", suiteId)
-		return 0
-	}
-	groupConfig := gdconf.GetSceneGroup(int32(groupId))
-	if groupConfig == nil {
-		logger.Error("get scene group config is nil, groupId: %v", groupId)
-		return 0
-	}
-	monsterConfig, exist := groupConfig.MonsterMap[int32(monsterConfigId)]
-	if !exist {
-		logger.Error("monster config not exist, monsterConfigId: %v", monsterConfigId)
-		return 0
-	}
-	entityId := s.createConfigEntity(uint32(groupConfig.Id), monsterConfig)
-	entity := s.GetEntity(entityId)
-	suite.entityMap[entityId] = entity
-	return entityId
-}
-
-func (s *Scene) AddGroupSuite(groupId uint32, suiteId uint8) {
-	groupConfig := gdconf.GetSceneGroup(int32(groupId))
-	if groupConfig == nil {
-		logger.Error("get scene group config is nil, groupId: %v", groupId)
-		return
-	}
-	suiteConfig, exist := groupConfig.SuiteMap[int32(suiteId)]
-	if !exist {
-		logger.Error("invalid suiteId: %v", suiteId)
-		return
-	}
-	suite := &Suite{
-		entityMap: make(map[uint32]*Entity),
-	}
-	for _, monsterConfigId := range suiteConfig.MonsterConfigIdList {
-		monsterConfig, exist := groupConfig.MonsterMap[monsterConfigId]
-		if !exist {
-			logger.Error("monster config not exist, monsterConfigId: %v", monsterConfigId)
-			continue
-		}
-		entityId := s.createConfigEntity(uint32(groupConfig.Id), monsterConfig)
-		entity := s.GetEntity(entityId)
-		suite.entityMap[entityId] = entity
-	}
-	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
-		gadgetConfig, exist := groupConfig.GadgetMap[gadgetConfigId]
-		if !exist {
-			logger.Error("gadget config not exist, gadgetConfigId: %v", gadgetConfigId)
-			continue
-		}
-		entityId := s.createConfigEntity(uint32(groupConfig.Id), gadgetConfig)
-		entity := s.GetEntity(entityId)
-		suite.entityMap[entityId] = entity
-	}
-	for _, npcConfig := range groupConfig.NpcMap {
-		entityId := s.createConfigEntity(uint32(groupConfig.Id), npcConfig)
-		entity := s.GetEntity(entityId)
-		suite.entityMap[entityId] = entity
-	}
+func (s *Scene) AddGroupSuite(groupId uint32, suiteId uint8, entityMap map[uint32]*Entity) {
 	group, exist := s.groupMap[groupId]
 	if !exist {
 		group = &Group{
+			id:       groupId,
 			suiteMap: make(map[uint8]*Suite),
 		}
 		s.groupMap[groupId] = group
 	}
-	group.suiteMap[suiteId] = suite
+	group.suiteMap[suiteId] = &Suite{
+		id:        suiteId,
+		entityMap: entityMap,
+	}
 }
 
 func (s *Scene) RemoveGroupSuite(groupId uint32, suiteId uint8) {
@@ -397,88 +335,18 @@ func (s *Scene) RemoveGroupSuite(groupId uint32, suiteId uint8) {
 	delete(group.suiteMap, suiteId)
 }
 
-// 创建配置表里的实体
-func (s *Scene) createConfigEntity(groupId uint32, entityConfig any) uint32 {
-	switch entityConfig.(type) {
-	case *gdconf.Monster:
-		monster := entityConfig.(*gdconf.Monster)
-		return s.CreateEntityMonster(
-			&model.Vector{X: float64(monster.Pos.X), Y: float64(monster.Pos.Y), Z: float64(monster.Pos.Z)},
-			&model.Vector{X: float64(monster.Rot.X), Y: float64(monster.Rot.Y), Z: float64(monster.Rot.Z)},
-			uint32(monster.MonsterId), uint8(monster.Level), getTempFightPropMap(), uint32(monster.ConfigId), groupId,
-		)
-	case *gdconf.Npc:
-		npc := entityConfig.(*gdconf.Npc)
-		return s.CreateEntityNpc(
-			&model.Vector{X: float64(npc.Pos.X), Y: float64(npc.Pos.Y), Z: float64(npc.Pos.Z)},
-			&model.Vector{X: float64(npc.Rot.X), Y: float64(npc.Rot.Y), Z: float64(npc.Rot.Z)},
-			uint32(npc.NpcId), 0, 0, 0, uint32(npc.ConfigId), groupId,
-		)
-	case *gdconf.Gadget:
-		gadget := entityConfig.(*gdconf.Gadget)
-		// 70500000并不是实际的物件id 根据节点类型对应采集物配置表
-		if gadget.PointType != 0 && gadget.GadgetId == 70500000 {
-			gatherDataConfig := gdconf.GetGatherDataByPointType(gadget.PointType)
-			if gatherDataConfig == nil {
-				return 0
-			}
-			return s.CreateEntityGadgetNormal(
-				&model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
-				&model.Vector{X: float64(gadget.Rot.X), Y: float64(gadget.Rot.Y), Z: float64(gadget.Rot.Z)},
-				uint32(gatherDataConfig.GadgetId),
-				uint32(constant.GADGET_STATE_DEFAULT),
-				&GadgetNormalEntity{
-					isDrop: false,
-					itemId: uint32(gatherDataConfig.ItemId),
-					count:  1,
-				},
-				uint32(gadget.ConfigId),
-				groupId,
-			)
-		} else {
-			return s.CreateEntityGadgetNormal(
-				&model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
-				&model.Vector{X: float64(gadget.Rot.X), Y: float64(gadget.Rot.Y), Z: float64(gadget.Rot.Z)},
-				uint32(gadget.GadgetId),
-				uint32(gadget.State),
-				new(GadgetNormalEntity),
-				uint32(gadget.ConfigId),
-				groupId,
-			)
-		}
-	default:
-		return 0
-	}
-}
-
-// TODO 临时写死
-func getTempFightPropMap() map[uint32]float32 {
-	fpm := map[uint32]float32{
-		constant.FIGHT_PROP_BASE_ATTACK:       float32(50.0),
-		constant.FIGHT_PROP_CUR_ATTACK:        float32(50.0),
-		constant.FIGHT_PROP_BASE_DEFENSE:      float32(500.0),
-		constant.FIGHT_PROP_CUR_DEFENSE:       float32(500.0),
-		constant.FIGHT_PROP_BASE_HP:           float32(50.0),
-		constant.FIGHT_PROP_CUR_HP:            float32(50.0),
-		constant.FIGHT_PROP_MAX_HP:            float32(50.0),
-		constant.FIGHT_PROP_PHYSICAL_SUB_HURT: float32(0.1),
-		constant.FIGHT_PROP_ICE_SUB_HURT:      float32(0.1),
-		constant.FIGHT_PROP_FIRE_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_ELEC_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_WIND_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_ROCK_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_GRASS_SUB_HURT:    float32(0.1),
-		constant.FIGHT_PROP_WATER_SUB_HURT:    float32(0.1),
-	}
-	return fpm
-}
-
 type Group struct {
+	id       uint32
 	suiteMap map[uint8]*Suite
 }
 
 type Suite struct {
+	id        uint8
 	entityMap map[uint32]*Entity
+}
+
+func (g *Group) GetId() uint32 {
+	return g.id
 }
 
 func (g *Group) GetSuiteById(suiteId uint8) *Suite {
@@ -519,6 +387,10 @@ func (g *Group) DestroyEntity(entityId uint32) {
 			}
 		}
 	}
+}
+
+func (s *Suite) GetId() uint8 {
+	return s.id
 }
 
 func (s *Suite) GetEntityById(entityId uint32) *Entity {

@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	MoveVectorCacheNum = 10
-	MaxMoveSpeed       = 50.0
-	JumpDistance       = 100.0
-	PointDistance      = 10.0
+	MoveVectorCacheNum        = 10
+	MaxMoveSpeed              = 100.0
+	JumpDistance              = 500.0
+	PointDistance             = 10.0
+	AttackCountLimitEntitySec = 10
 )
 
 type MoveVector struct {
@@ -28,9 +29,15 @@ type MoveVector struct {
 	time int64
 }
 
+type AttackEntity struct {
+	attackStartTime uint64
+	attackCount     uint32
+}
+
 type AnticheatContext struct {
-	sceneId        uint32
-	moveVectorList []*MoveVector
+	sceneId         uint32
+	moveVectorList  []*MoveVector
+	attackEntityMap map[uint32]*AttackEntity
 }
 
 func (a *AnticheatContext) Move(pos *proto.Vector) bool {
@@ -98,10 +105,33 @@ func (a *AnticheatContext) GetMoveSpeed() float32 {
 	return avgMoveSpeed
 }
 
+func (a *AnticheatContext) Attack(defEntityId uint32) bool {
+	now := uint64(time.Now().UnixMilli())
+	attackEntity, exist := a.attackEntityMap[defEntityId]
+	if !exist {
+		attackEntity = &AttackEntity{
+			attackStartTime: now,
+			attackCount:     0,
+		}
+		a.attackEntityMap[defEntityId] = attackEntity
+	}
+	attackEntity.attackCount++
+	if attackEntity.attackCount > AttackCountLimitEntitySec {
+		if now-attackEntity.attackStartTime < 1000 {
+			return false
+		} else {
+			attackEntity.attackStartTime = now
+			attackEntity.attackCount = 0
+		}
+	}
+	return true
+}
+
 func NewAnticheatContext() *AnticheatContext {
 	r := &AnticheatContext{
-		sceneId:        0,
-		moveVectorList: make([]*MoveVector, 0),
+		sceneId:         0,
+		moveVectorList:  make([]*MoveVector, 0),
+		attackEntityMap: make(map[uint32]*AttackEntity),
 	}
 	return r
 }
@@ -167,6 +197,11 @@ func (h *Handle) run() {
 
 func (h *Handle) CombatInvocationsNotify(userId uint32, gateAppId string, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.CombatInvocationsNotify)
+	ctx := h.GetPlayerAcCtx(userId)
+	if ctx == nil {
+		logger.Error("get player anticheat context is nil, uid: %v", userId)
+		return
+	}
 	for _, entry := range req.InvokeList {
 		switch entry.ArgumentType {
 		case proto.CombatTypeArgument_ENTITY_MOVE:
@@ -179,18 +214,20 @@ func (h *Handle) CombatInvocationsNotify(userId uint32, gateAppId string, payloa
 			if GetEntityType(entityMoveInfo.EntityId) != constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
-			if entityMoveInfo.MotionInfo.Pos == nil {
+			if entityMoveInfo.MotionInfo == nil {
+				continue
+			}
+			motionInfo := entityMoveInfo.MotionInfo
+			if motionInfo.Pos == nil {
 				continue
 			}
 			// 玩家超速移动检测
-			ctx := h.GetPlayerAcCtx(userId)
-			if ctx == nil {
-				logger.Error("get player anticheat context is nil, uid: %v", userId)
+			if ctx.sceneId != 3 {
 				continue
 			}
-			ok := ctx.Move(entityMoveInfo.MotionInfo.Pos)
+			ok := ctx.Move(motionInfo.Pos)
 			if !ok {
-				logger.Warn("player move jump, pos: %v, uid: %v", entityMoveInfo.MotionInfo.Pos, userId)
+				logger.Warn("player move jump, pos: %v, uid: %v", motionInfo.Pos, userId)
 				h.KickPlayer(userId, gateAppId)
 				continue
 			}
@@ -198,6 +235,26 @@ func (h *Handle) CombatInvocationsNotify(userId uint32, gateAppId string, payloa
 			logger.Debug("player move speed: %v, uid: %v", moveSpeed, userId)
 			if moveSpeed > MaxMoveSpeed {
 				logger.Warn("player move overspeed, speed: %v, uid: %v", moveSpeed, userId)
+				h.KickPlayer(userId, gateAppId)
+				continue
+			}
+		case proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT:
+			evtBeingHitInfo := new(proto.EvtBeingHitInfo)
+			err := pb.Unmarshal(entry.CombatData, evtBeingHitInfo)
+			if err != nil {
+				logger.Error("parse EvtBeingHitInfo error: %v, uid: %v", err, userId)
+				continue
+			}
+			attackResult := evtBeingHitInfo.AttackResult
+			if attackResult == nil {
+				continue
+			}
+			if GetEntityType(attackResult.DefenseId) != constant.ENTITY_TYPE_MONSTER {
+				continue
+			}
+			ok := ctx.Attack(attackResult.DefenseId)
+			if !ok {
+				logger.Warn("player attack monster feq too high, uid: %v", userId)
 				h.KickPlayer(userId, gateAppId)
 				continue
 			}

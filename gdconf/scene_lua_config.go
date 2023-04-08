@@ -54,21 +54,22 @@ type BlockRange struct {
 }
 
 type Group struct {
-	Id              int32               `json:"id"`
-	RefreshId       int32               `json:"refresh_id"`
-	Area            int32               `json:"area"`
-	Pos             *Vector             `json:"pos"`
-	DynamicLoad     bool                `json:"dynamic_load"`
-	IsReplaceable   *Replaceable        `json:"is_replaceable"`
-	MonsterMap      map[int32]*Monster  `json:"-"` // 怪物
-	NpcMap          map[int32]*Npc      `json:"-"` // NPC
-	GadgetMap       map[int32]*Gadget   `json:"-"` // 物件
-	RegionMap       map[int32]*Region   `json:"-"` // 区域
-	TriggerMap      map[string]*Trigger `json:"-"` // 触发器
-	GroupInitConfig *GroupInitConfig    `json:"-"` // 初始化配置
-	SuiteMap        map[int32]*Suite    `json:"-"` // 小组配置
-	LuaStr          string              `json:"-"` // LUA原始字符串缓存
-	LuaState        *lua.LState         `json:"-"` // LUA虚拟机实例
+	Id              int32                `json:"id"`
+	RefreshId       int32                `json:"refresh_id"`
+	Area            int32                `json:"area"`
+	Pos             *Vector              `json:"pos"`
+	DynamicLoad     bool                 `json:"dynamic_load"`
+	IsReplaceable   *Replaceable         `json:"is_replaceable"`
+	MonsterMap      map[int32]*Monster   `json:"-"` // 怪物
+	NpcMap          map[int32]*Npc       `json:"-"` // NPC
+	GadgetMap       map[int32]*Gadget    `json:"-"` // 物件
+	RegionMap       map[int32]*Region    `json:"-"` // 区域
+	TriggerMap      map[string]*Trigger  `json:"-"` // 触发器
+	VariableMap     map[string]*Variable `json:"-"` // 变量
+	GroupInitConfig *GroupInitConfig     `json:"-"` // 初始化配置
+	SuiteMap        map[int32]*Suite     `json:"-"` // 小组配置
+	LuaStr          string               `json:"-"` // LUA原始字符串缓存
+	LuaState        *lua.LState          `json:"-"` // LUA虚拟机实例
 }
 
 type GroupInitConfig struct {
@@ -91,6 +92,7 @@ type Monster struct {
 	Level     int32   `json:"level"`
 	AreaId    int32   `json:"area_id"`
 	DropTag   string  `json:"drop_tag"` // 关联MonsterDropData表
+	IsOneOff  bool    `json:"isOneoff"`
 }
 
 type Npc struct {
@@ -112,6 +114,8 @@ type Gadget struct {
 	State       int32   `json:"state"`
 	VisionLevel int32   `json:"vision_level"`
 	DropTag     string  `json:"drop_tag"`
+	IsOneOff    bool    `json:"isOneoff"`
+	ChestDropId int32   `json:"chest_drop_id"`
 }
 
 type Region struct {
@@ -133,6 +137,13 @@ type Trigger struct {
 	Condition    string `json:"condition"`
 	Action       string `json:"action"`
 	TriggerCount int32  `json:"trigger_count"`
+}
+
+type Variable struct {
+	ConfigId  int32  `json:"config_id"`
+	Name      string `json:"name"`
+	Value     int32  `json:"value"`
+	NoRefresh bool   `json:"no_refresh"`
 }
 
 type SuiteLuaTable struct {
@@ -230,6 +241,18 @@ func (g *GameDataConfig) loadGroup(group *Group, block *Block, sceneId int32, bl
 	group.TriggerMap = make(map[string]*Trigger)
 	for _, trigger := range triggerList {
 		group.TriggerMap[trigger.Name] = trigger
+	}
+	// variables
+	variableList := make([]*Variable, 0)
+	ok = getSceneLuaConfigTable[*[]*Variable](luaState, "variables", &variableList)
+	if !ok {
+		logger.Error("get variables object error, sceneId: %v, blockId: %v, groupId: %v", sceneId, blockId, groupId)
+		luaState.Close()
+		return
+	}
+	group.VariableMap = make(map[string]*Variable)
+	for _, variable := range variableList {
+		group.VariableMap[variable.Name] = variable
 	}
 	// suites
 	suiteLuaTableList := make([]*SuiteLuaTable, 0)

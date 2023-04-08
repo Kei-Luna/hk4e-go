@@ -20,7 +20,7 @@ func (g *GameDataConfig) loadPlayerLevelData() {
 	logger.Info("PlayerLevelData count: %v", len(g.PlayerLevelDataMap))
 }
 
-func GetPlayerLevelDataById(level int32) *PlayerLevelData {
+func GetPlayerLevelDataByLevel(level int32) *PlayerLevelData {
 	return CONF.PlayerLevelDataMap[level]
 }
 
