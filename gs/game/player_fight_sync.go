@@ -266,7 +266,7 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 	newGid := aoiManager.GetGidByPos(float32(newPos.X), 0.0, float32(newPos.Z))
 	if oldGid != newGid {
 		// 跨越了block格子
-		logger.Debug("player cross grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
+		logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
 	}
 	// 加载和卸载的group
 	oldNeighborGroupMap := g.GetNeighborGroup(player.SceneId, oldPos)
@@ -294,19 +294,29 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
-	for entityId := range oldVisionEntityMap {
+	for entityId, entity := range oldVisionEntityMap {
 		_, exist := newVisionEntityMap[entityId]
 		if exist {
 			continue
+		}
+		if WORLD_MANAGER.IsBigWorld(world) {
+			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
 		}
 		// 旧有新没有的实体即为消失的
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
 	addEntityIdList := make([]uint32, 0)
-	for entityId := range newVisionEntityMap {
+	for entityId, entity := range newVisionEntityMap {
 		_, exist := oldVisionEntityMap[entityId]
 		if exist {
 			continue
+		}
+		if WORLD_MANAGER.IsBigWorld(world) {
+			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
 		}
 		// 新有旧没有的实体即为出现的
 		addEntityIdList = append(addEntityIdList, entityId)
@@ -317,6 +327,60 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 	}
 	if len(addEntityIdList) > 0 {
 		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+	}
+	if WORLD_MANAGER.IsBigWorld(world) {
+		oldGid := world.bigWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+		newGid := world.bigWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+		if oldGid != newGid {
+			// 玩家跨越了格子
+			logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
+			// 老格子移除玩家 新格子添加玩家
+			activeAvatarId := world.GetPlayerActiveAvatarId(player)
+			activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
+			world.bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), oldGid)
+			world.bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, newGid)
+			oldOtherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+			delEntityIdList := make([]uint32, 0)
+			for _, otherWorldAvatarAny := range oldOtherWorldAvatarMap {
+				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
+				if otherWorldAvatar.GetUid() == player.PlayerID {
+					continue
+				}
+				delEntityIdList = append(delEntityIdList, otherWorldAvatar.GetAvatarEntityId())
+			}
+			// 通知自己 老格子里的其它玩家消失
+			g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+			for otherPlayerId := range oldOtherWorldAvatarMap {
+				if uint32(otherPlayerId) == player.PlayerID {
+					continue
+				}
+				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
+				// 通知老格子里的其它玩家 自己消失
+				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{
+					activeWorldAvatar.GetAvatarEntityId(),
+				})
+			}
+			newOtherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+			addEntityIdList := make([]uint32, 0)
+			for _, otherWorldAvatarAny := range newOtherWorldAvatarMap {
+				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
+				if otherWorldAvatar.GetUid() == player.PlayerID {
+					continue
+				}
+				addEntityIdList = append(addEntityIdList, otherWorldAvatar.GetAvatarEntityId())
+			}
+			// 通知自己 新格子里的其他玩家出现
+			g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+			for otherPlayerId := range newOtherWorldAvatarMap {
+				if uint32(otherPlayerId) == player.PlayerID {
+					continue
+				}
+				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
+				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
+				// 通知新格子里的其他玩家 自己出现
+				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
+			}
+		}
 	}
 }
 
@@ -535,7 +599,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	}
 	scene := world.GetSceneById(player.SceneId)
 	scene.DestroyEntity(req.EntityId)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId}, false, nil)
 }
 
 func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Message) {

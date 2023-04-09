@@ -348,9 +348,12 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 	)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerID, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
 
-	// 仅仅把当前的场上角色的实体消失掉
-	activeAvatarId := world.GetPlayerActiveAvatarId(hostPlayer)
-	g.RemoveSceneEntityNotifyToPlayer(hostPlayer, proto.VisionType_VISION_MISS, []uint32{world.GetPlayerWorldAvatarEntityId(hostPlayer, activeAvatarId)})
+	scene := world.GetSceneById(hostPlayer.SceneId)
+	entityIdList := make([]uint32, 0)
+	for _, entity := range scene.GetAllEntity() {
+		entityIdList = append(entityIdList, entity.GetId())
+	}
+	g.RemoveSceneEntityNotifyToPlayer(hostPlayer, proto.VisionType_VISION_MISS, entityIdList)
 }
 
 func (g *Game) UserLeaveWorld(player *model.Player) bool {
@@ -412,7 +415,7 @@ func (g *Game) UserWorldRemovePlayer(world *World, player *model.Player) {
 		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerID, player.ClientSeq, playerQuitFromMpNotify)
 
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)})
+		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, nil)
 	}
 
 	world.RemovePlayer(player)
@@ -488,7 +491,7 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 	}
 	g.SendMsg(cmd.ScenePlayerInfoNotify, player.PlayerID, player.ClientSeq, scenePlayerInfoNotify)
 
-	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world)
+	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
 	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerID, player.ClientSeq, sceneTeamUpdateNotify)
 
 	syncTeamEntityNotify := &proto.SyncTeamEntityNotify{

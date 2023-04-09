@@ -64,9 +64,16 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		waitEnterPlayerMap:   make(map[uint32]int64),
 		multiplayerTeam:      CreateMultiplayerTeam(),
 		peerList:             make([]*model.Player, 0),
+		bigWorldAoi:          nil,
 	}
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world
+	if w.IsBigWorld(world) {
+		aoiManager := alg.NewAoiManager()
+		aoiManager.SetAoiRange(-8000, 4000, -200, 1000, -5500, 6500)
+		aoiManager.Init3DRectAoiManager(1200, 12, 1200)
+		world.bigWorldAoi = aoiManager
+	}
 	return world
 }
 
@@ -94,15 +101,11 @@ func (w *WorldManager) InitAiWorld(owner *model.Player) {
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
-	return world.id == w.aiWorld.id
-}
-
-func (w *WorldManager) IsRobotWorld(world *World) bool {
 	return world.owner.PlayerID < PlayerBaseUid
 }
 
 func (w *WorldManager) IsBigWorld(world *World) bool {
-	return (world.id == w.aiWorld.id) && (w.aiWorld.owner.PlayerID == BigWorldAiUid)
+	return world.owner.PlayerID == BigWorldAiUid
 }
 
 func (w *WorldManager) GetSceneBlockAoiMap() map[uint32]*alg.AoiManager {
@@ -216,6 +219,7 @@ type World struct {
 	waitEnterPlayerMap   map[uint32]int64              // 进入世界的玩家等待列表 key:uid value:开始时间
 	multiplayerTeam      *MultiplayerTeam              // 多人队伍
 	peerList             []*model.Player               // 玩家编号列表
+	bigWorldAoi          *alg.AoiManager               // 大世界的aoi管理器
 }
 
 func (w *World) GetId() uint32 {
@@ -335,11 +339,7 @@ func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 		activeAvatarId := dbTeam.GetActiveAvatarId()
 		w.SetPlayerLocalTeam(player, []uint32{activeAvatarId})
 	}
-	playerNum := w.GetWorldPlayerNum()
-	if playerNum > 4 {
-		if !WORLD_MANAGER.IsBigWorld(w) {
-			return
-		}
+	if WORLD_MANAGER.IsBigWorld(w) {
 		w.AddMultiplayerTeam(player)
 	} else {
 		w.UpdateMultiplayerTeam()
@@ -362,6 +362,12 @@ func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 	}
 	scene.AddPlayer(player)
 	w.InitPlayerTeamEntityId(player)
+	if WORLD_MANAGER.IsBigWorld(w) {
+		activeAvatarId := w.GetPlayerActiveAvatarId(player)
+		worldAvatar := w.GetPlayerWorldAvatar(player, activeAvatarId)
+		w.bigWorldAoi.AddObjectToGridByPos(int64(player.PlayerID), worldAvatar,
+			float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	}
 }
 
 func (w *World) RemovePlayer(player *model.Player) {
@@ -374,12 +380,10 @@ func (w *World) RemovePlayer(player *model.Player) {
 	delete(w.multiplayerTeam.localTeamMap, player.PlayerID)
 	delete(w.multiplayerTeam.localAvatarIndexMap, player.PlayerID)
 	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerID)
-	playerNum := w.GetWorldPlayerNum()
-	if playerNum > 4 {
-		if !WORLD_MANAGER.IsBigWorld(w) {
-			return
-		}
+	if WORLD_MANAGER.IsBigWorld(w) {
 		w.RemoveMultiplayerTeam(player)
+		w.bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerID),
+			float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	} else {
 		if player.PlayerID != w.owner.PlayerID {
 			w.UpdateMultiplayerTeam()
@@ -663,9 +667,6 @@ func (w *World) copyLocalTeamToWorld(start int, end int, peerId uint32) {
 // 看来还是不能简单的走通用逻辑 需要对大世界场景队伍做特殊处理 欺骗客户端其他玩家仅仅以场景角色实体的形式出现
 
 func (w *World) AddMultiplayerTeam(player *model.Player) {
-	if !WORLD_MANAGER.IsBigWorld(w) {
-		return
-	}
 	localTeam := w.GetPlayerLocalTeam(player)
 	w.multiplayerTeam.worldTeam = append(w.multiplayerTeam.worldTeam, localTeam...)
 }

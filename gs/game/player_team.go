@@ -140,7 +140,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		dbTeam.CurrAvatarIndex = uint8(currAvatarIndex)
 		world.SetPlayerAvatarIndex(player, currAvatarIndex)
 
-		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world)
+		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
 		g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerID, player.ClientSeq, sceneTeamUpdateNotify)
 	}
 
@@ -173,7 +173,7 @@ func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Messag
 	world.UpdateMultiplayerTeam()
 	world.InitPlayerWorldAvatar(player)
 
-	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world)
+	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
 	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerID, player.ClientSeq, sceneTeamUpdateNotify)
 
 	chooseCurAvatarTeamRsp := &proto.ChooseCurAvatarTeamRsp{
@@ -186,7 +186,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	req := payloadMsg.(*proto.ChangeMpTeamAvatarReq)
 	avatarGuidList := req.AvatarGuidList
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
+	if WORLD_MANAGER.IsBigWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
 	}
@@ -215,7 +215,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	world.SetPlayerAvatarIndex(player, newAvatarIndex)
 
 	for _, worldPlayer := range world.GetAllPlayer() {
-		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world)
+		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
 		g.SendMsg(cmd.SceneTeamUpdateNotify, worldPlayer.PlayerID, worldPlayer.ClientSeq, sceneTeamUpdateNotify)
 	}
 
@@ -226,12 +226,15 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	g.SendMsg(cmd.ChangeMpTeamAvatarRsp, player.PlayerID, player.ClientSeq, changeMpTeamAvatarRsp)
 }
 
-func (g *Game) PacketSceneTeamUpdateNotify(world *World) *proto.SceneTeamUpdateNotify {
+func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *proto.SceneTeamUpdateNotify {
 	sceneTeamUpdateNotify := &proto.SceneTeamUpdateNotify{
 		IsInMp: world.GetMultiplayer(),
 	}
 	empty := new(proto.AbilitySyncStateInfo)
 	for _, worldAvatar := range world.GetWorldAvatarList() {
+		if WORLD_MANAGER.IsBigWorld(world) && worldAvatar.uid != player.PlayerID {
+			continue
+		}
 		worldPlayer := USER_MANAGER.GetOnlineUser(worldAvatar.GetUid())
 		if worldPlayer == nil {
 			logger.Error("player is nil, uid: %v", worldAvatar.GetUid())

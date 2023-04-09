@@ -244,23 +244,39 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	activeAvatarEntityId := world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
-	g.AddSceneEntityNotify(player, visionType, []uint32{activeAvatarEntityId}, true, false)
+	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
+	g.AddSceneEntityNotify(player, visionType, []uint32{
+		activeWorldAvatar.GetAvatarEntityId(),
+	}, true, false)
 
 	// 加载附近的group
 	for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
 		g.AddSceneGroup(player, scene, groupConfig)
 	}
 	// 同步客户端视野内的场景实体
-	entityIdList := make([]uint32, 0)
 	visionEntityMap := g.GetVisionEntity(scene, player.Pos)
-	for _, entity := range visionEntityMap {
-		if entity.GetId() == activeAvatarEntityId {
+	entityIdList := make([]uint32, 0)
+	for entityId, entity := range visionEntityMap {
+		if entityId == activeWorldAvatar.GetAvatarEntityId() {
 			continue
 		}
-		entityIdList = append(entityIdList, entity.GetId())
+		if WORLD_MANAGER.IsBigWorld(world) {
+			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
+		}
+		entityIdList = append(entityIdList, entityId)
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
+	if WORLD_MANAGER.IsBigWorld(world) {
+		otherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		entityIdList := make([]uint32, 0)
+		for _, otherWorldAvatarAny := range otherWorldAvatarMap {
+			otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
+			entityIdList = append(entityIdList, otherWorldAvatar.GetAvatarEntityId())
+		}
+		g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
+	}
 
 	sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
 		WeatherAreaId: 0,
@@ -335,7 +351,7 @@ func (g *Game) AddSceneEntityNotifyToPlayer(player *model.Player, visionType pro
 }
 
 // AddSceneEntityNotifyBroadcast 添加的场景实体广播
-func (g *Game) AddSceneEntityNotifyBroadcast(player *model.Player, scene *Scene, visionType proto.VisionType, entityList []*proto.SceneEntityInfo, aec bool) {
+func (g *Game) AddSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityList []*proto.SceneEntityInfo, aec bool, player *model.Player) {
 	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
 		AppearType: visionType,
 		EntityList: entityList,
@@ -362,12 +378,15 @@ func (g *Game) RemoveSceneEntityNotifyToPlayer(player *model.Player, visionType 
 }
 
 // RemoveSceneEntityNotifyBroadcast 移除的场景实体广播
-func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32) {
+func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32, aec bool, player *model.Player) {
 	sceneEntityDisappearNotify := &proto.SceneEntityDisappearNotify{
 		EntityList:    entityIdList,
 		DisappearType: visionType,
 	}
 	for _, scenePlayer := range scene.GetAllPlayer() {
+		if aec && scenePlayer.PlayerID == player.PlayerID {
+			continue
+		}
 		g.SendMsg(cmd.SceneEntityDisappearNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, sceneEntityDisappearNotify)
 		logger.Debug("SceneEntityDisappearNotify, uid: %v, type: %v, len: %v",
 			scenePlayer.PlayerID, sceneEntityDisappearNotify.DisappearType, len(sceneEntityDisappearNotify.EntityList))
@@ -426,7 +445,7 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 			}
 		}
 		if broadcast {
-			g.AddSceneEntityNotifyBroadcast(player, scene, visionType, entityList, aec)
+			g.AddSceneEntityNotifyBroadcast(scene, visionType, entityList, aec, player)
 		} else {
 			g.AddSceneEntityNotifyToPlayer(player, visionType, entityList)
 		}
@@ -529,7 +548,7 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 		MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 	}
 	g.SendToWorldA(scene.world, cmd.LifeStateChangeNotify, 0, ntf)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, false, nil)
 	// 删除实体
 	scene.DestroyEntity(entity.GetId())
 	group := scene.GetGroupById(entity.GetGroupId())

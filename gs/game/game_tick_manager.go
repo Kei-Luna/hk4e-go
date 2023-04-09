@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"hk4e/gdconf"
+	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
@@ -190,33 +191,37 @@ func (t *TickManager) onTickMinute(now int64) {
 	gdconf.LuaStateLruRemove()
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
 		for _, player := range world.GetAllPlayer() {
-			// 随机物品
-			allItemDataConfig := GAME.GetAllItemDataConfig()
-			count := random.GetRandomInt32(0, 4)
-			i := int32(0)
-			for itemId := range allItemDataConfig {
-				num := random.GetRandomInt32(1, 9)
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(num)}}, true, 0)
-				i++
-				if i > count {
-					break
+			if player.SceneLoadState == model.SceneEnterDone {
+				// 随机物品
+				allItemDataConfig := GAME.GetAllItemDataConfig()
+				count := random.GetRandomInt32(0, 4)
+				i := int32(0)
+				for itemId := range allItemDataConfig {
+					num := random.GetRandomInt32(1, 9)
+					GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(num)}}, true, 0)
+					i++
+					if i > count {
+						break
+					}
 				}
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 102, ChangeCount: 30}}, true, 0)
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 201, ChangeCount: 10}}, true, 0)
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 202, ChangeCount: 100}}, true, 0)
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 203, ChangeCount: 10}}, true, 0)
+				// 蓝球粉球
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 223, ChangeCount: 1}}, true, 0)
+				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 224, ChangeCount: 1}}, true, 0)
 			}
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 102, ChangeCount: 30}}, true, 0)
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 201, ChangeCount: 10}}, true, 0)
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 202, ChangeCount: 100}}, true, 0)
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 203, ChangeCount: 10}}, true, 0)
-			// 蓝球粉球
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 223, ChangeCount: 1}}, true, 0)
-			GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 224, ChangeCount: 1}}, true, 0)
 		}
 	}
 }
 
 func (t *TickManager) onTick10Second(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		GAME.SceneTimeNotify(world)
-		GAME.PlayerTimeNotify(world)
+		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
+			GAME.SceneTimeNotify(world)
+			GAME.PlayerTimeNotify(world)
+		}
 	}
 }
 
@@ -227,16 +232,20 @@ func (t *TickManager) onTick5Second(now int64) {
 				GAME.UserDealEnterWorld(world.owner, applyUid, true)
 			}
 		}
-		// 多人世界其他玩家的坐标位置广播
-		GAME.WorldPlayerLocationNotify(world)
-		GAME.ScenePlayerLocationNotify(world)
+		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
+			// 多人世界其他玩家的坐标位置广播
+			GAME.WorldPlayerLocationNotify(world)
+			GAME.ScenePlayerLocationNotify(world)
+		}
 	}
 }
 
 func (t *TickManager) onTickSecond(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		// 世界里所有玩家的网络延迟广播
-		GAME.WorldPlayerRTTNotify(world)
+		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
+			// 世界里所有玩家的网络延迟广播
+			GAME.WorldPlayerRTTNotify(world)
+		}
 	}
 	// // GCG游戏Tick
 	// for _, game := range GCG_MANAGER.gameMap {
@@ -247,10 +256,12 @@ func (t *TickManager) onTickSecond(now int64) {
 func (t *TickManager) onTick200MilliSecond(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
 		for _, player := range world.GetAllPlayer() {
-			// 耐力消耗
-			GAME.SustainStaminaHandler(player)
-			GAME.VehicleRestoreStaminaHandler(player)
-			GAME.DrownBackHandler(player)
+			if player.SceneLoadState == model.SceneEnterDone {
+				// 耐力消耗
+				GAME.SustainStaminaHandler(player)
+				GAME.VehicleRestoreStaminaHandler(player)
+				GAME.DrownBackHandler(player)
+			}
 		}
 	}
 }

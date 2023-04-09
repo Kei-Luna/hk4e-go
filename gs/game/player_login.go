@@ -149,10 +149,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	}
 	g.SendMsg(cmd.PlayerLoginRsp, userId, clientSeq, playerLoginRsp)
 
-	if userId < PlayerBaseUid {
-		return
-	}
-
 	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
 		MsgType: mq.MsgTypeServer,
 		EventId: mq.ServerUserOnlineStateChangeNotify,
@@ -161,6 +157,9 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 			IsOnline: true,
 		},
 	})
+	if userId < PlayerBaseUid {
+		return
+	}
 	atomic.AddInt32(&ONLINE_PLAYER_NUM, 1)
 
 	SELF = nil

@@ -90,10 +90,7 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
 	if r.IsMainGs() {
 		// TODO 测试
-		r.ai.Pos.X -= random.GetRandomFloat64(25.0, 35.0)
-		r.ai.Pos.Y += 1.0
-		r.ai.Pos.Z += random.GetRandomFloat64(25.0, 35.0)
-		for i := 1; i < 3; i++ {
+		for i := 1; i < 100; i++ {
 			uid := 1000000 + uint32(i)
 			avatarId := uint32(0)
 			for _, avatarData := range gdconf.GetAvatarDataMap() {
@@ -108,9 +105,12 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 				AvatarTeamGuidList: []uint64{dbAvatar.AvatarMap[avatarId].Guid},
 				CurAvatarGuid:      dbAvatar.AvatarMap[avatarId].Guid,
 			})
-			robot.Pos.X -= random.GetRandomFloat64(25.0, 35.0)
-			robot.Pos.Y += 1.0
-			robot.Pos.Z += random.GetRandomFloat64(25.0, 35.0)
+			pos := &model.Vector{
+				X: 1800.0 + random.GetRandomFloat64(-100.0, 100.0),
+				Y: 195.0 + random.GetRandomFloat64(0.0, 5.0),
+				Z: -1500.0 + random.GetRandomFloat64(-100.0, 100.0),
+			}
+			robot.Pos = pos
 			r.UserWorldAddPlayer(WORLD_MANAGER.GetAiWorld(), robot)
 		}
 	}
