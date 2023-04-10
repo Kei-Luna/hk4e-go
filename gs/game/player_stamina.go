@@ -392,10 +392,9 @@ func (g *Game) SetVehicleStamina(player *model.Player, vehicleEntity *Entity, st
 // SetPlayerStamina 设置玩家耐力
 func (g *Game) SetPlayerStamina(player *model.Player, stamina uint32) {
 	// 设置玩家的耐力
-	prop := constant.PLAYER_PROP_CUR_PERSIST_STAMINA
-	player.PropertiesMap[prop] = stamina
+	player.PropertiesMap[uint16(constant.PLAYER_PROP_CUR_PERSIST_STAMINA)] = stamina
 	// logger.Debug("player stamina set, stamina: %v", stamina)
-	g.PlayerPropNotify(player, prop)
+	g.PlayerPropNotify(player, uint16(constant.PLAYER_PROP_CUR_PERSIST_STAMINA))
 }
 
 func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint16) {
