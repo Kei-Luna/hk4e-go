@@ -219,7 +219,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 				}
 			}
 		}
-		GAME.SendToWorldA(world, cmd.ScenePlayerLocationNotify, 0, scenePlayerLocationNotify)
+		GAME.SendToSceneA(scene, cmd.ScenePlayerLocationNotify, 0, scenePlayerLocationNotify)
 	}
 }
 

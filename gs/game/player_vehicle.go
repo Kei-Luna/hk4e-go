@@ -120,7 +120,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	}
 	// 删除已创建的载具
 	scene.DestroyEntity(entity.GetId())
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()}, false, nil)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()}, false, 0)
 }
 
 // EnterVehicle 进入载具

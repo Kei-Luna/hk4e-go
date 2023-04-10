@@ -253,9 +253,7 @@ func (g *Game) PlayerChatReq(player *model.Player, payloadMsg pb.Message) {
 		ChannelId: channelId,
 		ChatInfo:  sendChatInfo,
 	}
-	for _, worldPlayer := range world.GetAllPlayer() {
-		g.SendMsg(cmd.PlayerChatNotify, worldPlayer.PlayerID, player.ClientSeq, playerChatNotify)
-	}
+	g.SendToWorldA(world, cmd.PlayerChatNotify, player.ClientSeq, playerChatNotify)
 
 	g.SendMsg(cmd.PlayerChatRsp, player.PlayerID, player.ClientSeq, new(proto.PlayerChatRsp))
 }

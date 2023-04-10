@@ -384,9 +384,15 @@ func ConvClientPbDataToServer(protoObj pb.Message, clientCmdProtoMap *client_pro
 		ntf := protoObj.(*proto.AbilityInvocationsNotify)
 		for _, entry := range ntf.Invokes {
 			switch entry.ArgumentType {
+			case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_CHANGE:
+				serverProtoObj := new(proto.AbilityMetaModifierChange)
+				ConvClientPbDataToServerCore("AbilityMetaModifierChange", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
 			case proto.AbilityInvokeArgument_ABILITY_MIXIN_COST_STAMINA:
 				serverProtoObj := new(proto.AbilityMixinCostStamina)
 				ConvClientPbDataToServerCore("AbilityMixinCostStamina", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
+			case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_DURABILITY_CHANGE:
+				serverProtoObj := new(proto.AbilityMetaModifierDurabilityChange)
+				ConvClientPbDataToServerCore("AbilityMetaModifierDurabilityChange", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
 			}
 		}
 	case *proto.ClientAbilityChangeNotify:
@@ -429,9 +435,15 @@ func ConvServerPbDataToClient(protoObj pb.Message, clientCmdProtoMap *client_pro
 		ntf := protoObj.(*proto.AbilityInvocationsNotify)
 		for _, entry := range ntf.Invokes {
 			switch entry.ArgumentType {
+			case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_CHANGE:
+				serverProtoObj := new(proto.AbilityMetaModifierChange)
+				ConvServerPbDataToClientCore("AbilityMetaModifierChange", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
 			case proto.AbilityInvokeArgument_ABILITY_MIXIN_COST_STAMINA:
 				serverProtoObj := new(proto.AbilityMixinCostStamina)
 				ConvServerPbDataToClientCore("AbilityMixinCostStamina", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
+			case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_DURABILITY_CHANGE:
+				serverProtoObj := new(proto.AbilityMetaModifierDurabilityChange)
+				ConvServerPbDataToClientCore("AbilityMetaModifierDurabilityChange", serverProtoObj, &entry.AbilityData, clientCmdProtoMap)
 			}
 		}
 	case *proto.ClientAbilityChangeNotify:

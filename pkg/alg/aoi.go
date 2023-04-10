@@ -244,6 +244,11 @@ func NewGrid(gid uint32, minX, maxX, minY, maxY, minZ, maxZ int16) (r *Grid) {
 	return r
 }
 
+// GetGid 获取格子id
+func (g *Grid) GetGid() uint32 {
+	return g.gid
+}
+
 // AddObject 向格子中添加一个对象
 func (g *Grid) AddObject(objectId int64, object any) {
 	g.objectMap[objectId] = object

@@ -276,9 +276,7 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 		AvatarGuid: req.AvatarGuid,
 		FlycloakId: req.FlycloakId,
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		g.SendMsg(cmd.AvatarFlycloakChangeNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, avatarFlycloakChangeNotify)
-	}
+	g.SendToSceneA(scene, cmd.AvatarFlycloakChangeNotify, player.ClientSeq, avatarFlycloakChangeNotify)
 
 	avatarWearFlycloakRsp := &proto.AvatarWearFlycloakRsp{
 		AvatarGuid: req.AvatarGuid,
@@ -338,9 +336,7 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 	} else {
 		avatarChangeCostumeNotify.EntityInfo = g.PacketSceneEntityInfoAvatar(scene, player, avatar.AvatarId)
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		g.SendMsg(cmd.AvatarChangeCostumeNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, avatarChangeCostumeNotify)
-	}
+	g.SendToSceneA(scene, cmd.AvatarChangeCostumeNotify, player.ClientSeq, avatarChangeCostumeNotify)
 
 	avatarChangeCostumeRsp := &proto.AvatarChangeCostumeRsp{
 		AvatarGuid: req.AvatarGuid,

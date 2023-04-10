@@ -54,9 +54,7 @@ func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 		DisappearType: proto.VisionType_VISION_REPLACE,
 		EntityList:    []uint32{oldAvatarEntity.GetId()},
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		g.SendMsg(cmd.SceneEntityDisappearNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, sceneEntityDisappearNotify)
-	}
+	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify)
 
 	newAvatarId := world.GetPlayerActiveAvatarId(player)
 	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, newAvatarId)
@@ -65,9 +63,7 @@ func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 		Param:      oldAvatarEntity.GetId(),
 		EntityList: []*proto.SceneEntityInfo{newAvatarEntity},
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		g.SendMsg(cmd.SceneEntityAppearNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, sceneEntityAppearNotify)
-	}
+	g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, player.ClientSeq, sceneEntityAppearNotify)
 
 	changeAvatarRsp := &proto.ChangeAvatarRsp{
 		CurGuid: targetAvatarGuid,
@@ -214,10 +210,8 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	newAvatarIndex := world.GetPlayerAvatarIndexByAvatarId(player, currAvatarId)
 	world.SetPlayerAvatarIndex(player, newAvatarIndex)
 
-	for _, worldPlayer := range world.GetAllPlayer() {
-		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
-		g.SendMsg(cmd.SceneTeamUpdateNotify, worldPlayer.PlayerID, worldPlayer.ClientSeq, sceneTeamUpdateNotify)
-	}
+	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
+	g.SendToWorldA(world, cmd.SceneTeamUpdateNotify, player.ClientSeq, sceneTeamUpdateNotify)
 
 	changeMpTeamAvatarRsp := &proto.ChangeMpTeamAvatarRsp{
 		CurAvatarGuid:  req.CurAvatarGuid,
@@ -278,65 +272,47 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			sceneTeamAvatar.AvatarInfo = g.PacketAvatarInfo(worldPlayerAvatar)
 			sceneTeamAvatar.SceneAvatarInfo = g.PacketSceneAvatarInfo(worldPlayerScene, worldPlayer, worldAvatar.GetAvatarId())
 		}
-		// add AbilityControlBlock
+		// 角色的ability控制块
 		acb := sceneTeamAvatar.AbilityControlBlock
-		embryoId := 0
-		// add avatar abilities
+		abilityId := 0
+		// 默认ability
+		for _, abilityHashCode := range constant.DEFAULT_ABILITY_HASH_CODE {
+			abilityId++
+			ae := &proto.AbilityEmbryo{
+				AbilityId:               uint32(abilityId),
+				AbilityNameHash:         uint32(abilityHashCode),
+				AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
+			}
+			acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
+		}
+		// 角色ability
 		avatarDataConfig := gdconf.GetAvatarDataById(int32(worldAvatar.GetAvatarId()))
 		if avatarDataConfig != nil {
-			for _, abilityId := range avatarDataConfig.AbilityHashCodeList {
-				embryoId++
-				emb := &proto.AbilityEmbryo{
-					AbilityId:               uint32(embryoId),
-					AbilityNameHash:         uint32(abilityId),
-					AbilityOverrideNameHash: uint32(constant.DEFAULT_ABILITY_NAME),
+			for _, abilityHashCode := range avatarDataConfig.AbilityHashCodeList {
+				abilityId++
+				ae := &proto.AbilityEmbryo{
+					AbilityId:               uint32(abilityId),
+					AbilityNameHash:         uint32(abilityHashCode),
+					AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
 				}
-				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, emb)
+				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
 			}
 		}
-		// add default abilities
-		for _, abilityId := range constant.DEFAULT_ABILITY_HASHES {
-			embryoId++
-			emb := &proto.AbilityEmbryo{
-				AbilityId:               uint32(embryoId),
-				AbilityNameHash:         uint32(abilityId),
-				AbilityOverrideNameHash: uint32(constant.DEFAULT_ABILITY_NAME),
-			}
-			acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, emb)
-		}
-		// // add team resonances
-		// for id := range worldPlayer.TeamConfig.TeamResonancesConfig {
-		//	embryoId++
-		//	emb := &proto.AbilityEmbryo{
-		//		AbilityId:               uint32(embryoId),
-		//		AbilityNameHash:         uint32(id),
-		//		AbilityOverrideNameHash: uint32(constant.GameConstantConst.DEFAULT_ABILITY_NAME),
-		//	}
-		//	acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, emb)
-		// }
-		// add skill depot abilities
+		// 技能库ability
 		skillDepot := gdconf.GetAvatarSkillDepotDataById(int32(worldPlayerAvatar.SkillDepotId))
 		if skillDepot != nil && len(skillDepot.AbilityHashCodeList) != 0 {
-			for _, id := range skillDepot.AbilityHashCodeList {
-				embryoId++
-				emb := &proto.AbilityEmbryo{
-					AbilityId:               uint32(embryoId),
-					AbilityNameHash:         uint32(id),
-					AbilityOverrideNameHash: uint32(constant.DEFAULT_ABILITY_NAME),
+			for _, abilityHashCode := range skillDepot.AbilityHashCodeList {
+				abilityId++
+				ae := &proto.AbilityEmbryo{
+					AbilityId:               uint32(abilityId),
+					AbilityNameHash:         uint32(abilityHashCode),
+					AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
 				}
-				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, emb)
+				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
 			}
 		}
-		// add equip abilities
-		for skill := range worldPlayerAvatar.ExtraAbilityEmbryos {
-			embryoId++
-			emb := &proto.AbilityEmbryo{
-				AbilityId:               uint32(embryoId),
-				AbilityNameHash:         uint32(endec.Hk4eAbilityHashCode(skill)),
-				AbilityOverrideNameHash: uint32(constant.DEFAULT_ABILITY_NAME),
-			}
-			acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, emb)
-		}
+		// TODO 队伍ability
+		// TODO 装备ability
 		sceneTeamUpdateNotify.SceneTeamAvatarList = append(sceneTeamUpdateNotify.SceneTeamAvatarList, sceneTeamAvatar)
 	}
 	return sceneTeamUpdateNotify

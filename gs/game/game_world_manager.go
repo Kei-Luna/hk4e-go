@@ -327,6 +327,10 @@ func (w *World) GetWorldPlayerNum() int {
 	return len(w.playerMap)
 }
 
+func (w *World) GetBigWorldAoi() *alg.AoiManager {
+	return w.bigWorldAoi
+}
+
 func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 	w.peerList = append(w.peerList, player)
 	w.playerMap[player.PlayerID] = player
@@ -714,6 +718,9 @@ func (w *World) UpdateMultiplayerTeam() {
 // 世界聊天
 
 func (w *World) AddChat(chatInfo *proto.ChatInfo) {
+	if len(w.chatMsgList) > 100 {
+		w.chatMsgList = w.chatMsgList[1:]
+	}
 	w.chatMsgList = append(w.chatMsgList, chatInfo)
 }
 

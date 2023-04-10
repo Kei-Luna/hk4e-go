@@ -23,30 +23,29 @@ func (p *Player) GetDbAvatar() *DbAvatar {
 }
 
 type Avatar struct {
-	AvatarId            uint32               // 角色id
-	LifeState           uint16               // 存活状态
-	Level               uint8                // 等级
-	Exp                 uint32               // 经验值
-	Promote             uint8                // 突破等阶
-	Satiation           uint32               // 饱食度
-	SatiationPenalty    uint32               // 饱食度溢出
-	CurrHP              float64              // 当前生命值
-	CurrEnergy          float64              // 当前元素能量值
-	FetterList          []uint32             // 资料解锁条目
-	SkillLevelMap       map[uint32]uint32    // 技能等级数据
-	SkillDepotId        uint32               // 技能库id
-	FlyCloak            uint32               // 当前风之翼
-	Costume             uint32               // 当前衣装
-	BornTime            int64                // 获得时间
-	FetterLevel         uint8                // 好感度等级
-	FetterExp           uint32               // 好感度经验
-	PromoteRewardMap    map[uint32]bool      // 突破奖励 map[突破等级]是否已被领取
-	Guid                uint64               `bson:"-" msgpack:"-"`
-	EquipGuidMap        map[uint64]uint64    `bson:"-" msgpack:"-"`
-	EquipWeapon         *Weapon              `bson:"-" msgpack:"-"`
-	EquipReliquaryMap   map[uint8]*Reliquary `bson:"-" msgpack:"-"`
-	FightPropMap        map[uint32]float32   `bson:"-" msgpack:"-"`
-	ExtraAbilityEmbryos map[string]bool      `bson:"-" msgpack:"-"`
+	AvatarId          uint32               // 角色id
+	LifeState         uint16               // 存活状态
+	Level             uint8                // 等级
+	Exp               uint32               // 经验值
+	Promote           uint8                // 突破等阶
+	Satiation         uint32               // 饱食度
+	SatiationPenalty  uint32               // 饱食度溢出
+	CurrHP            float64              // 当前生命值
+	CurrEnergy        float64              // 当前元素能量值
+	FetterList        []uint32             // 资料解锁条目
+	SkillLevelMap     map[uint32]uint32    // 技能等级数据
+	SkillDepotId      uint32               // 技能库id
+	FlyCloak          uint32               // 当前风之翼
+	Costume           uint32               // 当前衣装
+	BornTime          int64                // 获得时间
+	FetterLevel       uint8                // 好感度等级
+	FetterExp         uint32               // 好感度经验
+	PromoteRewardMap  map[uint32]bool      // 突破奖励 map[突破等级]是否已被领取
+	Guid              uint64               `bson:"-" msgpack:"-"`
+	EquipGuidMap      map[uint64]uint64    `bson:"-" msgpack:"-"`
+	EquipWeapon       *Weapon              `bson:"-" msgpack:"-"`
+	EquipReliquaryMap map[uint8]*Reliquary `bson:"-" msgpack:"-"`
+	FightPropMap      map[uint32]float32   `bson:"-" msgpack:"-"`
 }
 
 func (a *DbAvatar) InitAllAvatar(player *Player) {
@@ -115,30 +114,29 @@ func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
 		return
 	}
 	avatar := &Avatar{
-		AvatarId:            avatarId,
-		LifeState:           constant.LIFE_STATE_ALIVE,
-		Level:               1,
-		Exp:                 0,
-		Promote:             0,
-		Satiation:           0,
-		SatiationPenalty:    0,
-		CurrHP:              0,
-		CurrEnergy:          0,
-		FetterList:          make([]uint32, 0),
-		SkillLevelMap:       make(map[uint32]uint32),
-		SkillDepotId:        uint32(skillDepotId),
-		FlyCloak:            140001,
-		Costume:             0,
-		BornTime:            time.Now().Unix(),
-		FetterLevel:         1,
-		FetterExp:           0,
-		Guid:                0,
-		EquipGuidMap:        nil,
-		EquipWeapon:         nil,
-		EquipReliquaryMap:   nil,
-		FightPropMap:        nil,
-		ExtraAbilityEmbryos: make(map[string]bool),
-		PromoteRewardMap:    make(map[uint32]bool, len(avatarDataConfig.PromoteRewardMap)),
+		AvatarId:          avatarId,
+		LifeState:         constant.LIFE_STATE_ALIVE,
+		Level:             1,
+		Exp:               0,
+		Promote:           0,
+		Satiation:         0,
+		SatiationPenalty:  0,
+		CurrHP:            0,
+		CurrEnergy:        0,
+		FetterList:        make([]uint32, 0),
+		SkillLevelMap:     make(map[uint32]uint32),
+		SkillDepotId:      uint32(skillDepotId),
+		FlyCloak:          140001,
+		Costume:           0,
+		BornTime:          time.Now().Unix(),
+		FetterLevel:       1,
+		FetterExp:         0,
+		Guid:              0,
+		EquipGuidMap:      nil,
+		EquipWeapon:       nil,
+		EquipReliquaryMap: nil,
+		FightPropMap:      nil,
+		PromoteRewardMap:  make(map[uint32]bool, len(avatarDataConfig.PromoteRewardMap)),
 	}
 
 	// 元素爆发1级
@@ -176,16 +174,12 @@ func (a *DbAvatar) SetCurrEnergy(avatar *Avatar, value float64, max bool) {
 		logger.Error("get avatar energy skill is nil, avatarId: %v", avatar.AvatarId)
 		return
 	}
-	elementType := constant.ElementTypeConst.VALUE_MAP[uint16(avatarSkillDataConfig.CostElemType)]
-	if elementType == nil {
-		logger.Error("get element type const is nil, value: %v", avatarSkillDataConfig.CostElemType)
-		return
-	}
-	avatar.FightPropMap[uint32(elementType.MaxEnergyProp)] = float32(avatarSkillDataConfig.CostElemVal)
+	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+	avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
 	if max {
-		avatar.FightPropMap[uint32(elementType.CurrEnergyProp)] = float32(avatarSkillDataConfig.CostElemVal)
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
 	} else {
-		avatar.FightPropMap[uint32(elementType.CurrEnergyProp)] = float32(value)
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(value)
 	}
 }
 

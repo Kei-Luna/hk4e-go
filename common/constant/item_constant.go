@@ -2,17 +2,17 @@ package constant
 
 const (
 	// 虚拟物品
-	ITEM_ID_HCOIN         uint32 = 201 // 原石
-	ITEM_ID_SCOIN         uint32 = 202 // 摩拉
-	ITEM_ID_MCOIN         uint32 = 203 // 创世结晶
-	ITEM_ID_RESIN         uint32 = 106 // 树脂
-	ITEM_ID_LEGENDARY_KEY uint32 = 207 // 传说任务钥匙
-	ITEM_ID_HOME_COIN     uint32 = 204 // 洞天宝钱
-	ITEM_ID_PLAYER_EXP    uint32 = 102 // 冒险阅历
+	ITEM_ID_HCOIN         = 201 // 原石
+	ITEM_ID_SCOIN         = 202 // 摩拉
+	ITEM_ID_MCOIN         = 203 // 创世结晶
+	ITEM_ID_RESIN         = 106 // 树脂
+	ITEM_ID_LEGENDARY_KEY = 207 // 传说任务钥匙
+	ITEM_ID_HOME_COIN     = 204 // 洞天宝钱
+	ITEM_ID_PLAYER_EXP    = 102 // 冒险阅历
 	// 武器强化物品
-	ITEM_ID_WEAPON_UPGRADE_MAGIC  uint32 = 104013 // 精锻用魔矿
-	ITEM_ID_WEAPON_UPGRADE_GOOD   uint32 = 104012 // 精锻用良矿
-	ITEM_ID_WEAPON_UPGRADE_MOTLEY uint32 = 104011 // 精锻用杂矿
+	ITEM_ID_WEAPON_UPGRADE_MAGIC  = 104013 // 精锻用魔矿
+	ITEM_ID_WEAPON_UPGRADE_GOOD   = 104012 // 精锻用良矿
+	ITEM_ID_WEAPON_UPGRADE_MOTLEY = 104011 // 精锻用杂矿
 )
 
 // 虚拟物品对应玩家的属性

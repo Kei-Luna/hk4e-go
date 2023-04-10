@@ -501,11 +501,7 @@ func (g *Game) TeleportPlayer(
 	// 传送玩家
 	newSceneId := sceneId
 	oldSceneId := player.SceneId
-	oldPos := &model.Vector{
-		X: player.Pos.X,
-		Y: player.Pos.Y,
-		Z: player.Pos.Z,
-	}
+	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}
 	jumpScene := false
 	if newSceneId != oldSceneId {
 		jumpScene = true
@@ -518,7 +514,7 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, nil)
+	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)
 	if jumpScene {
 		delTeamEntityNotify := g.PacketDelTeamEntityNotify(oldScene, player)
 		g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerID, player.ClientSeq, delTeamEntityNotify)
@@ -533,12 +529,8 @@ func (g *Game) TeleportPlayer(
 		newScene.AddPlayer(player)
 	}
 	player.SceneLoadState = model.SceneNone
-	player.Pos.X = pos.X
-	player.Pos.Y = pos.Y
-	player.Pos.Z = pos.Z
-	player.Rot.X = rot.X
-	player.Rot.Y = rot.Y
-	player.Rot.Z = rot.Z
+	player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
+	player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
 
 	var enterType proto.EnterType
 	if jumpScene {

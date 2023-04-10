@@ -81,12 +81,8 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 		player.SceneJump = true
 		player.SceneId = hostPlayer.SceneId
 		player.SceneLoadState = model.SceneNone
-		player.Pos.X = hostPlayer.Pos.X
-		player.Pos.Y = hostPlayer.Pos.Y
-		player.Pos.Z = hostPlayer.Pos.Z
-		player.Rot.X = hostPlayer.Rot.X
-		player.Rot.Y = hostPlayer.Rot.Y
-		player.Rot.Z = hostPlayer.Rot.Z
+		player.Pos.X, player.Pos.Y, player.Pos.Z = hostPlayer.Pos.X, hostPlayer.Pos.Y, hostPlayer.Pos.Z
+		player.Rot.X, player.Rot.Y, player.Rot.Z = hostPlayer.Rot.X, hostPlayer.Rot.Y, hostPlayer.Rot.Z
 		g.UserWorldAddPlayer(hostWorld, player)
 
 		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
@@ -415,7 +411,7 @@ func (g *Game) UserWorldRemovePlayer(world *World, player *model.Player) {
 		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerID, player.ClientSeq, playerQuitFromMpNotify)
 
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, nil)
+		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)
 	}
 
 	world.RemovePlayer(player)

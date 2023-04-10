@@ -1,11 +1,5 @@
 package model
 
-import (
-	"hk4e/common/constant"
-	"hk4e/gdconf"
-	"hk4e/pkg/logger"
-)
-
 type Team struct {
 	Name         string
 	AvatarIdList []uint32
@@ -59,40 +53,6 @@ func NewDbTeam() (r *DbTeam) {
 		CurrAvatarIndex: 0,
 	}
 	return r
-}
-
-func (t *DbTeam) UpdateTeam() {
-	activeTeam := t.GetActiveTeam()
-	// TODO 队伍元素共鸣
-	t.TeamResonances = make(map[uint16]bool)
-	t.TeamResonancesConfig = make(map[int32]bool)
-	teamElementTypeCountMap := make(map[uint16]uint8)
-	for _, avatarId := range activeTeam.GetAvatarIdList() {
-		avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatarId)
-		if avatarSkillDataConfig == nil {
-			logger.Error("get avatar energy skill is nil, avatarId: %v", avatarId)
-			continue
-		}
-		elementType := constant.ElementTypeConst.VALUE_MAP[uint16(avatarSkillDataConfig.CostElemType)]
-		if elementType == nil {
-			logger.Error("get element type const is nil, value: %v", avatarSkillDataConfig.CostElemType)
-			continue
-		}
-		teamElementTypeCountMap[elementType.Value] += 1
-	}
-	for k, v := range teamElementTypeCountMap {
-		if v >= 2 {
-			element := constant.ElementTypeConst.VALUE_MAP[k]
-			if element.TeamResonanceId != 0 {
-				t.TeamResonances[element.TeamResonanceId] = true
-				t.TeamResonancesConfig[element.ConfigHash] = true
-			}
-		}
-	}
-	if len(t.TeamResonances) == 0 {
-		t.TeamResonances[constant.ElementTypeConst.Default.TeamResonanceId] = true
-		t.TeamResonancesConfig[int32(constant.ElementTypeConst.Default.TeamResonanceId)] = true
-	}
 }
 
 func (t *DbTeam) GetActiveTeamId() uint8 {

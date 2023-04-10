@@ -26,6 +26,7 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	if world == nil {
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
 	if srcNtf != nil && copyFieldList != nil {
 		for _, fieldName := range copyFieldList {
 			reflection.CopyStructField(newNtf, srcNtf, fieldName)
@@ -36,11 +37,11 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	}
 	if invokeHandler.AllLen() > 0 {
 		reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardAll)
-		GAME.SendToWorldA(world, cmdId, player.ClientSeq, newNtf)
+		GAME.SendToSceneA(scene, cmdId, player.ClientSeq, newNtf)
 	}
 	if invokeHandler.AllExceptCurLen() > 0 {
 		reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardAllExceptCur)
-		GAME.SendToWorldAEC(world, cmdId, player.ClientSeq, newNtf, player.PlayerID)
+		GAME.SendToSceneAEC(scene, cmdId, player.ClientSeq, newNtf, player.PlayerID)
 	}
 	if invokeHandler.HostLen() > 0 {
 		reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardHost)
@@ -74,13 +75,9 @@ func (g *Game) MassiveEntityElementOpBatchNotify(player *model.Player, payloadMs
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
-		return
-	}
 	req.OpIdx = scene.GetMeeoIndex()
 	scene.SetMeeoIndex(scene.GetMeeoIndex() + 1)
-	g.SendToWorldA(world, cmd.MassiveEntityElementOpBatchNotify, player.ClientSeq, req)
+	g.SendToSceneA(scene, cmd.MassiveEntityElementOpBatchNotify, player.ClientSeq, req)
 }
 
 func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Message) {
@@ -120,7 +117,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				currHp = 0
 			}
 			fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
-			g.EntityFightPropUpdateNotifyBroadcast(world, target)
+			g.EntityFightPropUpdateNotifyBroadcast(scene, target)
 			switch target.GetEntityType() {
 			case constant.ENTITY_TYPE_AVATAR:
 			case constant.ENTITY_TYPE_MONSTER:
@@ -135,13 +132,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 					break
 				}
 				logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerID)
-				// TODO 临时的解决方案
-				if strings.Contains(gadgetDataConfig.ServerLuaScript, "SetGadgetState") {
-					g.ChangeGadgetState(player, target.GetId(), constant.GADGET_STATE_GEAR_START)
-				}
-				if strings.Contains(gadgetDataConfig.ServerLuaScript, "Controller") {
-					g.ChangeGadgetState(player, target.GetId(), constant.GADGET_STATE_GEAR_START)
-				}
+				g.handleGadgetEntityBeHitLow(player, target, attackResult.ElementType)
 			}
 		case proto.CombatTypeArgument_ENTITY_MOVE:
 			entityMoveInfo := new(proto.EntityMoveInfo)
@@ -161,24 +152,21 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 			}
 			if sceneEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				// 玩家实体在移动
-				g.AoiPlayerMove(player, player.Pos, &model.Vector{
-					X: float64(motionInfo.Pos.X),
-					Y: float64(motionInfo.Pos.Y),
-					Z: float64(motionInfo.Pos.Z),
-				})
+				g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos,
+					&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
+				)
+				if WORLD_MANAGER.IsBigWorld(world) {
+					g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
+						&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
+					)
+				}
 				// 场景区域触发器检测
-				g.SceneRegionTriggerCheck(player, player.Pos, &model.Vector{
-					X: float64(motionInfo.Pos.X),
-					Y: float64(motionInfo.Pos.Y),
-					Z: float64(motionInfo.Pos.Z),
-				}, sceneEntity.GetId())
+				g.SceneRegionTriggerCheck(player, player.Pos,
+					&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
+					sceneEntity.GetId())
 				// 更新玩家的位置信息
-				player.Pos.X = float64(motionInfo.Pos.X)
-				player.Pos.Y = float64(motionInfo.Pos.Y)
-				player.Pos.Z = float64(motionInfo.Pos.Z)
-				player.Rot.X = float64(motionInfo.Rot.X)
-				player.Rot.Y = float64(motionInfo.Rot.Y)
-				player.Rot.Z = float64(motionInfo.Rot.Z)
+				player.Pos.X, player.Pos.Y, player.Pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
+				player.Rot.X, player.Rot.Y, player.Rot.Z = float64(motionInfo.Rot.X), float64(motionInfo.Rot.Y), float64(motionInfo.Rot.Z)
 				// 玩家安全位置更新
 				switch motionInfo.State {
 				case proto.MotionState_MOTION_DANGER_RUN,
@@ -192,9 +180,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 					proto.MotionState_MOTION_WALK,
 					proto.MotionState_MOTION_DASH:
 					// 仅在陆地时更新玩家安全位置
-					player.SafePos.X = player.Pos.X
-					player.SafePos.Y = player.Pos.Y
-					player.SafePos.Z = player.Pos.Z
+					player.SafePos.X, player.SafePos.Y, player.SafePos.Z = player.Pos.X, player.Pos.Y, player.Pos.Z
 				}
 				// 处理耐力消耗
 				g.ImmediateStamina(player, motionInfo.State)
@@ -202,13 +188,9 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				// 非玩家实体在移动
 				// 更新场景实体的位置信息
 				pos := sceneEntity.GetPos()
-				pos.X = float64(motionInfo.Pos.X)
-				pos.Y = float64(motionInfo.Pos.Y)
-				pos.Z = float64(motionInfo.Pos.Z)
+				pos.X, pos.Y, pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
 				rot := sceneEntity.GetRot()
-				rot.X = float64(motionInfo.Rot.X)
-				rot.Y = float64(motionInfo.Rot.Y)
-				rot.Z = float64(motionInfo.Rot.Z)
+				rot.X, rot.Y, rot.Z = float64(motionInfo.Rot.X), float64(motionInfo.Rot.Y), float64(motionInfo.Rot.Z)
 				if sceneEntity.GetEntityType() == constant.ENTITY_TYPE_GADGET {
 					// 载具耐力消耗
 					gadgetEntity := sceneEntity.GetGadgetEntity()
@@ -249,13 +231,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 	}
 }
 
-func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos *model.Vector) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if world == nil {
-		logger.Error("get player world is nil, uid: %v", player.PlayerID)
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
+func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
 	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
 	aoiManager, exist := sceneBlockAoiMap[player.SceneId]
 	if !exist {
@@ -328,18 +304,54 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 	if len(addEntityIdList) > 0 {
 		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
 	}
-	if WORLD_MANAGER.IsBigWorld(world) {
-		oldGid := world.bigWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
-		newGid := world.bigWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
-		if oldGid != newGid {
-			// 玩家跨越了格子
-			logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
-			// 老格子移除玩家 新格子添加玩家
-			activeAvatarId := world.GetPlayerActiveAvatarId(player)
-			activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
-			world.bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), oldGid)
-			world.bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, newGid)
-			oldOtherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+}
+
+func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
+	bigWorldAoi := world.GetBigWorldAoi()
+	oldGid := bigWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+	newGid := bigWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+	if oldGid != newGid {
+		// 玩家跨越了格子
+		logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
+		// 找出本次移动所带来的消失和出现的格子
+		oldGridList := bigWorldAoi.GetSurrGridListByGid(oldGid)
+		newGridList := bigWorldAoi.GetSurrGridListByGid(newGid)
+		delGridIdList := make([]uint32, 0)
+		for _, oldGrid := range oldGridList {
+			exist := false
+			for _, newGrid := range newGridList {
+				if oldGrid.GetGid() == newGrid.GetGid() {
+					exist = true
+					break
+				}
+			}
+			if exist {
+				continue
+			}
+			delGridIdList = append(delGridIdList, oldGrid.GetGid())
+		}
+		addGridIdList := make([]uint32, 0)
+		for _, newGrid := range newGridList {
+			exist := false
+			for _, oldGrid := range oldGridList {
+				if newGrid.GetGid() == oldGrid.GetGid() {
+					exist = true
+					break
+				}
+			}
+			if exist {
+				continue
+			}
+			addGridIdList = append(addGridIdList, newGrid.GetGid())
+		}
+		activeAvatarId := world.GetPlayerActiveAvatarId(player)
+		activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
+		// 处理消失的格子
+		for _, delGridId := range delGridIdList {
+			// 老格子移除玩家
+			bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), delGridId)
+			// 通知自己 老格子里的其它玩家消失
+			oldOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(delGridId)
 			delEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range oldOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -348,19 +360,22 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 				}
 				delEntityIdList = append(delEntityIdList, otherWorldAvatar.GetAvatarEntityId())
 			}
-			// 通知自己 老格子里的其它玩家消失
 			g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+			// 通知老格子里的其它玩家 自己消失
 			for otherPlayerId := range oldOtherWorldAvatarMap {
 				if uint32(otherPlayerId) == player.PlayerID {
 					continue
 				}
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
-				// 通知老格子里的其它玩家 自己消失
-				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{
-					activeWorldAvatar.GetAvatarEntityId(),
-				})
+				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{activeWorldAvatar.GetAvatarEntityId()})
 			}
-			newOtherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+		}
+		// 处理出现的格子
+		for _, addGridId := range addGridIdList {
+			// 新格子添加玩家
+			bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, addGridId)
+			// 通知自己 新格子里的其他玩家出现
+			newOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(addGridId)
 			addEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range newOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -369,15 +384,14 @@ func (g *Game) AoiPlayerMove(player *model.Player, oldPos *model.Vector, newPos 
 				}
 				addEntityIdList = append(addEntityIdList, otherWorldAvatar.GetAvatarEntityId())
 			}
-			// 通知自己 新格子里的其他玩家出现
 			g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+			// 通知新格子里的其他玩家 自己出现
 			for otherPlayerId := range newOtherWorldAvatarMap {
 				if uint32(otherPlayerId) == player.PlayerID {
 					continue
 				}
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
-				// 通知新格子里的其他玩家 自己出现
 				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
 			}
 		}
@@ -402,6 +416,7 @@ func (g *Game) AbilityInvocationsNotify(player *model.Player, payloadMsg pb.Mess
 			// logger.Debug("EntityId: %v, ModifierChange: %v", entry.EntityId, modifierChange)
 			// 处理耐力消耗
 			g.HandleAbilityStamina(player, entry)
+			g.handleGadgetEntityAbilityLow(player, entry.EntityId, entry.ArgumentType, modifierChange)
 		case proto.AbilityInvokeArgument_ABILITY_MIXIN_COST_STAMINA:
 			costStamina := new(proto.AbilityMixinCostStamina)
 			err := pb.Unmarshal(entry.AbilityData, costStamina)
@@ -526,7 +541,11 @@ func (g *Game) EvtAvatarEnterFocusNotify(player *model.Player, payloadMsg pb.Mes
 	}
 	// logger.Debug("EvtAvatarEnterFocusNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtAvatarEnterFocusNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtAvatarEnterFocusNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EvtAvatarUpdateFocusNotify(player *model.Player, payloadMsg pb.Message) {
@@ -536,7 +555,11 @@ func (g *Game) EvtAvatarUpdateFocusNotify(player *model.Player, payloadMsg pb.Me
 	}
 	// logger.Debug("EvtAvatarUpdateFocusNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtAvatarUpdateFocusNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtAvatarUpdateFocusNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EvtAvatarExitFocusNotify(player *model.Player, payloadMsg pb.Message) {
@@ -546,7 +569,11 @@ func (g *Game) EvtAvatarExitFocusNotify(player *model.Player, payloadMsg pb.Mess
 	}
 	// logger.Debug("EvtAvatarExitFocusNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtAvatarExitFocusNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtAvatarExitFocusNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg pb.Message) {
@@ -556,7 +583,11 @@ func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg 
 	}
 	// logger.Debug("EvtEntityRenderersChangedNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtEntityRenderersChangedNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtEntityRenderersChangedNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message) {
@@ -599,7 +630,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	}
 	scene := world.GetSceneById(player.SceneId)
 	scene.DestroyEntity(req.EntityId)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId}, false, nil)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId}, false, 0)
 }
 
 func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Message) {
@@ -609,7 +640,11 @@ func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Messag
 	}
 	// logger.Debug("EvtAiSyncSkillCdNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtAiSyncSkillCdNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtAiSyncSkillCdNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EvtAiSyncCombatThreatInfoNotify(player *model.Player, payloadMsg pb.Message) {
@@ -619,7 +654,11 @@ func (g *Game) EvtAiSyncCombatThreatInfoNotify(player *model.Player, payloadMsg 
 	}
 	// logger.Debug("EvtAiSyncCombatThreatInfoNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	g.SendToWorldA(world, cmd.EvtAiSyncCombatThreatInfoNotify, player.ClientSeq, req)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtAiSyncCombatThreatInfoNotify, player.ClientSeq, req)
 }
 
 func (g *Game) EntityConfigHashNotify(player *model.Player, payloadMsg pb.Message) {
@@ -650,4 +689,85 @@ func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
 		})
 	}
 	g.SendMsg(cmd.EntityAiSyncNotify, player.PlayerID, player.ClientSeq, entityAiSyncNotify)
+}
+
+// TODO 一些很low的解决方案 我本来是不想写的 有多low？要多low有多low！
+
+func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, hitElementType uint32) {
+	if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
+		return
+	}
+	gadgetEntity := entity.GetGadgetEntity()
+	gadgetId := gadgetEntity.GetGadgetId()
+	gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetId))
+	if gadgetDataConfig == nil {
+		logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
+		return
+	}
+	if strings.Contains(gadgetDataConfig.Name, "火把") ||
+		strings.Contains(gadgetDataConfig.Name, "火盆") ||
+		strings.Contains(gadgetDataConfig.Name, "篝火") {
+		// 火把点燃
+		if hitElementType != constant.ELEMENT_TYPE_FIRE {
+			return
+		}
+		g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_GEAR_START)
+	} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Controller") {
+		// 元素方碑点亮
+		gadgetElementType := uint32(0)
+		if strings.Contains(gadgetDataConfig.ServerLuaScript, "Fire") {
+			gadgetElementType = constant.ELEMENT_TYPE_FIRE
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Water") {
+			gadgetElementType = constant.ELEMENT_TYPE_WATER
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Grass") {
+			gadgetElementType = constant.ELEMENT_TYPE_GRASS
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Elec") {
+			gadgetElementType = constant.ELEMENT_TYPE_ELEC
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Ice") {
+			gadgetElementType = constant.ELEMENT_TYPE_ICE
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Wind") {
+			gadgetElementType = constant.ELEMENT_TYPE_WIND
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Rock") {
+			gadgetElementType = constant.ELEMENT_TYPE_ROCK
+		}
+		if hitElementType != gadgetElementType {
+			return
+		}
+		g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_GEAR_START)
+	}
+}
+
+func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint32, argument proto.AbilityInvokeArgument, entry pb.Message) {
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	entity := scene.GetEntity(entityId)
+	switch argument {
+	case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_CHANGE:
+		// 物件破碎
+		modifierChange := entry.(*proto.AbilityMetaModifierChange)
+		if modifierChange.Action != proto.ModifierAction_REMOVED {
+			return
+		}
+		logger.Debug("物件破碎, entityId: %v, modifierChange: %v, uid: %v", entityId, modifierChange, player.PlayerID)
+		if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
+			return
+		}
+		gadgetEntity := entity.GetGadgetEntity()
+		gadgetId := gadgetEntity.GetGadgetId()
+		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetId))
+		if gadgetDataConfig == nil {
+			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
+			return
+		}
+		if strings.Contains(gadgetDataConfig.Name, "碎石堆") ||
+			strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
+			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_Ore") {
+			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+			g.CreateDropGadget(player, entity.GetPos(), 70900001, 233, 1)
+		}
+	}
 }

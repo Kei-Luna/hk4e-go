@@ -217,10 +217,17 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 
 	g.UpdateWorldScenePlayerInfo(player, world)
 
-	g.GCGTavernInit(player) // GCG酒馆信息通知
-
-	g.SendMsg(cmd.DungeonWayPointNotify, player.PlayerID, player.ClientSeq, &proto.DungeonWayPointNotify{})
-	g.SendMsg(cmd.DungeonDataNotify, player.PlayerID, player.ClientSeq, &proto.DungeonDataNotify{})
+	ctx := world.GetEnterSceneContextByToken(req.EnterSceneToken)
+	if ctx == nil {
+		logger.Error("get enter scene context is nil, uid: %v", player.PlayerID)
+		return
+	}
+	// 进入的场景是地牢副本发送相关的包
+	if ctx.OldDungeonPointId != 0 {
+		g.GCGTavernInit(player) // GCG酒馆信息通知
+		g.SendMsg(cmd.DungeonWayPointNotify, player.PlayerID, player.ClientSeq, &proto.DungeonWayPointNotify{})
+		g.SendMsg(cmd.DungeonDataNotify, player.PlayerID, player.ClientSeq, &proto.DungeonDataNotify{})
+	}
 
 	SceneInitFinishRsp := &proto.SceneInitFinishRsp{
 		EnterSceneToken: req.EnterSceneToken,
@@ -245,9 +252,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
-	g.AddSceneEntityNotify(player, visionType, []uint32{
-		activeWorldAvatar.GetAvatarEntityId(),
-	}, true, false)
+	g.AddSceneEntityNotify(player, visionType, []uint32{activeWorldAvatar.GetAvatarEntityId()}, true, false)
 
 	// 加载附近的group
 	for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
@@ -269,7 +274,8 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
 	if WORLD_MANAGER.IsBigWorld(world) {
-		otherWorldAvatarMap := world.bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		bigWorldAoi := world.GetBigWorldAoi()
+		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 		entityIdList := make([]uint32, 0)
 		for _, otherWorldAvatarAny := range otherWorldAvatarMap {
 			otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -341,55 +347,53 @@ func (g *Game) SceneEntityDrownReq(player *model.Player, payloadMsg pb.Message) 
 
 // AddSceneEntityNotifyToPlayer 添加的场景实体同步给玩家
 func (g *Game) AddSceneEntityNotifyToPlayer(player *model.Player, visionType proto.VisionType, entityList []*proto.SceneEntityInfo) {
-	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
+	ntf := &proto.SceneEntityAppearNotify{
 		AppearType: visionType,
 		EntityList: entityList,
 	}
-	g.SendMsg(cmd.SceneEntityAppearNotify, player.PlayerID, player.ClientSeq, sceneEntityAppearNotify)
-	logger.Debug("SceneEntityAppearNotify, uid: %v, type: %v, len: %v",
-		player.PlayerID, sceneEntityAppearNotify.AppearType, len(sceneEntityAppearNotify.EntityList))
+	logger.Debug("[SceneEntityAppearNotify UC], type: %v, len: %v, uid: %v", ntf.AppearType, len(ntf.EntityList), player.PlayerID)
+	g.SendMsg(cmd.SceneEntityAppearNotify, player.PlayerID, player.ClientSeq, ntf)
 }
 
 // AddSceneEntityNotifyBroadcast 添加的场景实体广播
-func (g *Game) AddSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityList []*proto.SceneEntityInfo, aec bool, player *model.Player) {
-	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
+func (g *Game) AddSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityList []*proto.SceneEntityInfo, aec bool, aecUid uint32) {
+	ntf := &proto.SceneEntityAppearNotify{
 		AppearType: visionType,
 		EntityList: entityList,
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		if aec && scenePlayer.PlayerID == player.PlayerID {
-			continue
-		}
-		g.SendMsg(cmd.SceneEntityAppearNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, sceneEntityAppearNotify)
-		logger.Debug("SceneEntityAppearNotify, uid: %v, type: %v, len: %v",
-			scenePlayer.PlayerID, sceneEntityAppearNotify.AppearType, len(sceneEntityAppearNotify.EntityList))
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	logger.Debug("[SceneEntityAppearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.AppearType, len(ntf.EntityList), owner.PlayerID, aec)
+	if aec {
+		g.SendToSceneAEC(scene, cmd.SceneEntityAppearNotify, owner.ClientSeq, ntf, aecUid)
+	} else {
+		g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, owner.ClientSeq, ntf)
 	}
 }
 
 // RemoveSceneEntityNotifyToPlayer 移除的场景实体同步给玩家
 func (g *Game) RemoveSceneEntityNotifyToPlayer(player *model.Player, visionType proto.VisionType, entityIdList []uint32) {
-	sceneEntityDisappearNotify := &proto.SceneEntityDisappearNotify{
+	ntf := &proto.SceneEntityDisappearNotify{
 		EntityList:    entityIdList,
 		DisappearType: visionType,
 	}
-	g.SendMsg(cmd.SceneEntityDisappearNotify, player.PlayerID, player.ClientSeq, sceneEntityDisappearNotify)
-	logger.Debug("SceneEntityDisappearNotify, uid: %v, type: %v, len: %v",
-		player.PlayerID, sceneEntityDisappearNotify.DisappearType, len(sceneEntityDisappearNotify.EntityList))
+	logger.Debug("[SceneEntityDisappearNotify UC], type: %v, len: %v, uid: %v", ntf.DisappearType, len(ntf.EntityList), player.PlayerID)
+	g.SendMsg(cmd.SceneEntityDisappearNotify, player.PlayerID, player.ClientSeq, ntf)
 }
 
 // RemoveSceneEntityNotifyBroadcast 移除的场景实体广播
-func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32, aec bool, player *model.Player) {
-	sceneEntityDisappearNotify := &proto.SceneEntityDisappearNotify{
+func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32, aec bool, aecUid uint32) {
+	ntf := &proto.SceneEntityDisappearNotify{
 		EntityList:    entityIdList,
 		DisappearType: visionType,
 	}
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		if aec && scenePlayer.PlayerID == player.PlayerID {
-			continue
-		}
-		g.SendMsg(cmd.SceneEntityDisappearNotify, scenePlayer.PlayerID, scenePlayer.ClientSeq, sceneEntityDisappearNotify)
-		logger.Debug("SceneEntityDisappearNotify, uid: %v, type: %v, len: %v",
-			scenePlayer.PlayerID, sceneEntityDisappearNotify.DisappearType, len(sceneEntityDisappearNotify.EntityList))
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	logger.Debug("[SceneEntityDisappearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.DisappearType, len(ntf.EntityList), owner.PlayerID, aec)
+	if aec {
+		g.SendToSceneAEC(scene, cmd.SceneEntityDisappearNotify, owner.ClientSeq, ntf, aecUid)
+	} else {
+		g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, owner.ClientSeq, ntf)
 	}
 }
 
@@ -445,7 +449,7 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 			}
 		}
 		if broadcast {
-			g.AddSceneEntityNotifyBroadcast(scene, visionType, entityList, aec, player)
+			g.AddSceneEntityNotifyBroadcast(scene, visionType, entityList, aec, player.PlayerID)
 		} else {
 			g.AddSceneEntityNotifyToPlayer(player, visionType, entityList)
 		}
@@ -453,12 +457,12 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 }
 
 // EntityFightPropUpdateNotifyBroadcast 场景实体战斗属性变更通知广播
-func (g *Game) EntityFightPropUpdateNotifyBroadcast(world *World, entity *Entity) {
+func (g *Game) EntityFightPropUpdateNotifyBroadcast(scene *Scene, entity *Entity) {
 	ntf := &proto.EntityFightPropUpdateNotify{
 		FightPropMap: entity.GetFightProp(),
 		EntityId:     entity.GetId(),
 	}
-	g.SendToWorldA(world, cmd.EntityFightPropUpdateNotify, 0, ntf)
+	g.SendToSceneA(scene, cmd.EntityFightPropUpdateNotify, 0, ntf)
 }
 
 // KillPlayerAvatar 杀死玩家活跃角色实体
@@ -514,7 +518,7 @@ func (g *Game) RevivePlayerAvatar(player *model.Player) {
 	avatar.LifeState = constant.LIFE_STATE_ALIVE
 	// 设置血量
 	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 110
-	g.EntityFightPropUpdateNotifyBroadcast(world, avatarEntity)
+	g.EntityFightPropUpdateNotifyBroadcast(scene, avatarEntity)
 
 	avatarEntity.lifeState = constant.LIFE_STATE_REVIVE
 
@@ -536,7 +540,7 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	if entity.GetEntityType() == constant.ENTITY_TYPE_MONSTER {
 		// 设置血量
 		entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 0
-		g.EntityFightPropUpdateNotifyBroadcast(scene.world, entity)
+		g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
 		// 随机掉落
 		g.monsterDrop(player, entity)
 	}
@@ -547,8 +551,8 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 		DieType:         dieType,
 		MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 	}
-	g.SendToWorldA(scene.world, cmd.LifeStateChangeNotify, 0, ntf)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, false, nil)
+	g.SendToSceneA(scene, cmd.LifeStateChangeNotify, 0, ntf)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, false, 0)
 	// 删除实体
 	scene.DestroyEntity(entity.GetId())
 	group := scene.GetGroupById(entity.GetGroupId())
