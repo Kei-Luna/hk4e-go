@@ -18,6 +18,7 @@ type FightPropEnergy struct {
 var ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP map[int]*FightPropEnergy
 
 func init() {
+	ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP = make(map[int]*FightPropEnergy)
 	ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[ELEMENT_TYPE_FIRE] = &FightPropEnergy{
 		CurEnergy: FIGHT_PROP_CUR_FIRE_ENERGY,
 		MaxEnergy: FIGHT_PROP_MAX_FIRE_ENERGY,
