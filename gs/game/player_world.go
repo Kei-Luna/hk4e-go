@@ -191,11 +191,11 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChangeGameTimeReq)
 	gameTime := req.GameTime
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
 	scene.ChangeGameTime(gameTime)
 
 	for _, scenePlayer := range scene.GetAllPlayer() {
@@ -277,6 +277,7 @@ func (g *Game) PlayerQuitDungeonReq(player *model.Player, payloadMsg pb.Message)
 	req := payloadMsg.(*proto.PlayerQuitDungeonReq)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
 	ctx := world.GetLastEnterSceneContextBySceneIdAndUid(3, player.PlayerID)
@@ -379,6 +380,10 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 	sceneGroupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))
+	if sceneGroupConfig == nil {
+		logger.Error("get scene group config is nil, groupId: %v, uid: %v", entity.GetGroupId(), player.PlayerID)
+		return
+	}
 	monsterConfig := sceneGroupConfig.MonsterMap[int32(entity.GetConfigId())]
 	monsterDropDataConfig := gdconf.GetMonsterDropDataByDropTagAndLevel(monsterConfig.DropTag, monsterConfig.Level)
 	if monsterDropDataConfig == nil {
@@ -403,6 +408,10 @@ func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 
 func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 	sceneGroupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))
+	if sceneGroupConfig == nil {
+		logger.Error("get scene group config is nil, groupId: %v, uid: %v", entity.GetGroupId(), player.PlayerID)
+		return
+	}
 	gadgetConfig := sceneGroupConfig.GadgetMap[int32(entity.GetConfigId())]
 	chestDropDataConfig := gdconf.GetChestDropDataByDropTagAndLevel(gadgetConfig.DropTag, gadgetConfig.Level)
 	if chestDropDataConfig == nil {
@@ -492,13 +501,12 @@ func (g *Game) doRandDropOnce(dropDataConfig *gdconf.DropData) map[int32]int32 {
 	return dropMap
 }
 
-// TeleportPlayer 传送玩家至地图上的某个位置
+// TeleportPlayer 传送玩家通用接口
 func (g *Game) TeleportPlayer(
 	player *model.Player, enterReason proto.EnterReason,
 	sceneId uint32, pos, rot *model.Vector,
 	dungeonId, dungeonPointId uint32,
 ) {
-	// 传送玩家
 	newSceneId := sceneId
 	oldSceneId := player.SceneId
 	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}
@@ -508,13 +516,19 @@ func (g *Game) TeleportPlayer(
 	}
 	player.SceneJump = jumpScene
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	oldScene := world.GetSceneById(oldSceneId)
-	if oldScene == nil {
-		logger.Error("old scene is nil, sceneId: %v", oldSceneId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
+	oldScene := world.GetSceneById(oldSceneId)
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)
+
+	if WORLD_MANAGER.IsBigWorld(world) {
+		bigWorldAoi := world.GetBigWorldAoi()
+		bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerID), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	}
+
 	if jumpScene {
 		delTeamEntityNotify := g.PacketDelTeamEntityNotify(oldScene, player)
 		g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerID, player.ClientSeq, delTeamEntityNotify)
@@ -522,10 +536,6 @@ func (g *Game) TeleportPlayer(
 		oldScene.RemovePlayer(player)
 		player.SceneId = newSceneId
 		newScene := world.GetSceneById(newSceneId)
-		if newScene == nil {
-			logger.Error("new scene is nil, sceneId: %v", newSceneId)
-			return
-		}
 		newScene.AddPlayer(player)
 	}
 	player.SceneLoadState = model.SceneNone

@@ -355,45 +355,37 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			delEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range oldOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
-				if otherWorldAvatar.GetUid() == player.PlayerID {
-					continue
-				}
 				delEntityIdList = append(delEntityIdList, otherWorldAvatar.GetAvatarEntityId())
 			}
-			g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+			if len(delEntityIdList) > 0 {
+				g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+			}
 			// 通知老格子里的其它玩家 自己消失
 			for otherPlayerId := range oldOtherWorldAvatarMap {
-				if uint32(otherPlayerId) == player.PlayerID {
-					continue
-				}
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
 				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{activeWorldAvatar.GetAvatarEntityId()})
 			}
 		}
 		// 处理出现的格子
 		for _, addGridId := range addGridIdList {
-			// 新格子添加玩家
-			bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, addGridId)
 			// 通知自己 新格子里的其他玩家出现
 			newOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(addGridId)
 			addEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range newOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
-				if otherWorldAvatar.GetUid() == player.PlayerID {
-					continue
-				}
 				addEntityIdList = append(addEntityIdList, otherWorldAvatar.GetAvatarEntityId())
 			}
-			g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+			if len(addEntityIdList) > 0 {
+				g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+			}
 			// 通知新格子里的其他玩家 自己出现
 			for otherPlayerId := range newOtherWorldAvatarMap {
-				if uint32(otherPlayerId) == player.PlayerID {
-					continue
-				}
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
 				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
 			}
+			// 新格子添加玩家
+			bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, addGridId)
 		}
 	}
 }
@@ -598,7 +590,6 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	// logger.Debug("EvtCreateGadgetNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("world is nil, WorldId: %v", player.WorldId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -625,7 +616,6 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	// logger.Debug("EvtDestroyGadgetNotify: %v", req)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("world is nil, worldId: %v", player.WorldId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -694,6 +684,11 @@ func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
 // TODO 一些很low的解决方案 我本来是不想写的 有多low？要多low有多low！
 
 func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, hitElementType uint32) {
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
 	if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
 		return
 	}
@@ -734,6 +729,8 @@ func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, 
 			return
 		}
 		g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_GEAR_START)
+	} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
+		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 	}
 }
 
@@ -744,6 +741,9 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 	}
 	scene := world.GetSceneById(player.SceneId)
 	entity := scene.GetEntity(entityId)
+	if entity == nil {
+		return
+	}
 	switch argument {
 	case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_CHANGE:
 		// 物件破碎
@@ -751,7 +751,6 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 		if modifierChange.Action != proto.ModifierAction_REMOVED {
 			return
 		}
-		logger.Debug("物件破碎, entityId: %v, modifierChange: %v, uid: %v", entityId, modifierChange, player.PlayerID)
 		if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
 			return
 		}
@@ -764,6 +763,7 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 		}
 		if strings.Contains(gadgetDataConfig.Name, "碎石堆") ||
 			strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
+			logger.Debug("物件破碎, entityId: %v, modifierChange: %v, uid: %v", entityId, modifierChange, player.PlayerID)
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_Ore") {
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)

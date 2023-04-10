@@ -34,6 +34,10 @@ func (g *Game) PullRecentChatReq(player *model.Player, payloadMsg pb.Message) {
 	}
 
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
 	if world.GetMultiplayer() {
 		chatList := world.GetChatList()
 		count := len(chatList)
@@ -247,6 +251,10 @@ func (g *Game) PlayerChatReq(player *model.Player, payloadMsg pb.Message) {
 	}
 
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
 	world.AddChat(sendChatInfo)
 
 	playerChatNotify := &proto.PlayerChatNotify{

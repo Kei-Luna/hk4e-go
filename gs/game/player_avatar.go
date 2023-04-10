@@ -241,12 +241,12 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 	req := payloadMsg.(*proto.AvatarWearFlycloakReq)
 
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		g.SendError(cmd.AvatarWearFlycloakRsp, player, &proto.AvatarWearFlycloakRsp{})
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
 
 	// 确保角色存在
 	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)
@@ -290,12 +290,12 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 	req := payloadMsg.(*proto.AvatarChangeCostumeReq)
 
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		g.SendError(cmd.AvatarChangeCostumeRsp, player, &proto.AvatarChangeCostumeRsp{})
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
 
 	// 确保角色存在
 	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)

@@ -304,10 +304,6 @@ func UpdateFrame(rgb bool) {
 	}
 	world := WORLD_MANAGER.GetAiWorld()
 	scene := world.GetSceneById(3)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", 3)
-		return
-	}
 	for _, v := range SCREEN_ENTITY_ID_LIST {
 		scene.DestroyEntity(v)
 	}

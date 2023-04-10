@@ -392,7 +392,7 @@ func (g *Game) SendToWorldH(world *World, cmdId uint16, seq uint32, msg pb.Messa
 // SendToSceneA 给场景内所有玩家发消息
 func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Message) {
 	world := scene.GetWorld()
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsBigWorld(world) && SELF != nil {
 		bigWorldAoi := world.GetBigWorldAoi()
 		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {
@@ -408,7 +408,7 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 // SendToSceneAEC 给场景内除某玩家(一般是自己)以外的所有玩家发消息
 func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
 	world := scene.GetWorld()
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsBigWorld(world) && SELF != nil {
 		bigWorldAoi := world.GetBigWorldAoi()
 		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {

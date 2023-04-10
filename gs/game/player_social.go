@@ -437,6 +437,10 @@ func (g *Game) GetOnlinePlayerInfoReq(player *model.Player, payloadMsg pb.Messag
 
 func (g *Game) PacketOnlinePlayerInfo(player *model.Player) *proto.OnlinePlayerInfo {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return new(proto.OnlinePlayerInfo)
+	}
 	worldPlayerNum := uint32(1)
 	// TODO 远程玩家的世界内人数
 	if world != nil {

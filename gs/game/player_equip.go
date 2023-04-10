@@ -218,7 +218,7 @@ func (g *Game) WearUserAvatarWeapon(userId uint32, avatarId uint32, weaponId uin
 	}
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("world is nil, worldId: %v", player.WorldId)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
 	// 角色已装备的武器

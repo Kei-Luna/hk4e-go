@@ -360,10 +360,6 @@ func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 		}
 	}
 	scene := w.GetSceneById(sceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", sceneId)
-		return
-	}
 	scene.AddPlayer(player)
 	w.InitPlayerTeamEntityId(player)
 	if WORLD_MANAGER.IsBigWorld(w) {
@@ -496,10 +492,6 @@ func (w *World) GetWorldAvatarByEntityId(avatarEntityId uint32) *WorldAvatar {
 // InitPlayerWorldAvatar 初始化某玩家在世界队伍中的所有角色
 func (w *World) InitPlayerWorldAvatar(player *model.Player) {
 	scene := w.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
-		return
-	}
 	for _, worldAvatar := range w.GetWorldAvatarList() {
 		if worldAvatar.uid != player.PlayerID {
 			continue

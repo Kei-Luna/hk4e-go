@@ -29,20 +29,18 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EnterSceneReadyReq)
 	logger.Debug("player enter scene ready, uid: %v", player.PlayerID)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
 
 	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
-		guestBeginEnterSceneNotify := &proto.GuestBeginEnterSceneNotify{
-			SceneId: player.SceneId,
-			Uid:     player.PlayerID,
-		}
-		g.SendToWorldAEC(world, cmd.GuestBeginEnterSceneNotify, 0, guestBeginEnterSceneNotify, player.PlayerID)
-
 		playerPreEnterMpNotify := &proto.PlayerPreEnterMpNotify{
 			State:    proto.PlayerPreEnterMpNotify_START,
 			Uid:      player.PlayerID,
 			Nickname: player.NickName,
 		}
-		g.SendToWorldAEC(world, cmd.PlayerPreEnterMpNotify, 0, playerPreEnterMpNotify, player.PlayerID)
+		g.SendToWorldH(world, cmd.PlayerPreEnterMpNotify, 0, playerPreEnterMpNotify)
 	}
 
 	ctx := world.GetEnterSceneContextByToken(req.EnterSceneToken)
@@ -59,7 +57,10 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
 		// 卸载旧位置附近的group
 		for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
-			g.RemoveSceneGroup(player, oldScene, groupConfig)
+			if !world.GetMultiplayer() {
+				// 处理多人世界不同玩家不同位置的group卸载情况
+				g.RemoveSceneGroup(player, oldScene, groupConfig)
+			}
 		}
 	}
 
@@ -81,10 +82,18 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SceneInitFinishReq)
 	logger.Debug("player scene init finish, uid: %v", player.PlayerID)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+
+	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
+		guestBeginEnterSceneNotify := &proto.GuestBeginEnterSceneNotify{
+			SceneId: player.SceneId,
+			Uid:     player.PlayerID,
+		}
+		g.SendToWorldAEC(world, cmd.GuestBeginEnterSceneNotify, 0, guestBeginEnterSceneNotify, player.PlayerID)
 	}
 
 	serverTimeNotify := &proto.ServerTimeNotify{
@@ -241,6 +250,10 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EnterSceneDoneReq)
 	logger.Debug("player enter scene done, uid: %v", player.PlayerID)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
 	scene := world.GetSceneById(player.SceneId)
 
 	var visionType = proto.VisionType_VISION_NONE
@@ -252,6 +265,12 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
+
+	if WORLD_MANAGER.IsBigWorld(world) && !world.IsPlayerFirstEnter(player) {
+		bigWorldAoi := world.GetBigWorldAoi()
+		bigWorldAoi.AddObjectToGridByPos(int64(player.PlayerID), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	}
+
 	g.AddSceneEntityNotify(player, visionType, []uint32{activeWorldAvatar.GetAvatarEntityId()}, true, false)
 
 	// 加载附近的group
@@ -296,7 +315,6 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.EnterSceneDoneRsp, player.PlayerID, player.ClientSeq, enterSceneDoneRsp)
 
 	player.SceneLoadState = model.SceneEnterDone
-	world.PlayerEnter(player.PlayerID)
 
 	for _, otherPlayerId := range world.GetAllWaitPlayer() {
 		// 房主第一次进入多人世界场景完成 开始通知等待列表中的玩家进入场景
@@ -314,6 +332,10 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PostEnterSceneReq)
 	logger.Debug("player post enter scene, uid: %v", player.PlayerID)
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
 
 	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
 		guestPostEnterSceneNotify := &proto.GuestPostEnterSceneNotify{
@@ -322,6 +344,8 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.SendToWorldAEC(world, cmd.GuestPostEnterSceneNotify, 0, guestPostEnterSceneNotify, player.PlayerID)
 	}
+
+	world.PlayerEnter(player.PlayerID)
 
 	postEnterSceneRsp := &proto.PostEnterSceneRsp{
 		EnterSceneToken: req.EnterSceneToken,
@@ -400,11 +424,10 @@ func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.V
 // AddSceneEntityNotify 添加的场景实体同步 封装接口
 func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.VisionType, entityIdList []uint32, broadcast bool, aec bool) {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	scene := world.GetSceneById(player.SceneId)
-	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v", player.SceneId)
+	if world == nil {
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
 	// 如果总数量太多则分包发送
 	times := int(math.Ceil(float64(len(entityIdList)) / float64(ENTITY_MAX_BATCH_SEND_NUM)))
 	for i := 0; i < times; i++ {
@@ -560,7 +583,9 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 		return
 	}
 
-	dbWorld := player.GetDbWorld()
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(scene.GetId())
 	dbSceneGroup := dbScene.GetSceneGroupById(entity.GetGroupId())
 	dbSceneGroup.AddKill(entity.GetConfigId())
@@ -576,7 +601,6 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state uint32) {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v", player.WorldId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -605,7 +629,8 @@ func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state ui
 		return
 	}
 
-	dbWorld := player.GetDbWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(scene.GetId())
 	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
 	dbSceneGroup.ChangeGadgetState(entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
@@ -652,10 +677,15 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 
 // AddSceneGroup 加载场景组
 func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
+	group := scene.GetGroupById(uint32(groupConfig.Id))
+	if group != nil {
+		logger.Error("group already exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerID)
+		return
+	}
 	initSuiteId := groupConfig.GroupInitConfig.Suite
 	_, exist := groupConfig.SuiteMap[initSuiteId]
 	if !exist {
-		logger.Error("invalid init suite id: %v, uid: %v", initSuiteId, player.PlayerID)
+		logger.Error("invalid suiteId: %v, uid: %v", initSuiteId, player.PlayerID)
 		return
 	}
 	g.AddSceneGroupSuiteCore(player, scene, uint32(groupConfig.Id), uint8(initSuiteId))
@@ -665,7 +695,9 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
 	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerID, player.ClientSeq, ntf)
 
-	dbWorld := player.GetDbWorld()
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(scene.GetId())
 	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupConfig.Id))
 	for _, variable := range groupConfig.VariableMap {
@@ -676,13 +708,22 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 		dbSceneGroup.SetVariable(variable.Name, variable.Value)
 	}
 
-	group := scene.GetGroupById(uint32(groupConfig.Id))
+	group = scene.GetGroupById(uint32(groupConfig.Id))
 	if group == nil {
 		logger.Error("group not exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerID)
 		return
 	}
 	// 场景组加载触发器检测
 	g.GroupLoadTriggerCheck(player, group)
+	// 物件创建触发器检测
+	suiteConfig, exist := groupConfig.SuiteMap[initSuiteId]
+	if !exist {
+		logger.Error("invalid suiteId: %v, uid: %v", initSuiteId, player.PlayerID)
+		return
+	}
+	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
+		GAME.GadgetCreateTriggerCheck(player, group, uint32(gadgetConfigId))
+	}
 }
 
 // RemoveSceneGroup 卸载场景组
@@ -713,11 +754,20 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		logger.Error("invalid suiteId: %v", suiteId)
 		return
 	}
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
 	entityMap := make(map[uint32]*Entity)
 	for _, monsterConfigId := range suiteConfig.MonsterConfigIdList {
 		monsterConfig, exist := groupConfig.MonsterMap[monsterConfigId]
 		if !exist {
 			logger.Error("monster config not exist, monsterConfigId: %v", monsterConfigId)
+			continue
+		}
+		isKill := dbSceneGroup.CheckIsKill(uint32(monsterConfig.ConfigId))
+		if isKill {
 			continue
 		}
 		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), monsterConfig)
@@ -731,6 +781,10 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		gadgetConfig, exist := groupConfig.GadgetMap[gadgetConfigId]
 		if !exist {
 			logger.Error("gadget config not exist, gadgetConfigId: %v", gadgetConfigId)
+			continue
+		}
+		isKill := dbSceneGroup.CheckIsKill(uint32(gadgetConfig.ConfigId))
+		if isKill {
 			continue
 		}
 		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), gadgetConfig)
@@ -749,25 +803,18 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		entityMap[entityId] = entity
 	}
 	scene.AddGroupSuite(groupId, suiteId, entityMap)
-	group := scene.GetGroupById(groupId)
-	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
-		// 物件创建触发器检测
-		GAME.GadgetCreateTriggerCheck(player, group, uint32(gadgetConfigId))
-	}
 }
 
 // CreateConfigEntity 创建配置表里的实体
 func (g *Game) CreateConfigEntity(player *model.Player, scene *Scene, groupId uint32, entityConfig any) uint32 {
-	dbWorld := player.GetDbWorld()
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(scene.GetId())
 	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
 	switch entityConfig.(type) {
 	case *gdconf.Monster:
 		monster := entityConfig.(*gdconf.Monster)
-		isKill := dbSceneGroup.CheckIsKill(uint32(monster.ConfigId))
-		if isKill {
-			return 0
-		}
 		return scene.CreateEntityMonster(
 			&model.Vector{X: float64(monster.Pos.X), Y: float64(monster.Pos.Y), Z: float64(monster.Pos.Z)},
 			&model.Vector{X: float64(monster.Rot.X), Y: float64(monster.Rot.Y), Z: float64(monster.Rot.Z)},
@@ -782,10 +829,6 @@ func (g *Game) CreateConfigEntity(player *model.Player, scene *Scene, groupId ui
 		)
 	case *gdconf.Gadget:
 		gadget := entityConfig.(*gdconf.Gadget)
-		isKill := dbSceneGroup.CheckIsKill(uint32(gadget.ConfigId))
-		if isKill {
-			return 0
-		}
 		// 70500000并不是实际的物件id 根据节点类型对应采集物配置表
 		if gadget.PointType != 0 && gadget.GadgetId == 70500000 {
 			gatherDataConfig := gdconf.GetGatherDataByPointType(gadget.PointType)
@@ -821,9 +864,8 @@ func (g *Game) CreateConfigEntity(player *model.Player, scene *Scene, groupId ui
 				groupId,
 			)
 		}
-	default:
-		return 0
 	}
+	return 0
 }
 
 // TODO 临时写死
@@ -895,7 +937,6 @@ func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, config
 	}
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v", player.WorldId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -934,7 +975,6 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 	}
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v", player.WorldId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -966,7 +1006,7 @@ var SceneTransactionSeq uint32 = 0
 func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType proto.EnterType) *proto.PlayerEnterSceneNotify {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v", player.WorldId)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return new(proto.PlayerEnterSceneNotify)
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -1034,6 +1074,10 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 	dungeonPointId uint32,
 ) *proto.PlayerEnterSceneNotify {
 	world := WORLD_MANAGER.GetWorldByID(targetPlayer.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return new(proto.PlayerEnterSceneNotify)
+	}
 	scene := world.GetSceneById(targetPlayer.SceneId)
 	enterSceneToken := world.AddEnterSceneContext(&EnterSceneContext{
 		OldSceneId: prevSceneId,
