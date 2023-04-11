@@ -266,7 +266,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 
-	if WORLD_MANAGER.IsBigWorld(world) && !world.IsPlayerFirstEnter(player) {
+	if WORLD_MANAGER.IsBigWorld(world) {
 		bigWorldAoi := world.GetBigWorldAoi()
 		bigWorldAoi.AddObjectToGridByPos(int64(player.PlayerID), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	}
@@ -679,7 +679,6 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
 	group := scene.GetGroupById(uint32(groupConfig.Id))
 	if group != nil {
-		logger.Error("group already exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerID)
 		return
 	}
 	initSuiteId := groupConfig.GroupInitConfig.Suite

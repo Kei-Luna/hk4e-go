@@ -22,7 +22,13 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 		g.SendError(cmd.SceneTransToPointRsp, player, &proto.SceneTransToPointRsp{}, proto.Retcode_RET_IN_TRANSFER)
 		return
 	}
-	dbWorld := player.GetDbWorld()
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		g.SendError(cmd.SceneTransToPointRsp, player, &proto.SceneTransToPointRsp{})
+		return
+	}
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(req.SceneId)
 	if dbScene == nil {
 		g.SendError(cmd.SceneTransToPointRsp, player, &proto.SceneTransToPointRsp{}, proto.Retcode_RET_POINT_NOT_UNLOCKED)
@@ -60,7 +66,13 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.UnlockTransPointReq)
 
-	dbWorld := player.GetDbWorld()
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{})
+		return
+	}
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(req.SceneId)
 	if dbScene == nil {
 		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{}, proto.Retcode_RET_POINT_NOT_UNLOCKED)
@@ -86,7 +98,13 @@ func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) 
 func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetScenePointReq)
 
-	dbWorld := player.GetDbWorld()
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
+		return
+	}
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(req.SceneId)
 	if dbScene == nil {
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
@@ -280,18 +298,18 @@ func (g *Game) PlayerQuitDungeonReq(player *model.Player, payloadMsg pb.Message)
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
-	ctx := world.GetLastEnterSceneContextBySceneIdAndUid(3, player.PlayerID)
+	ctx := world.GetLastEnterSceneContextByUid(player.PlayerID)
 	if ctx == nil {
 		return
 	}
-	pointDataConfig := gdconf.GetScenePointBySceneIdAndPointId(3, int32(ctx.OldDungeonPointId))
+	pointDataConfig := gdconf.GetScenePointBySceneIdAndPointId(int32(ctx.OldSceneId), int32(ctx.OldDungeonPointId))
 	if pointDataConfig == nil {
 		return
 	}
 	g.TeleportPlayer(
 		player,
 		proto.EnterReason_ENTER_REASON_DUNGEON_QUIT,
-		3,
+		ctx.OldSceneId,
 		&model.Vector{X: pointDataConfig.TranPos.X, Y: pointDataConfig.TranPos.Y, Z: pointDataConfig.TranPos.Z},
 		&model.Vector{X: pointDataConfig.TranRot.X, Y: pointDataConfig.TranRot.Y, Z: pointDataConfig.TranRot.Z},
 		0,

@@ -87,7 +87,9 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 	r.ai = r.CreateRobot(uid, name, sign)
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
+	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerID, 3)
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
+	aiWorld := WORLD_MANAGER.GetAiWorld()
 	if r.IsMainGs() {
 		// TODO 测试
 		for i := 1; i < 100; i++ {
@@ -105,13 +107,52 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 				AvatarTeamGuidList: []uint64{dbAvatar.AvatarMap[avatarId].Guid},
 				CurAvatarGuid:      dbAvatar.AvatarMap[avatarId].Guid,
 			})
-			pos := &model.Vector{
-				X: 1800.0 + random.GetRandomFloat64(-100.0, 100.0),
-				Y: 195.0 + random.GetRandomFloat64(0.0, 5.0),
-				Z: -1500.0 + random.GetRandomFloat64(-100.0, 100.0),
+			r.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
+				TargetUid: r.ai.PlayerID,
+			})
+			r.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
+				EnterSceneToken: aiWorld.GetEnterSceneToken(),
+			})
+			r.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
+				EnterSceneToken: aiWorld.GetEnterSceneToken(),
+			})
+			r.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
+				EnterSceneToken: aiWorld.GetEnterSceneToken(),
+			})
+			r.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
+				EnterSceneToken: aiWorld.GetEnterSceneToken(),
+			})
+			activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
+			entityMoveInfo := &proto.EntityMoveInfo{
+				EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
+				MotionInfo: &proto.MotionInfo{
+					Pos: &proto.Vector{
+						X: float32(1800.0 + random.GetRandomFloat64(-100.0, 100.0)),
+						Y: float32(195.0 + random.GetRandomFloat64(0.0, 5.0)),
+						Z: float32(-1500.0 + random.GetRandomFloat64(-100.0, 100.0)),
+					},
+					Rot: &proto.Vector{
+						X: 0,
+						Y: float32(random.GetRandomFloat64(0.0, 360.0)),
+						Z: 0,
+					},
+					State: proto.MotionState_MOTION_STANDBY,
+				},
+				SceneTime:   0,
+				ReliableSeq: 0,
 			}
-			robot.Pos = pos
-			r.UserWorldAddPlayer(WORLD_MANAGER.GetAiWorld(), robot)
+			combatData, err := pb.Marshal(entityMoveInfo)
+			if err != nil {
+				continue
+			}
+			r.CombatInvocationsNotify(robot, &proto.CombatInvocationsNotify{
+				InvokeList: []*proto.CombatInvokeEntry{{
+					CombatData:   combatData,
+					ForwardType:  proto.ForwardType_FORWARD_TO_ALL_EXCEPT_CUR,
+					ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
+				}},
+			})
+			r.UnionCmdNotify(robot, &proto.UnionCmdNotify{})
 		}
 	}
 	r.run()
@@ -145,8 +186,20 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 	robot := USER_MANAGER.GetOnlineUser(uid)
 	robot.DbState = model.DbNormal
 	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
-	robot.SceneLoadState = model.SceneEnterDone
 	robot.Signature = sign
+	world := WORLD_MANAGER.GetWorldByID(robot.WorldId)
+	g.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
 	return robot
 }
 

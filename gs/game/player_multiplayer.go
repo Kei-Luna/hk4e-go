@@ -415,6 +415,10 @@ func (g *Game) UserWorldRemovePlayer(world *World, player *model.Player) {
 	}
 
 	world.RemovePlayer(player)
+	if WORLD_MANAGER.IsBigWorld(world) {
+		bigWorldAoi := world.GetBigWorldAoi()
+		bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerID), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	}
 	player.WorldId = 0
 	if world.GetOwner().PlayerID == player.PlayerID {
 		// 房主离开销毁世界

@@ -363,6 +363,10 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			// 通知老格子里的其它玩家 自己消失
 			for otherPlayerId := range oldOtherWorldAvatarMap {
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
+				if otherPlayer == nil {
+					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerID)
+					continue
+				}
 				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{activeWorldAvatar.GetAvatarEntityId()})
 			}
 		}
@@ -381,6 +385,10 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			// 通知新格子里的其他玩家 自己出现
 			for otherPlayerId := range newOtherWorldAvatarMap {
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
+				if otherPlayer == nil {
+					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerID)
+					continue
+				}
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
 				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
 			}

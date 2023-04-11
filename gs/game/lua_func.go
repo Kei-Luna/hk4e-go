@@ -101,6 +101,18 @@ func GetContextGroup(player *model.Player, ctx *lua.LTable, luaState *lua.LState
 	return group
 }
 
+func GetContextDbSceneGroup(player *model.Player, groupId uint32) *model.DbSceneGroup {
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return nil
+	}
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(player.SceneId)
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	return dbSceneGroup
+}
+
 // RegLuaScriptLibFunc 注册LUA侧ScriptLib调用的Golang方法
 func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("GetEntityType", GetEntityType)
@@ -497,9 +509,11 @@ func GetGroupVariableValue(luaState *lua.LState) int {
 		return 1
 	}
 	name := luaState.ToString(2)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	value := dbSceneGroup.GetVariableByName(name)
 	luaState.Push(lua.LNumber(value))
 	return 1
@@ -518,9 +532,11 @@ func GetGroupVariableValueByGroup(luaState *lua.LState) int {
 	}
 	name := luaState.ToString(2)
 	groupId := luaState.ToInt(3)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	value := dbSceneGroup.GetVariableByName(name)
 	luaState.Push(lua.LNumber(value))
 	return 1
@@ -544,9 +560,11 @@ func SetGroupVariableValue(luaState *lua.LState) int {
 	}
 	name := luaState.ToString(2)
 	value := luaState.ToInt(3)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	dbSceneGroup.SetVariable(name, int32(value))
 	luaState.Push(lua.LNumber(0))
 	return 1
@@ -566,9 +584,11 @@ func SetGroupVariableValueByGroup(luaState *lua.LState) int {
 	name := luaState.ToString(2)
 	value := luaState.ToInt(3)
 	groupId := luaState.ToInt(4)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	dbSceneGroup.SetVariable(name, int32(value))
 	luaState.Push(lua.LNumber(0))
 	return 1
@@ -592,9 +612,11 @@ func ChangeGroupVariableValue(luaState *lua.LState) int {
 	}
 	name := luaState.ToString(2)
 	change := luaState.ToInt(3)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	value := dbSceneGroup.GetVariableByName(name)
 	dbSceneGroup.SetVariable(name, value+int32(change))
 	luaState.Push(lua.LNumber(0))
@@ -615,9 +637,11 @@ func ChangeGroupVariableValueByGroup(luaState *lua.LState) int {
 	name := luaState.ToString(2)
 	change := luaState.ToInt(3)
 	groupId := luaState.ToInt(4)
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupId))
+	dbSceneGroup := GetContextDbSceneGroup(player, uint32(groupId))
+	if dbSceneGroup == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	value := dbSceneGroup.GetVariableByName(name)
 	dbSceneGroup.SetVariable(name, value+int32(change))
 	luaState.Push(lua.LNumber(0))

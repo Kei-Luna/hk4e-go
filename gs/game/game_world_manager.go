@@ -252,13 +252,10 @@ func (w *World) AddEnterSceneContext(ctx *EnterSceneContext) uint32 {
 	return w.enterSceneToken
 }
 
-func (w *World) GetLastEnterSceneContextBySceneIdAndUid(sceneId uint32, uid uint32) *EnterSceneContext {
+func (w *World) GetLastEnterSceneContextByUid(uid uint32) *EnterSceneContext {
 	for token := w.enterSceneToken; token >= 5000; token -= 100 {
 		ctx, exist := w.enterSceneContextMap[token]
 		if !exist {
-			continue
-		}
-		if ctx.OldSceneId != sceneId {
 			continue
 		}
 		if ctx.Uid != uid {
@@ -267,6 +264,19 @@ func (w *World) GetLastEnterSceneContextBySceneIdAndUid(sceneId uint32, uid uint
 		return ctx
 	}
 	return nil
+}
+
+func (w *World) RemoveAllEnterSceneContextByUid(uid uint32) {
+	for token := w.enterSceneToken; token >= 5000; token -= 100 {
+		ctx, exist := w.enterSceneContextMap[token]
+		if !exist {
+			continue
+		}
+		if ctx.Uid != uid {
+			continue
+		}
+		delete(w.enterSceneContextMap, token)
+	}
 }
 
 func (w *World) GetWorldLevel() uint8 {
@@ -309,7 +319,6 @@ func (w *World) GetPlayerPeerId(player *model.Player) uint32 {
 			peerId = uint32(peerIdIndex) + 1
 		}
 	}
-	// logger.Debug("get player peer id is: %v, uid: %v", peerId, player.PlayerID)
 	return peerId
 }
 
@@ -362,12 +371,6 @@ func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 	scene := w.GetSceneById(sceneId)
 	scene.AddPlayer(player)
 	w.InitPlayerTeamEntityId(player)
-	if WORLD_MANAGER.IsBigWorld(w) {
-		activeAvatarId := w.GetPlayerActiveAvatarId(player)
-		worldAvatar := w.GetPlayerWorldAvatar(player, activeAvatarId)
-		w.bigWorldAoi.AddObjectToGridByPos(int64(player.PlayerID), worldAvatar,
-			float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
-	}
 }
 
 func (w *World) RemovePlayer(player *model.Player) {
@@ -375,6 +378,7 @@ func (w *World) RemovePlayer(player *model.Player) {
 	w.peerList = append(w.peerList[:peerId-1], w.peerList[peerId:]...)
 	scene := w.sceneMap[player.SceneId]
 	scene.RemovePlayer(player)
+	w.RemoveAllEnterSceneContextByUid(player.PlayerID)
 	delete(w.playerMap, player.PlayerID)
 	delete(w.playerFirstEnterMap, player.PlayerID)
 	delete(w.multiplayerTeam.localTeamMap, player.PlayerID)
@@ -382,8 +386,6 @@ func (w *World) RemovePlayer(player *model.Player) {
 	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerID)
 	if WORLD_MANAGER.IsBigWorld(w) {
 		w.RemoveMultiplayerTeam(player)
-		w.bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerID),
-			float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	} else {
 		if player.PlayerID != w.owner.PlayerID {
 			w.UpdateMultiplayerTeam()
@@ -658,7 +660,7 @@ func (w *World) copyLocalTeamToWorld(start int, end int, peerId uint32) {
 	}
 }
 
-// TODO 为了实现大世界无限人数写的
+// 为了实现大世界无限人数写的
 // 现在看来把世界里所有人放进队伍里发给客户端超过8个客户端会崩溃
 // 看来还是不能简单的走通用逻辑 需要对大世界场景队伍做特殊处理 欺骗客户端其他玩家仅仅以场景角色实体的形式出现
 
