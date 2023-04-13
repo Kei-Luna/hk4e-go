@@ -343,8 +343,6 @@ func (s *UDPSession) Close() error {
 	})
 
 	if once {
-		atomic.AddUint64(&DefaultSnmp.CurrEstab, ^uint64(0))
-
 		// try best to send all queued messages
 		s.mu.Lock()
 		s.kcp.flush(false)

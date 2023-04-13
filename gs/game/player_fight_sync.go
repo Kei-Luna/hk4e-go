@@ -487,9 +487,7 @@ func (g *Game) ClientAbilityChangeNotify(player *model.Player, payloadMsg pb.Mes
 			if abilityMetaAddAbility.Ability == nil {
 				continue
 			}
-			abilityList := worldAvatar.GetAbilityList()
-			abilityList = append(abilityList, abilityMetaAddAbility.Ability)
-			worldAvatar.SetAbilityList(abilityList)
+			worldAvatar.AddAbility(abilityMetaAddAbility.Ability)
 		case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_CHANGE:
 			abilityMetaModifierChange := new(proto.AbilityMetaModifierChange)
 			err := pb.Unmarshal(abilityInvokeEntry.AbilityData, abilityMetaModifierChange)
@@ -516,9 +514,7 @@ func (g *Game) ClientAbilityChangeNotify(player *model.Player, payloadMsg pb.Mes
 			if worldAvatar == nil {
 				continue
 			}
-			modifierList := worldAvatar.GetModifierList()
-			modifierList = append(modifierList, abilityAppliedModifier)
-			worldAvatar.SetModifierList(modifierList)
+			worldAvatar.AddModifier(abilityAppliedModifier)
 		}
 	}
 }
@@ -738,6 +734,7 @@ func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, 
 		}
 		g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_GEAR_START)
 	} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
+		// 木箱破碎
 		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 	}
 }

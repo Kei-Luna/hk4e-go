@@ -369,6 +369,9 @@ func (g *Game) SendMsg(cmdId uint16, userId uint32, clientSeq uint32, payloadMsg
 		logger.Error("player not exist, uid: %v, stack: %v", userId, logger.Stack())
 		return
 	}
+	if player.NetFreeze {
+		return
+	}
 	gameMsg := new(mq.GameMsg)
 	gameMsg.UserId = userId
 	gameMsg.CmdId = cmdId

@@ -47,6 +47,9 @@ func (r *RouteManager) doRoute(cmdId uint16, userId uint32, clientSeq uint32, pa
 		logger.Error("player not online, uid: %v", userId)
 		return
 	}
+	if player.NetFreeze {
+		return
+	}
 	player.ClientSeq = clientSeq
 	SELF = player
 	handlerFunc(player, payloadMsg)

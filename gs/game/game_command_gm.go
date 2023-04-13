@@ -19,31 +19,11 @@ type GMCmd struct {
 // 玩家通用GM指令
 
 // GMTeleportPlayer 传送玩家
-func (g *GMCmd) GMTeleportPlayer(userId, sceneId, dungeonId uint32, posX, posY, posZ float64) {
+func (g *GMCmd) GMTeleportPlayer(userId, sceneId uint32, posX, posY, posZ float64) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
-	}
-	dungeonPointId := uint32(0)
-	if dungeonId != 0 {
-		end := false
-		for _, pointData := range gdconf.GetScenePointMapBySceneId(int32(sceneId)) {
-			if end {
-				break
-			}
-			for _, v := range pointData.DungeonIds {
-				if uint32(v) == dungeonId {
-					dungeonPointId = uint32(pointData.Id)
-					end = true
-					break
-				}
-			}
-		}
-		if dungeonPointId == 0 {
-			logger.Error("dungeon pointid not found, dungeonId: %v, uid: %v", dungeonId, userId)
-			return
-		}
 	}
 	GAME.TeleportPlayer(
 		player,
@@ -51,8 +31,8 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId, dungeonId uint32, posX, posY, 
 		sceneId,
 		&model.Vector{X: posX, Y: posY, Z: posZ},
 		new(model.Vector),
-		dungeonId,
-		dungeonPointId,
+		0,
+		0,
 	)
 }
 
@@ -106,6 +86,7 @@ func (g *GMCmd) GMAddUserFlycloak(userId, flycloakId uint32) {
 
 // GMAddUserAllItem 给予玩家所有物品
 func (g *GMCmd) GMAddUserAllItem(userId, itemCount uint32) {
+	g.GMHWOptLogoutPlayer(userId)
 	itemList := make([]*ChangeItem, 0)
 	for itemId := range GAME.GetAllItemDataConfig() {
 		itemList = append(itemList, &ChangeItem{
@@ -125,6 +106,7 @@ func (g *GMCmd) GMAddUserAllWeapon(userId, itemCount uint32) {
 
 // GMAddUserAllReliquary 给予玩家所有圣遗物
 func (g *GMCmd) GMAddUserAllReliquary(userId, itemCount uint32) {
+	g.GMHWOptLogoutPlayer(userId)
 	for itemId := range GAME.GetAllReliquaryDataConfig() {
 		g.GMAddUserReliquary(userId, uint32(itemId), itemCount)
 	}
@@ -153,6 +135,7 @@ func (g *GMCmd) GMAddUserAllFlycloak(userId uint32) {
 
 // GMAddUserAllEvery 给予玩家所有内容
 func (g *GMCmd) GMAddUserAllEvery(userId, itemCount uint32) {
+	g.GMHWOptLogoutPlayer(userId)
 	// 给予玩家所有物品
 	g.GMAddUserAllItem(userId, itemCount)
 	// 给予玩家所有武器
@@ -165,8 +148,18 @@ func (g *GMCmd) GMAddUserAllEvery(userId, itemCount uint32) {
 	g.GMAddUserAllCostume(userId)
 	// 给予玩家所有风之翼
 	g.GMAddUserAllFlycloak(userId)
+}
 
+// GMHWOptLogoutPlayer GM重量级操作主动下线玩家
+func (g *GMCmd) GMHWOptLogoutPlayer(userId uint32) {
 	GAME.LogoutPlayer(userId)
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 冻结掉服务器对该玩家的下行 避免大量发包对整个系统造成压力
+	player.NetFreeze = true
 }
 
 // GMAddQuest 添加任务

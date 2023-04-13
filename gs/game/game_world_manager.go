@@ -399,8 +399,8 @@ type WorldAvatar struct {
 	avatarId       uint32
 	avatarEntityId uint32
 	weaponEntityId uint32
-	abilityList    []*proto.AbilityAppliedAbility
-	modifierList   []*proto.AbilityAppliedModifier
+	abilityMap     map[uint32]*proto.AbilityAppliedAbility
+	modifierMap    map[uint32]*proto.AbilityAppliedModifier
 }
 
 func (w *WorldAvatar) GetUid() uint32 {
@@ -424,28 +424,31 @@ func (w *WorldAvatar) SetWeaponEntityId(weaponEntityId uint32) {
 }
 
 func (w *WorldAvatar) GetAbilityList() []*proto.AbilityAppliedAbility {
-	return w.abilityList
+	abilityList := make([]*proto.AbilityAppliedAbility, 0)
+	for _, ability := range w.abilityMap {
+		abilityList = append(abilityList, ability)
+	}
+	return abilityList
 }
 
 func (w *WorldAvatar) GetAbilityByInstanceId(instanceId uint32) *proto.AbilityAppliedAbility {
-	for _, ability := range w.abilityList {
-		if ability.InstancedAbilityId == instanceId {
-			return ability
-		}
-	}
-	return nil
+	return w.abilityMap[instanceId]
 }
 
-func (w *WorldAvatar) SetAbilityList(abilityList []*proto.AbilityAppliedAbility) {
-	w.abilityList = abilityList
+func (w *WorldAvatar) AddAbility(ability *proto.AbilityAppliedAbility) {
+	w.abilityMap[ability.InstancedAbilityId] = ability
 }
 
 func (w *WorldAvatar) GetModifierList() []*proto.AbilityAppliedModifier {
-	return w.modifierList
+	modifierList := make([]*proto.AbilityAppliedModifier, 0)
+	for _, modifier := range w.modifierMap {
+		modifierList = append(modifierList, modifier)
+	}
+	return modifierList
 }
 
-func (w *WorldAvatar) SetModifierList(modifierList []*proto.AbilityAppliedModifier) {
-	w.modifierList = modifierList
+func (w *WorldAvatar) AddModifier(modifier *proto.AbilityAppliedModifier) {
+	w.modifierMap[modifier.InstancedModifierId] = modifier
 }
 
 // GetWorldAvatarList 获取世界队伍的全部角色列表
@@ -632,8 +635,8 @@ func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) 
 			avatarId:       avatarId,
 			avatarEntityId: 0,
 			weaponEntityId: 0,
-			abilityList:    make([]*proto.AbilityAppliedAbility, 0),
-			modifierList:   make([]*proto.AbilityAppliedModifier, 0),
+			abilityMap:     make(map[uint32]*proto.AbilityAppliedAbility),
+			modifierMap:    make(map[uint32]*proto.AbilityAppliedModifier),
 		}
 	}
 	w.multiplayerTeam.localTeamMap[player.PlayerID] = newLocalTeam
@@ -650,8 +653,8 @@ func (w *World) copyLocalTeamToWorld(start int, end int, peerId uint32) {
 				avatarId:       0,
 				avatarEntityId: 0,
 				weaponEntityId: 0,
-				abilityList:    nil,
-				modifierList:   nil,
+				abilityMap:     nil,
+				modifierMap:    nil,
 			}
 			continue
 		}

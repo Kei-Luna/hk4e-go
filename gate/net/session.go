@@ -41,10 +41,10 @@ func (k *KcpConnectManager) recvMsgHandle(protoMsg *ProtoMsg, session *Session) 
 	if protoMsg.HeadMessage == nil {
 		logger.Error("recv null head msg: %v", protoMsg)
 	}
-	// gate本地处理的请求
+	// 网关服务器本地处理的请求
 	switch protoMsg.CmdId {
 	case cmd.GetPlayerTokenReq:
-		// 获取玩家token请求
+		// GATE登录包
 		if connState != ConnEst {
 			return
 		}
@@ -55,14 +55,15 @@ func (k *KcpConnectManager) recvMsgHandle(protoMsg *ProtoMsg, session *Session) 
 			return
 		}
 		// 返回数据到客户端
-		rsp := new(ProtoMsg)
-		rsp.ConvId = protoMsg.ConvId
-		rsp.CmdId = cmd.GetPlayerTokenRsp
-		rsp.HeadMessage = k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId)
-		rsp.PayloadMessage = getPlayerTokenRsp
+		rsp := &ProtoMsg{
+			ConvId:         protoMsg.ConvId,
+			CmdId:          cmd.GetPlayerTokenRsp,
+			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
+			PayloadMessage: getPlayerTokenRsp,
+		}
 		session.kcpRawSendChan <- rsp
 	case cmd.PlayerForceExitReq:
-		// 玩家退出游戏请求
+		// 退出游戏
 		if connState != ConnActive {
 			return
 		}
@@ -72,17 +73,18 @@ func (k *KcpConnectManager) recvMsgHandle(protoMsg *ProtoMsg, session *Session) 
 			EventMessage: uint32(kcp.EnetClientClose),
 		}
 	case cmd.PingReq:
-		// ping请求
+		// ping
 		pingReq := protoMsg.PayloadMessage.(*proto.PingReq)
 		logger.Debug("user ping req, data: %v", pingReq.String())
 		// 返回数据到客户端
 		pingRsp := new(proto.PingRsp)
 		pingRsp.ClientTime = pingReq.ClientTime
-		rsp := new(ProtoMsg)
-		rsp.ConvId = protoMsg.ConvId
-		rsp.CmdId = cmd.PingRsp
-		rsp.HeadMessage = k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId)
-		rsp.PayloadMessage = pingRsp
+		rsp := &ProtoMsg{
+			ConvId:         protoMsg.ConvId,
+			CmdId:          cmd.PingRsp,
+			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
+			PayloadMessage: pingRsp,
+		}
 		session.kcpRawSendChan <- rsp
 		logger.Debug("convId: %v, RTO: %v, SRTT: %v, RTTVar: %v",
 			protoMsg.ConvId, session.conn.GetRTO(), session.conn.GetSRTT(), session.conn.GetSRTTVar())
@@ -91,35 +93,40 @@ func (k *KcpConnectManager) recvMsgHandle(protoMsg *ProtoMsg, session *Session) 
 		}
 		// 通知GS玩家客户端往返时延
 		rtt := session.conn.GetSRTT()
-		connCtrlMsg := new(mq.ConnCtrlMsg)
-		connCtrlMsg.UserId = userId
-		connCtrlMsg.ClientRtt = uint32(rtt)
+		connCtrlMsg := &mq.ConnCtrlMsg{
+			UserId:     userId,
+			ClientRtt:  uint32(rtt),
+			ClientTime: 0,
+		}
 		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 			MsgType:     mq.MsgTypeConnCtrl,
 			EventId:     mq.ClientRttNotify,
 			ConnCtrlMsg: connCtrlMsg,
 		})
 		// 通知GS玩家客户端的本地时钟
-		connCtrlMsg = new(mq.ConnCtrlMsg)
-		connCtrlMsg.UserId = userId
-		connCtrlMsg.ClientTime = pingReq.ClientTime
+		connCtrlMsg = &mq.ConnCtrlMsg{
+			UserId:     userId,
+			ClientTime: pingReq.ClientTime,
+		}
 		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 			MsgType:     mq.MsgTypeConnCtrl,
 			EventId:     mq.ClientTimeNotify,
 			ConnCtrlMsg: connCtrlMsg,
 		})
 	case cmd.PlayerLoginReq:
+		// GS登录包
 		if connState != ConnWaitLogin {
 			return
 		}
 		playerLoginReq := protoMsg.PayloadMessage.(*proto.PlayerLoginReq)
 		playerLoginReq.TargetUid = 0
 		playerLoginReq.TargetHomeOwnerUid = 0
-		gameMsg := new(mq.GameMsg)
-		gameMsg.UserId = userId
-		gameMsg.CmdId = protoMsg.CmdId
-		gameMsg.ClientSeq = protoMsg.HeadMessage.ClientSequenceId
-		gameMsg.PayloadMessage = playerLoginReq
+		gameMsg := &mq.GameMsg{
+			UserId:         userId,
+			CmdId:          protoMsg.CmdId,
+			ClientSeq:      protoMsg.HeadMessage.ClientSequenceId,
+			PayloadMessage: playerLoginReq,
+		}
 		// 转发到GS
 		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 			MsgType: mq.MsgTypeGame,
@@ -131,10 +138,12 @@ func (k *KcpConnectManager) recvMsgHandle(protoMsg *ProtoMsg, session *Session) 
 			logger.Error("conn not active so drop packet, cmdId: %v, userId: %v, convId: %v", protoMsg.CmdId, userId, protoMsg.ConvId)
 			return
 		}
-		gameMsg := new(mq.GameMsg)
-		gameMsg.UserId = userId
-		gameMsg.CmdId = protoMsg.CmdId
-		gameMsg.ClientSeq = protoMsg.HeadMessage.ClientSequenceId
+		gameMsg := &mq.GameMsg{
+			UserId:             userId,
+			CmdId:              protoMsg.CmdId,
+			ClientSeq:          protoMsg.HeadMessage.ClientSequenceId,
+			PayloadMessageData: nil,
+		}
 		// 在这里直接序列化成二进制数据 终结PayloadMessage的生命周期并回收进缓存池
 		payloadMessageData, err := pb.Marshal(protoMsg.PayloadMessage)
 		if err != nil {
@@ -207,32 +216,34 @@ func (k *KcpConnectManager) sendMsgHandle() {
 						logger.Error("can not find convId by userId")
 						continue
 					}
-					protoMsg := new(ProtoMsg)
-					protoMsg.ConvId = convId
-					protoMsg.CmdId = gameMsg.CmdId
-					protoMsg.HeadMessage = k.getHeadMsg(gameMsg.ClientSeq)
-					protoMsg.PayloadMessage = gameMsg.PayloadMessage
+					protoMsg := &ProtoMsg{
+						ConvId:         convId,
+						CmdId:          gameMsg.CmdId,
+						HeadMessage:    k.getHeadMsg(gameMsg.ClientSeq),
+						PayloadMessage: gameMsg.PayloadMessage,
+					}
 					session := convSessionMap[protoMsg.ConvId]
 					if session == nil {
 						logger.Error("session is nil, convId: %v", protoMsg.ConvId)
-						return
+						continue
 					}
 					kcpRawSendChan := session.kcpRawSendChan
 					if kcpRawSendChan == nil {
 						logger.Error("kcpRawSendChan is nil, convId: %v", protoMsg.ConvId)
-						return
+						continue
 					}
 					if len(kcpRawSendChan) == 1000 {
 						logger.Error("kcpRawSendChan is full, convId: %v", protoMsg.ConvId)
-						return
+						continue
 					}
 					if protoMsg.CmdId == cmd.PlayerLoginRsp {
 						logger.Debug("session active, convId: %v", protoMsg.ConvId)
 						session.connState = ConnActive
 						// 通知GS玩家各个服务器的appid
-						serverMsg := new(mq.ServerMsg)
-						serverMsg.UserId = session.userId
-						serverMsg.AnticheatServerAppId = session.anticheatServerAppId
+						serverMsg := &mq.ServerMsg{
+							UserId:               session.userId,
+							AnticheatServerAppId: session.anticheatServerAppId,
+						}
 						k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 							MsgType:   mq.MsgTypeServer,
 							EventId:   mq.ServerAppidBindNotify,
@@ -273,13 +284,14 @@ func (k *KcpConnectManager) sendMsgHandle() {
 					session.gsServerAppId = serverMsg.GameServerAppId
 					session.anticheatServerAppId = ""
 					// 网关代发登录请求到新的GS
-					gameMsg := new(mq.GameMsg)
-					gameMsg.UserId = serverMsg.UserId
-					gameMsg.CmdId = cmd.PlayerLoginReq
-					gameMsg.ClientSeq = 0
-					gameMsg.PayloadMessage = &proto.PlayerLoginReq{
-						TargetUid:          serverMsg.JoinHostUserId,
-						TargetHomeOwnerUid: 0,
+					gameMsg := &mq.GameMsg{
+						UserId:    serverMsg.UserId,
+						CmdId:     cmd.PlayerLoginReq,
+						ClientSeq: 0,
+						PayloadMessage: &proto.PlayerLoginReq{
+							TargetUid:          serverMsg.JoinHostUserId,
+							TargetHomeOwnerUid: 0,
+						},
 					}
 					k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 						MsgType: mq.MsgTypeGame,
