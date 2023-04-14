@@ -333,6 +333,9 @@ func (s *Scene) RemoveGroupSuite(groupId uint32, suiteId uint8) {
 		s.DestroyEntity(entity.id)
 	}
 	delete(group.suiteMap, suiteId)
+	if len(group.suiteMap) == 0 {
+		delete(s.groupMap, groupId)
+	}
 }
 
 type Group struct {

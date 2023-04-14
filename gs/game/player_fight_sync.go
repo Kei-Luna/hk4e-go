@@ -258,8 +258,25 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		}
 		// 旧有新没有的group即为卸载的
 		if !world.GetMultiplayer() {
-			// 处理多人世界不同玩家不同位置的group卸载情况
+			// 单人世界直接卸载group
 			g.RemoveSceneGroup(player, scene, groupConfig)
+		} else {
+			// 多人世界group附近没有任何玩家则卸载
+			remove := true
+			for _, otherPlayer := range scene.GetAllPlayer() {
+				for otherPlayerGroupId := range g.GetNeighborGroup(otherPlayer.SceneId, otherPlayer.Pos) {
+					if otherPlayerGroupId == groupId {
+						remove = false
+						break
+					}
+				}
+				if !remove {
+					break
+				}
+			}
+			if remove {
+				g.RemoveSceneGroup(player, scene, groupConfig)
+			}
 		}
 	}
 	for groupId, groupConfig := range newNeighborGroupMap {

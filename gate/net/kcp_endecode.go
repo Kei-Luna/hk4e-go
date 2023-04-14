@@ -32,21 +32,16 @@ type KcpMsg struct {
 	ProtoData []byte
 }
 
-func DecodeBinToPayload(data []byte, dataBuf *[]byte, convId uint64, kcpMsgList *[]*KcpMsg, xorKey []byte) {
+func DecodeBinToPayload(data []byte, convId uint64, kcpMsgList *[]*KcpMsg, xorKey []byte) {
 	// xor解密
 	endec.Xor(data, xorKey)
-	DecodeLoop(data, dataBuf, convId, kcpMsgList)
+	DecodeLoop(data, convId, kcpMsgList)
 }
 
-func DecodeLoop(data []byte, dataBuf *[]byte, convId uint64, kcpMsgList *[]*KcpMsg) {
-	if len(*dataBuf) != 0 {
-		// 取出之前的缓冲区数据
-		data = append(*dataBuf, data...)
-		*dataBuf = make([]byte, 0, 1500)
-	}
+func DecodeLoop(data []byte, convId uint64, kcpMsgList *[]*KcpMsg) {
 	// 长度太短
 	if len(data) < 12 {
-		logger.Debug("packet len less 12 byte")
+		logger.Error("packet len less than 12 byte")
 		return
 	}
 	// 头部幻数错误
@@ -66,13 +61,8 @@ func DecodeLoop(data []byte, dataBuf *[]byte, convId uint64, kcpMsgList *[]*KcpM
 		logger.Error("packet len too long")
 		return
 	}
-	haveMorePacket := false
-	if len(data) > packetLen {
-		// 有不止一个包
-		haveMorePacket = true
-	} else if len(data) < packetLen {
-		// 这一次没收够 放入缓冲区
-		*dataBuf = append(*dataBuf, data...)
+	if len(data) < packetLen {
+		logger.Error("packet len not enough")
 		return
 	}
 	// 尾部幻数错误
@@ -91,9 +81,9 @@ func DecodeLoop(data []byte, dataBuf *[]byte, convId uint64, kcpMsgList *[]*KcpM
 	kcpMsg.HeadData = headData
 	kcpMsg.ProtoData = protoData
 	*kcpMsgList = append(*kcpMsgList, kcpMsg)
-	// 递归解析
-	if haveMorePacket {
-		DecodeLoop(data[packetLen:], dataBuf, convId, kcpMsgList)
+	// 有不止一个包 递归解析
+	if len(data) > packetLen {
+		DecodeLoop(data[packetLen:], convId, kcpMsgList)
 	}
 }
 

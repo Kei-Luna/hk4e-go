@@ -69,7 +69,6 @@ func (s *Session) recvHandle() {
 	conn := s.Conn
 	convId := conn.GetConv()
 	recvBuf := make([]byte, hk4egatenet.PacketMaxLen)
-	dataBuf := make([]byte, 0, 1500)
 	for {
 		_ = conn.SetReadDeadline(time.Now().Add(time.Second * hk4egatenet.ConnRecvTimeout))
 		recvLen, err := conn.Read(recvBuf)
@@ -80,7 +79,7 @@ func (s *Session) recvHandle() {
 		}
 		recvData := recvBuf[:recvLen]
 		kcpMsgList := make([]*hk4egatenet.KcpMsg, 0)
-		hk4egatenet.DecodeBinToPayload(recvData, &dataBuf, convId, &kcpMsgList, s.XorKey)
+		hk4egatenet.DecodeBinToPayload(recvData, convId, &kcpMsgList, s.XorKey)
 		for _, v := range kcpMsgList {
 			protoMsgList := hk4egatenet.ProtoDecode(v, s.ServerCmdProtoMap, s.ClientCmdProtoMap)
 			for _, vv := range protoMsgList {

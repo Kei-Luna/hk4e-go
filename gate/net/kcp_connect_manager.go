@@ -287,7 +287,6 @@ func (k *KcpConnectManager) recvHandle(session *Session) {
 	conn := session.conn
 	convId := conn.GetConv()
 	recvBuf := make([]byte, PacketMaxLen)
-	dataBuf := make([]byte, 0, 1500)
 	pktFreqLimitCounter := 0
 	pktFreqLimitTimer := time.Now().UnixNano()
 	for {
@@ -313,7 +312,7 @@ func (k *KcpConnectManager) recvHandle(session *Session) {
 		}
 		recvData := recvBuf[:recvLen]
 		kcpMsgList := make([]*KcpMsg, 0)
-		DecodeBinToPayload(recvData, &dataBuf, convId, &kcpMsgList, session.xorKey)
+		DecodeBinToPayload(recvData, convId, &kcpMsgList, session.xorKey)
 		for _, v := range kcpMsgList {
 			protoMsgList := ProtoDecode(v, k.serverCmdProtoMap, k.clientCmdProtoMap)
 			for _, vv := range protoMsgList {

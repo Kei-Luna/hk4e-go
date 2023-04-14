@@ -399,54 +399,46 @@ func (m *MessageQueue) gateTcpMqConn(gateServerConnAddrMap map[string]bool) {
 }
 
 func (m *MessageQueue) gateTcpMqRecvHandle(inst *GateTcpMqInst) {
-	dataBuf := make([]byte, 0, 1024)
-	recvBuf := make([]byte, 1024*1024)
+	header := make([]byte, 4)
+	payload := make([]byte, 1024)
 	for {
-		recvLen, err := inst.conn.Read(recvBuf)
-		if err != nil {
-			logger.Error("gate tcp mq recv error: %v", err)
-			m.gateTcpMqEventChan <- &GateTcpMqEvent{
-				event: EventDisconnect,
-				inst:  inst,
+		// 读取头部的消息长度
+		recvLen := 0
+		for recvLen < 4 {
+			n, err := inst.conn.Read(header[recvLen:])
+			if err != nil {
+				logger.Error("gate tcp mq recv error: %v", err)
+				m.gateTcpMqEventChan <- &GateTcpMqEvent{
+					event: EventDisconnect,
+					inst:  inst,
+				}
+				_ = inst.conn.Close()
+				return
 			}
-			_ = inst.conn.Close()
-			return
+			recvLen += n
 		}
-		recvBuf = recvBuf[:recvLen]
-		m.gateTcpMqRecvHandleLoop(recvBuf, &dataBuf)
-	}
-}
-
-func (m *MessageQueue) gateTcpMqRecvHandleLoop(data []byte, dataBuf *[]byte) {
-	if len(*dataBuf) != 0 {
-		// 取出之前的缓冲区数据
-		data = append(*dataBuf, data...)
-		*dataBuf = make([]byte, 0, 1024)
-	}
-	// 长度太短
-	if len(data) < 4 {
-		*dataBuf = append(*dataBuf, data...)
-		return
-	}
-	// 消息的载荷部分长度
-	msgPayloadLen := binary.BigEndian.Uint32(data[0:4])
-	// 检查长度
-	packetLen := int(msgPayloadLen) + 4
-	haveMorePacket := false
-	if len(data) > packetLen {
-		// 有不止一个包
-		haveMorePacket = true
-	} else if len(data) < packetLen {
-		// 这一次没收够 放入缓冲区
-		*dataBuf = append(*dataBuf, data...)
-		return
-	}
-	rawData := data[4 : 4+msgPayloadLen]
-	netMsg := m.parseNetMsg(rawData)
-	if netMsg != nil {
-		m.netMsgOutput <- netMsg
-	}
-	if haveMorePacket {
-		m.gateTcpMqRecvHandleLoop(data[packetLen:], dataBuf)
+		msgLen := binary.BigEndian.Uint32(header)
+		// 读取消息体
+		if len(payload) < int(msgLen) {
+			payload = make([]byte, msgLen)
+		}
+		recvLen = 0
+		for recvLen < int(msgLen) {
+			n, err := inst.conn.Read(payload[recvLen:msgLen])
+			if err != nil {
+				logger.Error("gate tcp mq recv error: %v", err)
+				m.gateTcpMqEventChan <- &GateTcpMqEvent{
+					event: EventDisconnect,
+					inst:  inst,
+				}
+				_ = inst.conn.Close()
+				return
+			}
+			recvLen += n
+		}
+		netMsg := m.parseNetMsg(payload[:msgLen])
+		if netMsg != nil {
+			m.netMsgOutput <- netMsg
+		}
 	}
 }

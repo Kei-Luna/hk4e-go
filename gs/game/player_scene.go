@@ -56,10 +56,27 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
 		// 卸载旧位置附近的group
-		for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
+		for groupId, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
 			if !world.GetMultiplayer() {
-				// 处理多人世界不同玩家不同位置的group卸载情况
+				// 单人世界直接卸载group
 				g.RemoveSceneGroup(player, oldScene, groupConfig)
+			} else {
+				// 多人世界group附近没有任何玩家则卸载
+				remove := true
+				for _, otherPlayer := range oldScene.GetAllPlayer() {
+					for otherPlayerGroupId := range g.GetNeighborGroup(otherPlayer.SceneId, otherPlayer.Pos) {
+						if otherPlayerGroupId == groupId {
+							remove = false
+							break
+						}
+					}
+					if !remove {
+						break
+					}
+				}
+				if remove {
+					g.RemoveSceneGroup(player, oldScene, groupConfig)
+				}
 			}
 		}
 	}
