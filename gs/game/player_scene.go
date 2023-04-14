@@ -60,7 +60,7 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 			if !world.GetMultiplayer() {
 				// 单人世界直接卸载group
 				g.RemoveSceneGroup(player, oldScene, groupConfig)
-			} else {
+			} else if !WORLD_MANAGER.IsBigWorld(world) {
 				// 多人世界group附近没有任何玩家则卸载
 				remove := true
 				for _, otherPlayer := range oldScene.GetAllPlayer() {
@@ -342,6 +342,14 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 			continue
 		}
 		g.JoinOtherWorld(otherPlayer, player)
+	}
+
+	if WORLD_MANAGER.IsBigWorld(world) {
+		// aoi区域玩家数量限制
+		bigWorldAoi := world.GetBigWorldAoi()
+		if len(bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))) > 8 {
+			g.LogoutPlayer(player.PlayerID)
+		}
 	}
 }
 

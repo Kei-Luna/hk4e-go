@@ -260,7 +260,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		if !world.GetMultiplayer() {
 			// 单人世界直接卸载group
 			g.RemoveSceneGroup(player, scene, groupConfig)
-		} else {
+		} else if !WORLD_MANAGER.IsBigWorld(world) {
 			// 多人世界group附近没有任何玩家则卸载
 			remove := true
 			for _, otherPlayer := range scene.GetAllPlayer() {
@@ -418,6 +418,10 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 		}
 		// 新格子添加玩家
 		bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, newGid)
+		// aoi区域玩家数量限制
+		if len(bigWorldAoi.GetObjectListByGid(newGid)) > 8 {
+			g.LogoutPlayer(player.PlayerID)
+		}
 	}
 }
 
