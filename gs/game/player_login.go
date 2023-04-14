@@ -157,9 +157,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 			IsOnline: true,
 		},
 	})
-	if userId < PlayerBaseUid {
-		return
-	}
 	atomic.AddInt32(&ONLINE_PLAYER_NUM, 1)
 
 	SELF = nil
@@ -197,30 +194,19 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE] = 2
 	player.PropertiesMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
 
-	player.SafePos = new(model.Vector)
-	player.Pos = new(model.Vector)
-	player.Rot = new(model.Vector)
 	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.SceneId))
-	if sceneLuaConfig == nil {
+	if sceneLuaConfig != nil {
+		bornPos := sceneLuaConfig.SceneConfig.BornPos
+		bornRot := sceneLuaConfig.SceneConfig.BornRot
+		player.SafePos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
+		player.Pos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
+		player.Rot = &model.Vector{X: float64(bornRot.X), Y: float64(bornRot.Y), Z: float64(bornRot.Z)}
+	} else {
 		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerID)
-		return player
+		player.SafePos = &model.Vector{X: 2747, Y: 194, Z: -1719}
+		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
+		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
-	player.SafePos = &model.Vector{
-		X: float64(sceneLuaConfig.SceneConfig.BornPos.X),
-		Y: float64(sceneLuaConfig.SceneConfig.BornPos.Y),
-		Z: float64(sceneLuaConfig.SceneConfig.BornPos.Z),
-	}
-	player.Pos = &model.Vector{
-		X: float64(sceneLuaConfig.SceneConfig.BornPos.X),
-		Y: float64(sceneLuaConfig.SceneConfig.BornPos.Y),
-		Z: float64(sceneLuaConfig.SceneConfig.BornPos.Z),
-	}
-	player.Rot = &model.Vector{
-		X: float64(sceneLuaConfig.SceneConfig.BornRot.X),
-		Y: float64(sceneLuaConfig.SceneConfig.BornRot.Y),
-		Z: float64(sceneLuaConfig.SceneConfig.BornRot.Z),
-	}
-
 	return player
 }
 

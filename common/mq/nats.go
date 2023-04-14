@@ -399,7 +399,7 @@ func (m *MessageQueue) gateTcpMqConn(gateServerConnAddrMap map[string]bool) {
 }
 
 func (m *MessageQueue) gateTcpMqRecvHandle(inst *GateTcpMqInst) {
-	dataBuf := make([]byte, 0, 1500)
+	dataBuf := make([]byte, 0, 1024)
 	recvBuf := make([]byte, 1024*1024)
 	for {
 		recvLen, err := inst.conn.Read(recvBuf)
@@ -421,11 +421,10 @@ func (m *MessageQueue) gateTcpMqRecvHandleLoop(data []byte, dataBuf *[]byte) {
 	if len(*dataBuf) != 0 {
 		// 取出之前的缓冲区数据
 		data = append(*dataBuf, data...)
-		*dataBuf = make([]byte, 0, 1500)
+		*dataBuf = make([]byte, 0, 1024)
 	}
 	// 长度太短
 	if len(data) < 4 {
-		logger.Debug("packet len less 4 byte, data: %v", data)
 		*dataBuf = append(*dataBuf, data...)
 		return
 	}

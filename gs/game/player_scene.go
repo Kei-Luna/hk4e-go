@@ -438,9 +438,8 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 		}
 		entityList := make([]*proto.SceneEntityInfo, 0)
 		for _, entityId := range entityIdList[begin:end] {
-			entityMap := scene.GetAllEntity()
-			entity, exist := entityMap[entityId]
-			if !exist {
+			entity := scene.GetEntity(entityId)
+			if entity == nil {
 				logger.Error("get entity is nil, entityId: %v", entityId)
 				continue
 			}

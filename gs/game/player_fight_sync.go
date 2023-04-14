@@ -2,6 +2,7 @@ package game
 
 import (
 	"strings"
+	"time"
 
 	"hk4e/common/constant"
 	"hk4e/gdconf"
@@ -154,16 +155,13 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				// 玩家实体在移动
 				g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos,
 					&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
+					sceneEntity.GetId(),
 				)
 				if WORLD_MANAGER.IsBigWorld(world) {
 					g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
 						&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
 					)
 				}
-				// 场景区域触发器检测
-				g.SceneRegionTriggerCheck(player, player.Pos,
-					&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
-					sceneEntity.GetId())
 				// 更新玩家的位置信息
 				player.Pos.X, player.Pos.Y, player.Pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
 				player.Rot.X, player.Rot.Y, player.Rot.Z = float64(motionInfo.Rot.X), float64(motionInfo.Rot.Y), float64(motionInfo.Rot.Z)
@@ -185,7 +183,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				// 处理耐力消耗
 				g.ImmediateStamina(player, motionInfo.State)
 			} else {
-				// 非玩家实体在移动
+				// 其他实体在移动
 				// 更新场景实体的位置信息
 				pos := sceneEntity.GetPos()
 				pos.X, pos.Y, pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
@@ -231,7 +229,13 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 	}
 }
 
-func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
+func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, entityId uint32) {
+	// 服务器处理玩家移动场景区块aoi事件频率限制
+	now := uint64(time.Now().UnixMilli())
+	if now-player.LastSceneBlockAoiMoveTime < 200 {
+		return
+	}
+	player.LastSceneBlockAoiMoveTime = now
 	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
 	aoiManager, exist := sceneBlockAoiMap[player.SceneId]
 	if !exist {
@@ -304,6 +308,8 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	if len(addEntityIdList) > 0 {
 		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
 	}
+	// 场景区域触发器检测
+	g.SceneRegionTriggerCheck(player, oldPos, newPos, entityId)
 }
 
 func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
@@ -346,10 +352,10 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 		}
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
+		// 老格子移除玩家
+		bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), oldGid)
 		// 处理消失的格子
 		for _, delGridId := range delGridIdList {
-			// 老格子移除玩家
-			bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), delGridId)
 			// 通知自己 老格子里的其它玩家消失
 			oldOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(delGridId)
 			delEntityIdList := make([]uint32, 0)
@@ -392,9 +398,9 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
 				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
 			}
-			// 新格子添加玩家
-			bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, addGridId)
 		}
+		// 新格子添加玩家
+		bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, newGid)
 	}
 }
 

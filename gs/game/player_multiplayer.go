@@ -346,7 +346,7 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 
 	scene := world.GetSceneById(hostPlayer.SceneId)
 	entityIdList := make([]uint32, 0)
-	for _, entity := range scene.GetAllEntity() {
+	for _, entity := range g.GetVisionEntity(scene, hostPlayer.Pos) {
 		entityIdList = append(entityIdList, entity.GetId())
 	}
 	g.RemoveSceneEntityNotifyToPlayer(hostPlayer, proto.VisionType_VISION_MISS, entityIdList)
@@ -396,7 +396,7 @@ func (g *Game) UserWorldRemovePlayer(world *World, player *model.Player) {
 	scene := world.GetSceneById(player.SceneId)
 
 	entityIdList := make([]uint32, 0)
-	for _, entity := range scene.GetAllEntity() {
+	for _, entity := range g.GetVisionEntity(scene, player.Pos) {
 		entityIdList = append(entityIdList, entity.GetId())
 	}
 	g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, entityIdList)

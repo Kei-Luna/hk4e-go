@@ -86,7 +86,7 @@ func (g *GMCmd) GMAddUserFlycloak(userId, flycloakId uint32) {
 
 // GMAddUserAllItem 给予玩家所有物品
 func (g *GMCmd) GMAddUserAllItem(userId, itemCount uint32) {
-	g.GMHWOptLogoutPlayer(userId)
+	GAME.LogoutPlayer(userId)
 	itemList := make([]*ChangeItem, 0)
 	for itemId := range GAME.GetAllItemDataConfig() {
 		itemList = append(itemList, &ChangeItem{
@@ -106,7 +106,7 @@ func (g *GMCmd) GMAddUserAllWeapon(userId, itemCount uint32) {
 
 // GMAddUserAllReliquary 给予玩家所有圣遗物
 func (g *GMCmd) GMAddUserAllReliquary(userId, itemCount uint32) {
-	g.GMHWOptLogoutPlayer(userId)
+	GAME.LogoutPlayer(userId)
 	for itemId := range GAME.GetAllReliquaryDataConfig() {
 		g.GMAddUserReliquary(userId, uint32(itemId), itemCount)
 	}
@@ -135,7 +135,7 @@ func (g *GMCmd) GMAddUserAllFlycloak(userId uint32) {
 
 // GMAddUserAllEvery 给予玩家所有内容
 func (g *GMCmd) GMAddUserAllEvery(userId, itemCount uint32) {
-	g.GMHWOptLogoutPlayer(userId)
+	GAME.LogoutPlayer(userId)
 	// 给予玩家所有物品
 	g.GMAddUserAllItem(userId, itemCount)
 	// 给予玩家所有武器
@@ -148,18 +148,6 @@ func (g *GMCmd) GMAddUserAllEvery(userId, itemCount uint32) {
 	g.GMAddUserAllCostume(userId)
 	// 给予玩家所有风之翼
 	g.GMAddUserAllFlycloak(userId)
-}
-
-// GMHWOptLogoutPlayer GM重量级操作主动下线玩家
-func (g *GMCmd) GMHWOptLogoutPlayer(userId uint32) {
-	GAME.LogoutPlayer(userId)
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	// 冻结掉服务器对该玩家的下行 避免大量发包对整个系统造成压力
-	player.NetFreeze = true
 }
 
 // GMAddQuest 添加任务

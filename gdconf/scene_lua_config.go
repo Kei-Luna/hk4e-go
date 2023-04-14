@@ -16,8 +16,8 @@ import (
 // 场景详情配置数据
 
 const (
-	SceneGroupLoaderLimit = 4 // 加载文件的并发数 此操作很耗内存 调大之前请确保你的机器内存足够
-	LuaStateLruKeepNum    = 100
+	SceneGroupLoaderLimit = 4    // 加载文件的并发数 此操作很耗内存 调大之前请确保你的机器内存足够
+	LuaStateLruKeepNum    = 1000 // 内存常驻LUA虚拟机实例数量上限
 )
 
 type SceneLuaConfig struct {

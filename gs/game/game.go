@@ -491,10 +491,21 @@ func (g *Game) ReLoginPlayer(userId uint32, isQuitMp bool) {
 	g.SendMsg(cmd.ClientReconnectNotify, userId, 0, &proto.ClientReconnectNotify{
 		Reason: reason,
 	})
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		return
+	}
+	player.NetFreeze = true
 }
 
 func (g *Game) LogoutPlayer(userId uint32) {
 	g.SendMsg(cmd.PlayerLogoutNotify, userId, 0, &proto.PlayerLogoutNotify{})
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		return
+	}
+	// 冻结掉服务器对该玩家的下行 避免大量发包对整个系统造成压力
+	player.NetFreeze = true
 }
 
 func (g *Game) KickPlayer(userId uint32, reason uint32) {
@@ -510,4 +521,5 @@ func (g *Game) KickPlayer(userId uint32, reason uint32) {
 			KickReason: reason,
 		},
 	})
+	player.NetFreeze = true
 }

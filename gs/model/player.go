@@ -56,30 +56,31 @@ type Player struct {
 	DbQuest         *DbQuest           // 任务
 	DbWorld         *DbWorld           // 大世界
 	// 在线数据 请随意 记得加忽略字段的tag
-	LastSaveTime          uint32                                   `bson:"-" msgpack:"-"` // 上一次存档保存时间
-	DbState               int                                      `bson:"-" msgpack:"-"` // 数据库存档状态
-	WorldId               uint32                                   `bson:"-" msgpack:"-"` // 所在的世界id
-	GameObjectGuidCounter uint64                                   `bson:"-" msgpack:"-"` // 游戏对象guid计数器
-	LastKeepaliveTime     uint32                                   `bson:"-" msgpack:"-"` // 上一次保持活跃时间
-	ClientTime            uint32                                   `bson:"-" msgpack:"-"` // 客户端本地时钟
-	ClientRTT             uint32                                   `bson:"-" msgpack:"-"` // 客户端网络往返时延
-	GameObjectGuidMap     map[uint64]GameObject                    `bson:"-" msgpack:"-"` // 游戏对象guid映射表
-	Online                bool                                     `bson:"-" msgpack:"-"` // 在线状态
-	Pause                 bool                                     `bson:"-" msgpack:"-"` // 暂停状态
-	SceneJump             bool                                     `bson:"-" msgpack:"-"` // 是否场景切换
-	SceneLoadState        int                                      `bson:"-" msgpack:"-"` // 场景加载状态
-	CoopApplyMap          map[uint32]int64                         `bson:"-" msgpack:"-"` // 敲门申请的玩家uid及时间
-	StaminaInfo           *StaminaInfo                             `bson:"-" msgpack:"-"` // 耐力在线数据
-	VehicleInfo           *VehicleInfo                             `bson:"-" msgpack:"-"` // 载具在线数据
-	ClientSeq             uint32                                   `bson:"-" msgpack:"-"` // 客户端发包请求的序号
-	CombatInvokeHandler   *InvokeHandler[proto.CombatInvokeEntry]  `bson:"-" msgpack:"-"` // combat转发器
-	AbilityInvokeHandler  *InvokeHandler[proto.AbilityInvokeEntry] `bson:"-" msgpack:"-"` // ability转发器
-	GateAppId             string                                   `bson:"-" msgpack:"-"` // 网关服务器的appid
-	AnticheatAppId        string                                   `bson:"-" msgpack:"-"` // 反作弊服务器的appid
-	GCGCurGameGuid        uint32                                   `bson:"-" msgpack:"-"` // GCG玩家所在的游戏guid
-	GCGInfo               *GCGInfo                                 `bson:"-" msgpack:"-"` // 七圣召唤信息
-	XLuaDebug             bool                                     `bson:"-" msgpack:"-"` // 是否开启客户端XLUA调试
-	NetFreeze             bool                                     `bson:"-" msgpack:"-"` // 客户端网络上下行冻结状态
+	LastSaveTime              uint32                                   `bson:"-" msgpack:"-"` // 上一次存档保存时间
+	DbState                   int                                      `bson:"-" msgpack:"-"` // 数据库存档状态
+	WorldId                   uint32                                   `bson:"-" msgpack:"-"` // 所在的世界id
+	GameObjectGuidCounter     uint64                                   `bson:"-" msgpack:"-"` // 游戏对象guid计数器
+	LastKeepaliveTime         uint32                                   `bson:"-" msgpack:"-"` // 上一次保持活跃时间
+	ClientTime                uint32                                   `bson:"-" msgpack:"-"` // 客户端本地时钟
+	ClientRTT                 uint32                                   `bson:"-" msgpack:"-"` // 客户端网络往返时延
+	GameObjectGuidMap         map[uint64]GameObject                    `bson:"-" msgpack:"-"` // 游戏对象guid映射表
+	Online                    bool                                     `bson:"-" msgpack:"-"` // 在线状态
+	Pause                     bool                                     `bson:"-" msgpack:"-"` // 暂停状态
+	SceneJump                 bool                                     `bson:"-" msgpack:"-"` // 是否场景切换
+	SceneLoadState            int                                      `bson:"-" msgpack:"-"` // 场景加载状态
+	CoopApplyMap              map[uint32]int64                         `bson:"-" msgpack:"-"` // 敲门申请的玩家uid及时间
+	StaminaInfo               *StaminaInfo                             `bson:"-" msgpack:"-"` // 耐力在线数据
+	VehicleInfo               *VehicleInfo                             `bson:"-" msgpack:"-"` // 载具在线数据
+	ClientSeq                 uint32                                   `bson:"-" msgpack:"-"` // 客户端发包请求的序号
+	CombatInvokeHandler       *InvokeHandler[proto.CombatInvokeEntry]  `bson:"-" msgpack:"-"` // combat转发器
+	AbilityInvokeHandler      *InvokeHandler[proto.AbilityInvokeEntry] `bson:"-" msgpack:"-"` // ability转发器
+	GateAppId                 string                                   `bson:"-" msgpack:"-"` // 网关服务器的appid
+	AnticheatAppId            string                                   `bson:"-" msgpack:"-"` // 反作弊服务器的appid
+	GCGCurGameGuid            uint32                                   `bson:"-" msgpack:"-"` // GCG玩家所在的游戏guid
+	GCGInfo                   *GCGInfo                                 `bson:"-" msgpack:"-"` // 七圣召唤信息
+	XLuaDebug                 bool                                     `bson:"-" msgpack:"-"` // 是否开启客户端XLUA调试
+	NetFreeze                 bool                                     `bson:"-" msgpack:"-"` // 客户端网络上下行冻结状态
+	LastSceneBlockAoiMoveTime uint64                                   `bson:"-" msgpack:"-"` // 上一次移动处理场景区块aoi的时间
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 }
