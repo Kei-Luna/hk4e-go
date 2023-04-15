@@ -505,6 +505,8 @@ func (w *World) InitPlayerWorldAvatar(player *model.Player) {
 		if !player.SceneJump && (worldAvatar.avatarEntityId != 0 || worldAvatar.weaponEntityId != 0) {
 			continue
 		}
+		scene.DestroyEntity(worldAvatar.avatarEntityId)
+		scene.DestroyEntity(worldAvatar.weaponEntityId)
 		worldAvatar.avatarEntityId = scene.CreateEntityAvatar(player, worldAvatar.avatarId)
 		worldAvatar.weaponEntityId = scene.CreateEntityWeapon()
 	}

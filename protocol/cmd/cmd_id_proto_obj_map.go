@@ -11,12 +11,13 @@ import (
 )
 
 type CmdProtoMap struct {
-	cmdIdProtoObjMap      map[uint16]reflect.Type
-	protoObjCmdIdMap      map[reflect.Type]uint16
-	cmdDeDupMap           map[uint16]bool
-	cmdIdCmdNameMap       map[uint16]string
-	cmdNameCmdIdMap       map[string]uint16
-	cmdIdProtoObjCacheMap map[uint16]*sync.Pool
+	cmdIdProtoObjMap        map[uint16]reflect.Type
+	protoObjCmdIdMap        map[reflect.Type]uint16
+	cmdDeDupMap             map[uint16]bool
+	cmdIdCmdNameMap         map[uint16]string
+	cmdNameCmdIdMap         map[string]uint16
+	cmdIdProtoObjCacheMap   map[uint16]*sync.Pool
+	cmdIdProtoObjFastNewMap map[uint16]func() any
 }
 
 func NewCmdProtoMap() (r *CmdProtoMap) {
@@ -27,6 +28,7 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 	r.cmdIdCmdNameMap = make(map[uint16]string)
 	r.cmdNameCmdIdMap = make(map[string]uint16)
 	r.cmdIdProtoObjCacheMap = make(map[uint16]*sync.Pool)
+	r.cmdIdProtoObjFastNewMap = make(map[uint16]func() any)
 	r.registerAllMessage()
 	return r
 }
@@ -344,26 +346,36 @@ func (c *CmdProtoMap) registerAllMessage() {
 	c.regMsg(QuestGlobalVarNotify, func() any { return new(proto.QuestGlobalVarNotify) })                               // 任务全局变量通知
 
 	// 家园
-	c.regMsg(GetPlayerHomeCompInfoReq, func() any { return new(proto.GetPlayerHomeCompInfoReq) })         // 请求
-	c.regMsg(HomeGetBasicInfoReq, func() any { return new(proto.HomeGetBasicInfoReq) })                   // 请求
-	c.regMsg(GetHomeExchangeWoodInfoReq, func() any { return new(proto.GetHomeExchangeWoodInfoReq) })     // 请求
-	c.regMsg(GetHomeExchangeWoodInfoRsp, func() any { return new(proto.GetHomeExchangeWoodInfoRsp) })     // 响应
-	c.regMsg(HomeGetOnlineStatusReq, func() any { return new(proto.HomeGetOnlineStatusReq) })             // 请求
-	c.regMsg(HomeGetOnlineStatusRsp, func() any { return new(proto.HomeGetOnlineStatusRsp) })             // 响应
-	c.regMsg(TryEnterHomeReq, func() any { return new(proto.TryEnterHomeReq) })                           // 请求
-	c.regMsg(TryEnterHomeRsp, func() any { return new(proto.TryEnterHomeRsp) })                           // 响应
-	c.regMsg(HomeGetArrangementInfoReq, func() any { return new(proto.HomeGetArrangementInfoReq) })       // 请求
-	c.regMsg(HomeGetArrangementInfoRsp, func() any { return new(proto.HomeGetArrangementInfoRsp) })       // 响应
-	c.regMsg(HomeSceneInitFinishReq, func() any { return new(proto.HomeSceneInitFinishReq) })             // 请求
-	c.regMsg(HomeSceneInitFinishRsp, func() any { return new(proto.HomeSceneInitFinishRsp) })             // 响应
-	c.regMsg(HomeGetBlueprintSlotInfoReq, func() any { return new(proto.HomeGetBlueprintSlotInfoReq) })   // 请求
-	c.regMsg(HomeGetBlueprintSlotInfoRsp, func() any { return new(proto.HomeGetBlueprintSlotInfoRsp) })   // 响应
-	c.regMsg(HomeChangeEditModeReq, func() any { return new(proto.HomeChangeEditModeReq) })               // 请求
-	c.regMsg(HomeChangeEditModeRsp, func() any { return new(proto.HomeChangeEditModeRsp) })               // 响应
-	c.regMsg(HomeEnterEditModeFinishReq, func() any { return new(proto.HomeEnterEditModeFinishReq) })     // 请求
-	c.regMsg(HomeEnterEditModeFinishRsp, func() any { return new(proto.HomeEnterEditModeFinishRsp) })     // 响应
-	c.regMsg(HomeUpdateArrangementInfoReq, func() any { return new(proto.HomeUpdateArrangementInfoReq) }) // 请求
-	c.regMsg(HomeUpdateArrangementInfoRsp, func() any { return new(proto.HomeUpdateArrangementInfoRsp) }) // 响应
+	c.regMsg(GetPlayerHomeCompInfoReq, func() any { return new(proto.GetPlayerHomeCompInfoReq) })
+	c.regMsg(HomeGetBasicInfoReq, func() any { return new(proto.HomeGetBasicInfoReq) })
+	c.regMsg(GetHomeExchangeWoodInfoReq, func() any { return new(proto.GetHomeExchangeWoodInfoReq) })
+	c.regMsg(GetHomeExchangeWoodInfoRsp, func() any { return new(proto.GetHomeExchangeWoodInfoRsp) })
+	c.regMsg(HomeGetOnlineStatusReq, func() any { return new(proto.HomeGetOnlineStatusReq) })
+	c.regMsg(HomeGetOnlineStatusRsp, func() any { return new(proto.HomeGetOnlineStatusRsp) })
+	c.regMsg(TryEnterHomeReq, func() any { return new(proto.TryEnterHomeReq) })
+	c.regMsg(TryEnterHomeRsp, func() any { return new(proto.TryEnterHomeRsp) })
+	c.regMsg(HomeGetArrangementInfoReq, func() any { return new(proto.HomeGetArrangementInfoReq) })
+	c.regMsg(HomeGetArrangementInfoRsp, func() any { return new(proto.HomeGetArrangementInfoRsp) })
+	c.regMsg(HomeSceneInitFinishReq, func() any { return new(proto.HomeSceneInitFinishReq) })
+	c.regMsg(HomeSceneInitFinishRsp, func() any { return new(proto.HomeSceneInitFinishRsp) })
+	c.regMsg(HomeGetBlueprintSlotInfoReq, func() any { return new(proto.HomeGetBlueprintSlotInfoReq) })
+	c.regMsg(HomeGetBlueprintSlotInfoRsp, func() any { return new(proto.HomeGetBlueprintSlotInfoRsp) })
+	c.regMsg(HomeChangeEditModeReq, func() any { return new(proto.HomeChangeEditModeReq) })
+	c.regMsg(HomeChangeEditModeRsp, func() any { return new(proto.HomeChangeEditModeRsp) })
+	c.regMsg(HomeEnterEditModeFinishReq, func() any { return new(proto.HomeEnterEditModeFinishReq) })
+	c.regMsg(HomeEnterEditModeFinishRsp, func() any { return new(proto.HomeEnterEditModeFinishRsp) })
+	c.regMsg(HomeUpdateArrangementInfoReq, func() any { return new(proto.HomeUpdateArrangementInfoReq) })
+	c.regMsg(HomeUpdateArrangementInfoRsp, func() any { return new(proto.HomeUpdateArrangementInfoRsp) })
+
+	// 乱七八糟
+	c.regMsg(GMShowNavMeshReq, func() any { return new(proto.GMShowNavMeshReq) })
+	c.regMsg(GMShowNavMeshRsp, func() any { return new(proto.GMShowNavMeshRsp) })
+	c.regMsg(NavMeshStatsNotify, func() any { return new(proto.NavMeshStatsNotify) })
+	c.regMsg(GMShowObstacleReq, func() any { return new(proto.GMShowObstacleReq) })
+	c.regMsg(GMShowObstacleRsp, func() any { return new(proto.GMShowObstacleRsp) })
+	c.regMsg(GmTalkReq, func() any { return new(proto.GmTalkReq) })
+	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })
+	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })
 }
 
 func (c *CmdProtoMap) regMsg(cmdId uint16, protoObjNewFunc func() any) {
@@ -389,6 +401,8 @@ func (c *CmdProtoMap) regMsg(cmdId uint16, protoObjNewFunc func() any) {
 	c.cmdIdProtoObjCacheMap[cmdId] = &sync.Pool{
 		New: protoObjNewFunc,
 	}
+	// cmdId -> protoObjNewFunc
+	c.cmdIdProtoObjFastNewMap[cmdId] = protoObjNewFunc
 }
 
 // 性能优化专用方法 若不满足使用条件 请老老实实的用下面的反射方法
@@ -412,6 +426,16 @@ func (c *CmdProtoMap) PutProtoObjCache(cmdId uint16, protoObj pb.Message) {
 		return
 	}
 	cachePool.Put(protoObj)
+}
+
+func (c *CmdProtoMap) GetProtoObjFastNewByCmdId(cmdId uint16) pb.Message {
+	fn, exist := c.cmdIdProtoObjFastNewMap[cmdId]
+	if !exist {
+		logger.Error("unknown cmd id: %v", cmdId)
+		return nil
+	}
+	protoObj := fn().(pb.Message)
+	return protoObj
 }
 
 // 反射方法

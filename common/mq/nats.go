@@ -150,7 +150,7 @@ func (m *MessageQueue) parseNetMsg(rawData []byte) *NetMsg {
 		}
 		if netMsg.EventId == NormalMsg {
 			// protobuf PayloadMessage
-			payloadMessage := m.cmdProtoMap.GetProtoObjCacheByCmdId(gameMsg.CmdId)
+			payloadMessage := m.cmdProtoMap.GetProtoObjFastNewByCmdId(gameMsg.CmdId)
 			if payloadMessage == nil {
 				logger.Error("get protobuf obj by cmd id error: %v", err)
 				return nil

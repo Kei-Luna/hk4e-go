@@ -191,7 +191,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
 		return
 	}
-	if !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
+	if WORLD_MANAGER.IsBigWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
 	}
