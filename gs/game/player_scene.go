@@ -20,9 +20,10 @@ import (
 // 场景模块 场景组 小组 实体 管理相关
 
 const (
-	ENTITY_MAX_BATCH_SEND_NUM = 1000 // 单次同步的最大实体数量
-	ENTITY_VISION_DISTANCE    = 100  // 实体视野距离
-	GROUP_LOAD_DISTANCE       = 250  // 场景组加载距离
+	ENTITY_MAX_BATCH_SEND_NUM = 1000 // 单次同步客户端的最大实体数量
+	BLOCK_SIZE                = 1024 // 区块大小
+	GROUP_LOAD_DISTANCE       = 250  // 场景组加载距离 取值范围(0,BLOCK_SIZE)
+	ENTITY_VISION_DISTANCE    = 100  // 实体视野距离 取值范围(0,GROUP_LOAD_DISTANCE)
 )
 
 func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
@@ -56,21 +57,24 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
 		// 卸载旧位置附近的group
-		for groupId, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
+		for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
 			if !world.GetMultiplayer() {
 				// 单人世界直接卸载group
 				g.RemoveSceneGroup(player, oldScene, groupConfig)
-			} else if !WORLD_MANAGER.IsBigWorld(world) {
+			} else {
 				// 多人世界group附近没有任何玩家则卸载
 				remove := true
 				for _, otherPlayer := range oldScene.GetAllPlayer() {
-					for otherPlayerGroupId := range g.GetNeighborGroup(otherPlayer.SceneId, otherPlayer.Pos) {
-						if otherPlayerGroupId == groupId {
-							remove = false
-							break
-						}
+					dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
+					if dx < 0 {
+						dx *= -1
 					}
-					if !remove {
+					dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
+					if dy < 0 {
+						dy *= -1
+					}
+					if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
+						remove = false
 						break
 					}
 				}
@@ -665,10 +669,19 @@ func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state ui
 
 // GetVisionEntity 获取某位置视野内的全部实体
 func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Entity {
-	visionEntity := make(map[uint32]*Entity)
-	for _, entity := range scene.GetAllEntity() {
-		if math.Abs(pos.X-entity.pos.X) > ENTITY_VISION_DISTANCE ||
-			math.Abs(pos.Z-entity.pos.Z) > ENTITY_VISION_DISTANCE {
+	allEntityMap := scene.GetAllEntity()
+	ratio := float32(ENTITY_VISION_DISTANCE*ENTITY_VISION_DISTANCE) / float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE)
+	visionEntity := make(map[uint32]*Entity, int(float32(len(allEntityMap))*ratio))
+	for _, entity := range allEntityMap {
+		dx := int32(pos.X) - int32(entity.pos.X)
+		if dx < 0 {
+			dx *= -1
+		}
+		dy := int32(pos.Z) - int32(entity.pos.Z)
+		if dy < 0 {
+			dy *= -1
+		}
+		if dx > ENTITY_VISION_DISTANCE || dy > ENTITY_VISION_DISTANCE {
 			continue
 		}
 		visionEntity[entity.GetId()] = entity
@@ -684,11 +697,19 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 		return nil
 	}
 	objectList := aoiManager.GetObjectListByPos(float32(pos.X), 0.0, float32(pos.Z))
-	neighborGroup := make(map[uint32]*gdconf.Group)
+	ratio := float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE) / float32(BLOCK_SIZE*BLOCK_SIZE*9)
+	neighborGroup := make(map[uint32]*gdconf.Group, int(float32(len(objectList))*ratio))
 	for _, groupAny := range objectList {
 		groupConfig := groupAny.(*gdconf.Group)
-		if math.Abs(pos.X-float64(groupConfig.Pos.X)) > GROUP_LOAD_DISTANCE ||
-			math.Abs(pos.Z-float64(groupConfig.Pos.Z)) > GROUP_LOAD_DISTANCE {
+		dx := int32(pos.X) - int32(groupConfig.Pos.X)
+		if dx < 0 {
+			dx *= -1
+		}
+		dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
+		if dy < 0 {
+			dy *= -1
+		}
+		if dx > GROUP_LOAD_DISTANCE || dy > GROUP_LOAD_DISTANCE {
 			continue
 		}
 		if groupConfig.DynamicLoad {

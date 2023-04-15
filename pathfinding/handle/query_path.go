@@ -55,7 +55,8 @@ func (h *Handle) QueryPath(userId uint32, gateAppId string, payloadMsg pb.Messag
 	if !ok {
 		queryPathRsp := &proto.QueryPathRsp{
 			QueryId:     req.QueryId,
-			QueryStatus: proto.QueryPathRsp_STATUS_FAIL,
+			QueryStatus: proto.QueryPathRsp_STATUS_SUCC,
+			Corners:     []*proto.Vector{req.DestinationPos[0]},
 		}
 		h.SendMsg(cmd.QueryPathRsp, userId, gateAppId, queryPathRsp)
 		return

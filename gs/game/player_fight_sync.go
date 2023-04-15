@@ -260,17 +260,20 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		if !world.GetMultiplayer() {
 			// 单人世界直接卸载group
 			g.RemoveSceneGroup(player, scene, groupConfig)
-		} else if !WORLD_MANAGER.IsBigWorld(world) {
+		} else {
 			// 多人世界group附近没有任何玩家则卸载
 			remove := true
 			for _, otherPlayer := range scene.GetAllPlayer() {
-				for otherPlayerGroupId := range g.GetNeighborGroup(otherPlayer.SceneId, otherPlayer.Pos) {
-					if otherPlayerGroupId == groupId {
-						remove = false
-						break
-					}
+				dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
+				if dx < 0 {
+					dx *= -1
 				}
-				if !remove {
+				dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
+				if dy < 0 {
+					dy *= -1
+				}
+				if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
+					remove = false
 					break
 				}
 			}

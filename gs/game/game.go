@@ -2,17 +2,16 @@ package game
 
 import (
 	"runtime"
+	"strconv"
 	"time"
 
 	"hk4e/common/mq"
 	"hk4e/common/rpc"
 	"hk4e/gate/kcp"
-	"hk4e/gdconf"
 	"hk4e/gs/dao"
 	"hk4e/gs/model"
 	"hk4e/pkg/alg"
 	"hk4e/pkg/logger"
-	"hk4e/pkg/random"
 	"hk4e/pkg/reflection"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
@@ -55,7 +54,7 @@ type Game struct {
 	ai          *model.Player // 本服的Ai玩家对象
 }
 
-func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
+func NewGameCore(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
 	r = new(Game)
 	r.discovery = discovery
 	r.dao = dao
@@ -76,7 +75,7 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 	// 创建本服的Ai世界
 	uid := AiBaseUid + gsId
 	name := AiName
-	sign := AiSign
+	sign := AiSign + " GS:" + strconv.Itoa(int(gsId))
 	if r.IsMainGs() {
 		// 约定MainGameServer的Ai的AiWorld叫BigWorld
 		// 此世界会出现在全服的在线玩家列表中 所有的玩家都可以进入到此世界里来
@@ -89,72 +88,6 @@ func NewGameManager(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gs
 	COMMAND_MANAGER.SetSystem(r.ai)
 	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerID, 3)
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
-	aiWorld := WORLD_MANAGER.GetAiWorld()
-	if r.IsMainGs() {
-		// TODO 测试
-		for i := 1; i < 100; i++ {
-			uid := 1000000 + uint32(i)
-			avatarId := uint32(0)
-			for _, avatarData := range gdconf.GetAvatarDataMap() {
-				avatarId = uint32(avatarData.AvatarId)
-				break
-			}
-			robot := r.CreateRobot(uid, random.GetRandomStr(8), random.GetRandomStr(10))
-			r.AddUserAvatar(uid, avatarId)
-			dbAvatar := robot.GetDbAvatar()
-			r.SetUpAvatarTeamReq(robot, &proto.SetUpAvatarTeamReq{
-				TeamId:             1,
-				AvatarTeamGuidList: []uint64{dbAvatar.AvatarMap[avatarId].Guid},
-				CurAvatarGuid:      dbAvatar.AvatarMap[avatarId].Guid,
-			})
-			r.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
-				TargetUid: r.ai.PlayerID,
-			})
-			r.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
-				EnterSceneToken: aiWorld.GetEnterSceneToken(),
-			})
-			r.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
-				EnterSceneToken: aiWorld.GetEnterSceneToken(),
-			})
-			r.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
-				EnterSceneToken: aiWorld.GetEnterSceneToken(),
-			})
-			r.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
-				EnterSceneToken: aiWorld.GetEnterSceneToken(),
-			})
-			activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
-			entityMoveInfo := &proto.EntityMoveInfo{
-				EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
-				MotionInfo: &proto.MotionInfo{
-					Pos: &proto.Vector{
-						X: float32(1800.0 + random.GetRandomFloat64(-100.0, 100.0)),
-						Y: float32(195.0 + random.GetRandomFloat64(0.0, 5.0)),
-						Z: float32(-1500.0 + random.GetRandomFloat64(-100.0, 100.0)),
-					},
-					Rot: &proto.Vector{
-						X: 0,
-						Y: float32(random.GetRandomFloat64(0.0, 360.0)),
-						Z: 0,
-					},
-					State: proto.MotionState_MOTION_STANDBY,
-				},
-				SceneTime:   0,
-				ReliableSeq: 0,
-			}
-			combatData, err := pb.Marshal(entityMoveInfo)
-			if err != nil {
-				continue
-			}
-			r.CombatInvocationsNotify(robot, &proto.CombatInvocationsNotify{
-				InvokeList: []*proto.CombatInvokeEntry{{
-					CombatData:   combatData,
-					ForwardType:  proto.ForwardType_FORWARD_TO_ALL_EXCEPT_CUR,
-					ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
-				}},
-			})
-			r.UnionCmdNotify(robot, &proto.UnionCmdNotify{})
-		}
-	}
 	r.run()
 	return r
 }
@@ -237,6 +170,8 @@ func (g *Game) gameMainLoop() {
 	localEventCost := int64(0)
 	commandCost := int64(0)
 	routeCount := int64(0)
+	maxRouteCost := int64(0)
+	maxRouteCmdId := uint16(0)
 	runtime.LockOSThread()
 	for {
 		// 消耗CPU时间性能统计
@@ -246,6 +181,7 @@ func (g *Game) gameMainLoop() {
 			tickCost /= 1e6
 			localEventCost /= 1e6
 			commandCost /= 1e6
+			maxRouteCost /= 1e6
 			logger.Info("[GAME MAIN LOOP] cpu time cost detail, routeCost: %v ms, tickCost: %v ms, localEventCost: %v ms, commandCost: %v ms",
 				routeCost, tickCost, localEventCost, commandCost)
 			totalCost := routeCost + tickCost + localEventCost + commandCost
@@ -258,13 +194,20 @@ func (g *Game) gameMainLoop() {
 				totalCost)
 			logger.Info("[GAME MAIN LOOP] total cpu time cost percent, totalCost: %v%%",
 				float32(totalCost)/float32(intervalTime/1e6)*100.0)
-			logger.Info("[GAME MAIN LOOP] avg route cost: %v ms", float32(routeCost)/float32(routeCount))
+			avgRouteCost := float32(0)
+			if routeCount != 0 {
+				avgRouteCost = float32(routeCost) / float32(routeCount)
+			}
+			logger.Info("[GAME MAIN LOOP] avg route cost: %v ms", avgRouteCost)
+			logger.Info("[GAME MAIN LOOP] max route cost: %v ms, cmdId: %v", maxRouteCost, maxRouteCmdId)
 			lastTime = now
 			routeCost = 0
 			tickCost = 0
 			localEventCost = 0
 			commandCost = 0
 			routeCount = 0
+			maxRouteCost = 0
+			maxRouteCmdId = 0
 		}
 		select {
 		case netMsg := <-MESSAGE_QUEUE.GetNetMsg():
@@ -272,6 +215,10 @@ func (g *Game) gameMainLoop() {
 			start := time.Now().UnixNano()
 			ROUTE_MANAGER.RouteHandle(netMsg)
 			end := time.Now().UnixNano()
+			if netMsg.MsgType == mq.MsgTypeGame && (end-start) > maxRouteCost {
+				maxRouteCost = end - start
+				maxRouteCmdId = netMsg.GameMsg.CmdId
+			}
 			routeCost += end - start
 			routeCount++
 		case <-TICK_MANAGER.GetGlobalTick().C:
@@ -367,6 +314,9 @@ func (g *Game) SendMsg(cmdId uint16, userId uint32, clientSeq uint32, payloadMsg
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player not exist, uid: %v, stack: %v", userId, logger.Stack())
+		return
+	}
+	if !player.Online {
 		return
 	}
 	if player.NetFreeze {

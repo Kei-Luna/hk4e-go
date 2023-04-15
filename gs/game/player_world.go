@@ -525,6 +525,15 @@ func (g *Game) TeleportPlayer(
 	sceneId uint32, pos, rot *model.Vector,
 	dungeonId, dungeonPointId uint32,
 ) {
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		return
+	}
+	if WORLD_MANAGER.IsBigWorld(world) && sceneId != 3 {
+		logger.Error("big world scene not support now, sceneId: %v, uid: %v", sceneId, player.PlayerID)
+		return
+	}
 	newSceneId := sceneId
 	oldSceneId := player.SceneId
 	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}
@@ -533,11 +542,6 @@ func (g *Game) TeleportPlayer(
 		jumpScene = true
 	}
 	player.SceneJump = jumpScene
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
-		return
-	}
 	oldScene := world.GetSceneById(oldSceneId)
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)

@@ -22,6 +22,7 @@ const (
 	JumpDistance              = 500.0
 	PointDistance             = 10.0
 	AttackCountLimitEntitySec = 10
+	KickCheatPlayer           = false
 )
 
 type MoveVector struct {
@@ -232,7 +233,6 @@ func (h *Handle) CombatInvocationsNotify(userId uint32, gateAppId string, payloa
 				continue
 			}
 			moveSpeed := ctx.GetMoveSpeed()
-			logger.Debug("player move speed: %v, uid: %v", moveSpeed, userId)
 			if moveSpeed > MaxMoveSpeed {
 				logger.Warn("player move overspeed, speed: %v, uid: %v", moveSpeed, userId)
 				h.KickPlayer(userId, gateAppId)
@@ -286,6 +286,9 @@ func GetDistance(v1 *proto.Vector, v2 *proto.Vector) float32 {
 }
 
 func (h *Handle) KickPlayer(userId uint32, gateAppId string) {
+	if !KickCheatPlayer {
+		return
+	}
 	h.messageQueue.SendToGate(gateAppId, &mq.NetMsg{
 		MsgType: mq.MsgTypeConnCtrl,
 		EventId: mq.KickPlayerNotify,

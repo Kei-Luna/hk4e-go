@@ -7,7 +7,6 @@ import (
 	"syscall"
 
 	"hk4e/common/config"
-	"hk4e/common/rpc"
 	"hk4e/gm/controller"
 	"hk4e/pkg/logger"
 )
@@ -21,13 +20,7 @@ func Run(ctx context.Context, configFile string) error {
 		logger.CloseLogger()
 	}()
 
-	// natsrpc client
-	client, err := rpc.NewClient()
-	if err != nil {
-		return err
-	}
-
-	_ = controller.NewController(client.GM)
+	_ = controller.NewController()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)

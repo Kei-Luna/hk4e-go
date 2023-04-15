@@ -13,49 +13,6 @@ import (
 
 // 接口路由管理器
 
-type HandlerFunc func(player *model.Player, payloadMsg pb.Message)
-
-type RouteManager struct {
-	// k:cmdId v:HandlerFunc
-	handlerFuncRouteMap map[uint16]HandlerFunc
-}
-
-func NewRouteManager() (r *RouteManager) {
-	r = new(RouteManager)
-	r.handlerFuncRouteMap = make(map[uint16]HandlerFunc)
-	r.initRoute()
-	return r
-}
-
-func (r *RouteManager) registerRouter(cmdId uint16, handlerFunc HandlerFunc) {
-	r.handlerFuncRouteMap[cmdId] = handlerFunc
-}
-
-func (r *RouteManager) doRoute(cmdId uint16, userId uint32, clientSeq uint32, payloadMsg pb.Message) {
-	handlerFunc, ok := r.handlerFuncRouteMap[cmdId]
-	if !ok {
-		logger.Error("no route for msg, cmdId: %v", cmdId)
-		return
-	}
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		GAME.KickPlayer(userId, kcp.EnetNotFoundSession)
-		return
-	}
-	if !player.Online {
-		logger.Error("player not online, uid: %v", userId)
-		return
-	}
-	if player.NetFreeze {
-		return
-	}
-	player.ClientSeq = clientSeq
-	SELF = player
-	handlerFunc(player, payloadMsg)
-	SELF = nil
-}
-
 func (r *RouteManager) initRoute() {
 	r.registerRouter(cmd.SetPlayerBornDataReq, GAME.SetPlayerBornDataReq)
 	r.registerRouter(cmd.QueryPathReq, GAME.QueryPathReq)
@@ -153,6 +110,49 @@ func (r *RouteManager) initRoute() {
 	r.registerRouter(cmd.PlayerEnterDungeonReq, GAME.PlayerEnterDungeonReq)
 	r.registerRouter(cmd.PlayerQuitDungeonReq, GAME.PlayerQuitDungeonReq)
 	r.registerRouter(cmd.GadgetInteractReq, GAME.GadgetInteractReq)
+}
+
+type HandlerFunc func(player *model.Player, payloadMsg pb.Message)
+
+type RouteManager struct {
+	// k:cmdId v:HandlerFunc
+	handlerFuncRouteMap map[uint16]HandlerFunc
+}
+
+func NewRouteManager() (r *RouteManager) {
+	r = new(RouteManager)
+	r.handlerFuncRouteMap = make(map[uint16]HandlerFunc)
+	r.initRoute()
+	return r
+}
+
+func (r *RouteManager) registerRouter(cmdId uint16, handlerFunc HandlerFunc) {
+	r.handlerFuncRouteMap[cmdId] = handlerFunc
+}
+
+func (r *RouteManager) doRoute(cmdId uint16, userId uint32, clientSeq uint32, payloadMsg pb.Message) {
+	handlerFunc, ok := r.handlerFuncRouteMap[cmdId]
+	if !ok {
+		logger.Error("no route for msg, cmdId: %v", cmdId)
+		return
+	}
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		GAME.KickPlayer(userId, kcp.EnetNotFoundSession)
+		return
+	}
+	if !player.Online {
+		logger.Error("player not online, uid: %v", userId)
+		return
+	}
+	if player.NetFreeze {
+		return
+	}
+	player.ClientSeq = clientSeq
+	SELF = player
+	handlerFunc(player, payloadMsg)
+	SELF = nil
 }
 
 func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {

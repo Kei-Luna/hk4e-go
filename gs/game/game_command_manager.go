@@ -27,14 +27,16 @@ type CommandFunc func(*CommandMessage)
 // CommandMessage 命令消息
 // 给下层执行命令时提供数据
 type CommandMessage struct {
+	// 玩家聊天GM
 	// executor 玩家为 model.Player 类型
 	// GM等为 string 类型
 	Executor any               // 执行者
 	Text     string            // 命令原始文本
 	Name     string            // 命令前缀
 	Args     map[string]string // 命令参数
-	FuncName string            // 函数名
-	Param    []string          // 函数参数列表
+	// 系统GM
+	FuncName  string   // 函数名
+	ParamList []string // 函数参数列表
 }
 
 // CommandManager 命令管理器
@@ -120,17 +122,8 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 	if targetUid != c.system.PlayerID {
 		return
 	}
-	// 输入命令进行处理
-	c.InputCommand(player, text)
-}
-
-// InputCommand 输入要处理的命令
-func (c *CommandManager) InputCommand(executor any, text string) {
-	// 留着这个主要还是为了万一以后要对接要别的地方
-	logger.Debug("input command, uid: %v text: %v", c.GetExecutorId(executor), text)
-
-	// 输入的命令将在其他协程中处理
-	c.commandTextInput <- &CommandMessage{Executor: executor, Text: text}
+	// 输入的命令将在主协程中处理
+	c.commandTextInput <- &CommandMessage{Executor: player, Text: text}
 }
 
 func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
@@ -239,11 +232,11 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 // HandleCommand 处理命令
 // 主协程接收到命令消息后执行
 func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
-	// 直接执行GM函数
+	// 系统GM 直接执行GM函数
 	if cmd.FuncName != "" {
-		logger.Info("run gm cmd, FuncName: %v, Param: %v", cmd.FuncName, cmd.Param)
+		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", cmd.FuncName, cmd.ParamList)
 		// 反射调用command_gm.go中的函数并反射解析传入参数类型
-		c.CallGMCmd(cmd.FuncName, cmd.Param)
+		c.CallGMCmd(cmd.FuncName, cmd.ParamList)
 		return
 	}
 

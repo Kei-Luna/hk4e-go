@@ -93,24 +93,32 @@ func (a *AoiManager) IsValidAoiPos(x, y, z float32) bool {
 }
 
 // GetSurrGridListByGid 根据格子的gid得到当前周边的格子信息
-func (a *AoiManager) GetSurrGridListByGid(gid uint32) (gridList []*Grid) {
-	gridList = make([]*Grid, 0)
+func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
+	gridList := make([]*Grid, 0, 27)
 	// 判断grid是否存在
 	grid, exist := a.gridMap[gid]
 	if !exist {
 		return gridList
 	}
 	// 添加自己
-	gridList = append(gridList, grid)
+	if grid != nil {
+		gridList = append(gridList, grid)
+	}
 	// 根据gid得到当前格子所在的x轴编号
 	idx := int16(gid % (uint32(a.numX) * uint32(a.numZ)) % uint32(a.numX))
 	// 判断当前格子左边是否还有格子
 	if idx > 0 {
-		gridList = append(gridList, a.gridMap[gid-1])
+		grid = a.gridMap[gid-1]
+		if grid != nil {
+			gridList = append(gridList, grid)
+		}
 	}
 	// 判断当前格子右边是否还有格子
 	if idx < a.numX-1 {
-		gridList = append(gridList, a.gridMap[gid+1])
+		grid = a.gridMap[gid+1]
+		if grid != nil {
+			gridList = append(gridList, grid)
+		}
 	}
 	// 将x轴当前的格子都取出进行遍历 再分别得到每个格子的平面上下是否有格子
 	// 得到当前x轴的格子id集合
@@ -124,11 +132,17 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) (gridList []*Grid) {
 		idz := int16(v % (uint32(a.numX) * uint32(a.numZ)) / uint32(a.numX))
 		// 判断当前格子平面上方是否还有格子
 		if idz > 0 {
-			gridList = append(gridList, a.gridMap[v-uint32(a.numX)])
+			grid = a.gridMap[v-uint32(a.numX)]
+			if grid != nil {
+				gridList = append(gridList, grid)
+			}
 		}
 		// 判断当前格子平面下方是否还有格子
 		if idz < a.numZ-1 {
-			gridList = append(gridList, a.gridMap[v+uint32(a.numX)])
+			grid = a.gridMap[v+uint32(a.numX)]
+			if grid != nil {
+				gridList = append(gridList, grid)
+			}
 		}
 	}
 	// 将xoz平面当前的格子都取出进行遍历 再分别得到每个格子的空间上下是否有格子
@@ -143,21 +157,20 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) (gridList []*Grid) {
 		idy := int16(v / (uint32(a.numX) * uint32(a.numZ)))
 		// 判断当前格子空间上方是否还有格子
 		if idy > 0 {
-			gridList = append(gridList, a.gridMap[v-uint32(a.numX)*uint32(a.numZ)])
+			grid = a.gridMap[v-uint32(a.numX)*uint32(a.numZ)]
+			if grid != nil {
+				gridList = append(gridList, grid)
+			}
 		}
 		// 判断当前格子空间下方是否还有格子
 		if idy < a.numY-1 {
-			gridList = append(gridList, a.gridMap[v+uint32(a.numX)*uint32(a.numZ)])
+			grid = a.gridMap[v+uint32(a.numX)*uint32(a.numZ)]
+			if grid != nil {
+				gridList = append(gridList, grid)
+			}
 		}
 	}
-	retGridList := make([]*Grid, 0)
-	for _, v := range gridList {
-		if v == nil {
-			continue
-		}
-		retGridList = append(retGridList, v)
-	}
-	return retGridList
+	return gridList
 }
 
 // GetObjectListByPos 通过坐标得到周边格子内的全部object
@@ -166,7 +179,12 @@ func (a *AoiManager) GetObjectListByPos(x, y, z float32) map[int64]any {
 	gid := a.GetGidByPos(x, y, z)
 	// 根据格子id得到周边格子的信息
 	gridList := a.GetSurrGridListByGid(gid)
-	objectList := make(map[int64]any)
+	objectListLen := 0
+	for _, v := range gridList {
+		tmp := v.GetObjectList()
+		objectListLen += len(tmp)
+	}
+	objectList := make(map[int64]any, objectListLen)
 	for _, v := range gridList {
 		tmp := v.GetObjectList()
 		for kk, vv := range tmp {

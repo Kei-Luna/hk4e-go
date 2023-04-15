@@ -6,7 +6,6 @@ import (
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
-	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 )
@@ -19,9 +18,9 @@ const (
 )
 
 type UserTimer struct {
-	timer  *time.Timer
-	action int
-	data   []any
+	timeout int64
+	action  int
+	data    []any
 }
 
 type UserTick struct {
@@ -76,9 +75,9 @@ func (t *TickManager) CreateUserTimer(userId uint32, action int, delay uint32, d
 	}
 	userTick.timerIdCounter++
 	userTick.timerMap[userTick.timerIdCounter] = &UserTimer{
-		timer:  time.NewTimer(time.Second * time.Duration(delay)),
-		action: action,
-		data:   data,
+		timeout: int64(delay * 1000),
+		action:  action,
+		data:    data,
 	}
 	logger.Debug("create user timer, uid: %v, action: %v, time: %v",
 		userId, action, time.Now().Add(time.Second*time.Duration(delay)).Format("2006-01-02 15:04:05"))
@@ -170,12 +169,10 @@ func (t *TickManager) OnGameServerTick() {
 			t.onUserTickMinute(userId, now)
 		}
 		for timerId, timer := range userTick.timerMap {
-			if len(timer.timer.C) == 0 {
+			if now < timer.timeout {
 				// 跳过还没到时间的定时器
 				continue
 			}
-			<-timer.timer.C
-			timer.timer.Stop()
 			delete(userTick.timerMap, timerId)
 			t.userTimerHandle(userId, timer.action, timer.data)
 		}
@@ -187,33 +184,7 @@ func (t *TickManager) onTickHour(now int64) {
 }
 
 func (t *TickManager) onTickMinute(now int64) {
-	// GAME.ServerAnnounceNotify(100, "test123")
 	gdconf.LuaStateLruRemove()
-	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		for _, player := range world.GetAllPlayer() {
-			if player.SceneLoadState == model.SceneEnterDone {
-				// 随机物品
-				allItemDataConfig := GAME.GetAllItemDataConfig()
-				count := random.GetRandomInt32(0, 4)
-				i := int32(0)
-				for itemId := range allItemDataConfig {
-					num := random.GetRandomInt32(1, 9)
-					GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(num)}}, true, 0)
-					i++
-					if i > count {
-						break
-					}
-				}
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 102, ChangeCount: 30}}, true, 0)
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 201, ChangeCount: 10}}, true, 0)
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 202, ChangeCount: 100}}, true, 0)
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 203, ChangeCount: 10}}, true, 0)
-				// 蓝球粉球
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 223, ChangeCount: 1}}, true, 0)
-				GAME.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: 224, ChangeCount: 1}}, true, 0)
-			}
-		}
-	}
 }
 
 func (t *TickManager) onTick10Second(now int64) {

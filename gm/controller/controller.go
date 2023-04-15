@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"sync"
 
 	"hk4e/common/config"
 	"hk4e/common/rpc"
@@ -12,12 +13,13 @@ import (
 )
 
 type Controller struct {
-	gm *rpc.GMClient
+	gmClientMap     map[uint32]*rpc.GMClient
+	gmClientMapLock sync.RWMutex
 }
 
-func NewController(gm *rpc.GMClient) (r *Controller) {
+func NewController() (r *Controller) {
 	r = new(Controller)
-	r.gm = gm
+	r.gmClientMap = make(map[uint32]*rpc.GMClient)
 	go r.registerRouter()
 	return r
 }

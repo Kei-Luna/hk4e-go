@@ -74,6 +74,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		aoiManager.Init3DRectAoiManager(1200, 12, 1200)
 		world.bigWorldAoi = aoiManager
 	}
+	logger.Info("big world aoi init finish")
 	return world
 }
 

@@ -16,8 +16,8 @@ type GMService struct {
 func (s *GMService) Cmd(ctx context.Context, req *api.CmdRequest) (*api.CmdReply, error) {
 	commandTextInput := game.COMMAND_MANAGER.GetCommandTextInput()
 	commandTextInput <- &game.CommandMessage{
-		FuncName: req.FuncName,
-		Param:    req.Param,
+		FuncName:  req.FuncName,
+		ParamList: req.ParamList,
 	}
 	return &api.CmdReply{
 		Message: "OK",

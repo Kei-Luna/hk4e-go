@@ -23,13 +23,13 @@ func Run(ctx context.Context, configFile string) error {
 	config.InitConfig(configFile)
 
 	// natsrpc client
-	client, err := rpc.NewClient()
+	discoveryClient, err := rpc.NewDiscoveryClient()
 	if err != nil {
 		return err
 	}
 
 	// 注册到节点服务器
-	rsp, err := client.Discovery.RegisterServer(context.TODO(), &api.RegisterServerReq{
+	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
 		ServerType: api.ANTICHEAT,
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func Run(ctx context.Context, configFile string) error {
 		ticker := time.NewTicker(time.Second * 15)
 		for {
 			<-ticker.C
-			_, err := client.Discovery.KeepaliveServer(context.TODO(), &api.KeepaliveServerReq{
+			_, err := discoveryClient.KeepaliveServer(context.TODO(), &api.KeepaliveServerReq{
 				ServerType: api.ANTICHEAT,
 				AppId:      APPID,
 			})
@@ -50,7 +50,7 @@ func Run(ctx context.Context, configFile string) error {
 		}
 	}()
 	defer func() {
-		_, _ = client.Discovery.CancelServer(context.TODO(), &api.CancelServerReq{
+		_, _ = discoveryClient.CancelServer(context.TODO(), &api.CancelServerReq{
 			ServerType: api.ANTICHEAT,
 			AppId:      APPID,
 		})
@@ -64,7 +64,7 @@ func Run(ctx context.Context, configFile string) error {
 
 	gdconf.InitGameDataConfig()
 
-	messageQueue := mq.NewMessageQueue(api.ANTICHEAT, APPID, client)
+	messageQueue := mq.NewMessageQueue(api.ANTICHEAT, APPID, discoveryClient)
 	defer messageQueue.Close()
 
 	handle.NewHandle(messageQueue)

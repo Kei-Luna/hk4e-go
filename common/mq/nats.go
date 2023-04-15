@@ -35,10 +35,10 @@ type MessageQueue struct {
 	appId                  string
 	gateTcpMqEventChan     chan *GateTcpMqEvent
 	gateTcpMqDeadEventChan chan string
-	rpcClient              *rpc.Client
+	discoveryClient        *rpc.DiscoveryClient
 }
 
-func NewMessageQueue(serverType string, appId string, rpcClient *rpc.Client) (r *MessageQueue) {
+func NewMessageQueue(serverType string, appId string, discoveryClient *rpc.DiscoveryClient) (r *MessageQueue) {
 	r = new(MessageQueue)
 	conn, err := nats.Connect(config.GetConfig().MQ.NatsUrl)
 	if err != nil {
@@ -64,7 +64,7 @@ func NewMessageQueue(serverType string, appId string, rpcClient *rpc.Client) (r 
 	r.appId = appId
 	r.gateTcpMqEventChan = make(chan *GateTcpMqEvent, 1000)
 	r.gateTcpMqDeadEventChan = make(chan string, 1000)
-	r.rpcClient = rpcClient
+	r.discoveryClient = discoveryClient
 	if serverType == api.GATE {
 		go r.runGateTcpMqServer()
 	} else if serverType == api.GS || serverType == api.ANTICHEAT || serverType == api.PATHFINDING {
@@ -355,7 +355,7 @@ func (m *MessageQueue) runGateTcpMqClient() {
 }
 
 func (m *MessageQueue) gateTcpMqConn(gateServerConnAddrMap map[string]bool) {
-	rsp, err := m.rpcClient.Discovery.GetAllGateServerInfoList(context.TODO(), new(api.NullMsg))
+	rsp, err := m.discoveryClient.GetAllGateServerInfoList(context.TODO(), new(api.NullMsg))
 	if err != nil {
 		logger.Error("gate tcp mq get gate list error: %v", err)
 		return

@@ -29,13 +29,13 @@ func Run(ctx context.Context, configFile string) error {
 	config.InitConfig(configFile)
 
 	// natsrpc client
-	client, err := rpc.NewClient()
+	discoveryClient, err := rpc.NewDiscoveryClient()
 	if err != nil {
 		return err
 	}
 
 	// 注册到节点服务器
-	rsp, err := client.Discovery.RegisterServer(context.TODO(), &api.RegisterServerReq{
+	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
 		ServerType: api.GS,
 	})
 	if err != nil {
@@ -46,7 +46,7 @@ func Run(ctx context.Context, configFile string) error {
 		ticker := time.NewTicker(time.Second * 15)
 		for {
 			<-ticker.C
-			_, err := client.Discovery.KeepaliveServer(context.TODO(), &api.KeepaliveServerReq{
+			_, err := discoveryClient.KeepaliveServer(context.TODO(), &api.KeepaliveServerReq{
 				ServerType: api.GS,
 				AppId:      APPID,
 				LoadCount:  uint32(atomic.LoadInt32(&game.ONLINE_PLAYER_NUM)),
@@ -58,12 +58,12 @@ func Run(ctx context.Context, configFile string) error {
 	}()
 	GSID = rsp.GetGsId()
 	defer func() {
-		_, _ = client.Discovery.CancelServer(context.TODO(), &api.CancelServerReq{
+		_, _ = discoveryClient.CancelServer(context.TODO(), &api.CancelServerReq{
 			ServerType: api.GS,
 			AppId:      APPID,
 		})
 	}()
-	mainGsAppid, err := client.Discovery.GetMainGameServerAppId(context.TODO(), &api.NullMsg{})
+	mainGsAppid, err := discoveryClient.GetMainGameServerAppId(context.TODO(), &api.NullMsg{})
 	if err != nil {
 		return err
 	}
@@ -82,11 +82,11 @@ func Run(ctx context.Context, configFile string) error {
 	}
 	defer db.CloseDao()
 
-	messageQueue := mq.NewMessageQueue(api.GS, APPID, client)
+	messageQueue := mq.NewMessageQueue(api.GS, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	gameManager := game.NewGameManager(db, messageQueue, GSID, APPID, mainGsAppid.AppId, client.Discovery)
-	defer gameManager.Close()
+	gameCore := game.NewGameCore(db, messageQueue, GSID, APPID, mainGsAppid.AppId, discoveryClient)
+	defer gameCore.Close()
 
 	// natsrpc server
 	conn, err := nats.Connect(config.GetConfig().MQ.NatsUrl)
@@ -95,7 +95,7 @@ func Run(ctx context.Context, configFile string) error {
 		return err
 	}
 	defer conn.Close()
-	s, err := service.NewService(conn)
+	s, err := service.NewService(conn, GSID)
 	if err != nil {
 		return err
 	}

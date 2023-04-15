@@ -6,8 +6,12 @@ import (
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
+	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	pb "google.golang.org/protobuf/proto"
 )
 
 // GM函数模块
@@ -166,6 +170,23 @@ func (g *GMCmd) GMAddQuest(userId uint32, questId uint32) {
 	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
 }
 
+// GMFinishQuest 完成任务
+func (g *GMCmd) GMFinishQuest(userId uint32, questId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbQuest := player.GetDbQuest()
+	dbQuest.ForceFinishQuest(questId)
+	ntf := &proto.QuestListUpdateNotify{
+		QuestList: make([]*proto.Quest, 0),
+	}
+	ntf.QuestList = append(ntf.QuestList, GAME.PacketQuest(player, questId))
+	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+	GAME.AcceptQuest(player, true)
+}
+
 // GMForceFinishAllQuest 强制完成当前所有任务
 func (g *GMCmd) GMForceFinishAllQuest(userId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
@@ -278,4 +299,111 @@ func (g *GMCmd) PlayAudio() {
 
 func (g *GMCmd) UpdateFrame(rgb bool) {
 	UpdateFrame(rgb)
+}
+
+var RobotUidCounter uint32 = 0
+
+func (g *GMCmd) CreateRobotInBigWorld(uid uint32, name string, avatarId uint32) {
+	if !GAME.IsMainGs() {
+		return
+	}
+	if uid == 0 {
+		RobotUidCounter++
+		uid = 1000000 + RobotUidCounter
+	}
+	if name == "" {
+		name = random.GetRandomStr(8)
+	}
+	if avatarId == 0 {
+		for _, avatarData := range gdconf.GetAvatarDataMap() {
+			avatarId = uint32(avatarData.AvatarId)
+			break
+		}
+	}
+	aiWorld := WORLD_MANAGER.GetAiWorld()
+	robot := GAME.CreateRobot(uid, name, name)
+	GAME.AddUserAvatar(uid, avatarId)
+	dbAvatar := robot.GetDbAvatar()
+	GAME.SetUpAvatarTeamReq(robot, &proto.SetUpAvatarTeamReq{
+		TeamId:             1,
+		AvatarTeamGuidList: []uint64{dbAvatar.AvatarMap[avatarId].Guid},
+		CurAvatarGuid:      dbAvatar.AvatarMap[avatarId].Guid,
+	})
+	GAME.SetPlayerHeadImageReq(robot, &proto.SetPlayerHeadImageReq{
+		AvatarId: avatarId,
+	})
+	GAME.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
+		TargetUid: aiWorld.owner.PlayerID,
+	})
+	GAME.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
+	})
+	GAME.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
+	})
+	GAME.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
+	})
+	GAME.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
+	})
+	activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
+	pos := new(model.Vector)
+	rot := new(model.Vector)
+	for _, targetPlayer := range aiWorld.GetAllPlayer() {
+		if targetPlayer.PlayerID < PlayerBaseUid {
+			continue
+		}
+		pos = &model.Vector{X: targetPlayer.Pos.X, Y: targetPlayer.Pos.Y, Z: targetPlayer.Pos.Z}
+		rot = &model.Vector{X: targetPlayer.Rot.X, Y: targetPlayer.Rot.Y, Z: targetPlayer.Rot.Z}
+	}
+	entityMoveInfo := &proto.EntityMoveInfo{
+		EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
+		MotionInfo: &proto.MotionInfo{
+			Pos:   &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
+			Rot:   &proto.Vector{X: float32(rot.X), Y: float32(rot.Y), Z: float32(rot.Z)},
+			State: proto.MotionState_MOTION_STANDBY,
+		},
+		SceneTime:   0,
+		ReliableSeq: 0,
+	}
+	combatData, err := pb.Marshal(entityMoveInfo)
+	if err != nil {
+		return
+	}
+	GAME.CombatInvocationsNotify(robot, &proto.CombatInvocationsNotify{
+		InvokeList: []*proto.CombatInvokeEntry{{
+			CombatData:   combatData,
+			ForwardType:  proto.ForwardType_FORWARD_TO_ALL_EXCEPT_CUR,
+			ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
+		}},
+	})
+	GAME.UnionCmdNotify(robot, &proto.UnionCmdNotify{})
+}
+
+func (g *GMCmd) ServerAnnounce(announceId uint32, announceMsg string, isRevoke bool) {
+	if !isRevoke {
+		GAME.ServerAnnounceNotify(announceId, announceMsg)
+	} else {
+		GAME.ServerAnnounceRevokeNotify(announceId)
+	}
+}
+
+func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
+	cmdId := cmdProtoMap.GetCmdIdByCmdName(cmdName)
+	if cmdId == 0 {
+		logger.Error("cmd name not found")
+		return
+	}
+	if cmdId == cmd.WindSeedClientNotify {
+		logger.Error("what are you doing ???")
+		return
+	}
+	msg := cmdProtoMap.GetProtoObjByCmdId(cmdId)
+	err := protojson.Unmarshal([]byte(msgJson), msg)
+	if err != nil {
+		logger.Error("parse msg error: %v", err)
+		return
+	}
+	GAME.SendMsg(cmdId, userId, 0, msg)
 }

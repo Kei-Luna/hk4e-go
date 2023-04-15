@@ -27,12 +27,12 @@ func Run(ctx context.Context, configFile string) error {
 	defer db.CloseDao()
 
 	// natsrpc client
-	client, err := rpc.NewClient()
+	discoveryClient, err := rpc.NewDiscoveryClient()
 	if err != nil {
 		return err
 	}
 
-	_ = controller.NewController(db, client.Discovery)
+	_ = controller.NewController(db, discoveryClient)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
