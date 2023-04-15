@@ -298,6 +298,10 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
 		g.AddSceneGroup(player, scene, groupConfig)
 	}
+	for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
+		groupConfig := gdconf.GetSceneGroup(triggerDataConfig.GroupId)
+		g.AddSceneGroup(player, scene, groupConfig)
+	}
 	// 同步客户端视野内的场景实体
 	visionEntityMap := g.GetVisionEntity(scene, player.Pos)
 	entityIdList := make([]uint32, 0)

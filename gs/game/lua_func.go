@@ -4,6 +4,7 @@ import (
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
+	"hk4e/pkg/alg"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/object"
 	"hk4e/protocol/cmd"
@@ -101,6 +102,7 @@ func GetContextGroup(player *model.Player, ctx *lua.LTable, luaState *lua.LState
 	return group
 }
 
+// GetContextDbSceneGroup 获取上下文中的场景组离线数据对象
 func GetContextDbSceneGroup(player *model.Player, groupId uint32) *model.DbSceneGroup {
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
@@ -136,6 +138,7 @@ func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("SetGroupVariableValueByGroup", SetGroupVariableValueByGroup)
 	gdconf.RegScriptLibFunc("ChangeGroupVariableValue", ChangeGroupVariableValue)
 	gdconf.RegScriptLibFunc("ChangeGroupVariableValueByGroup", ChangeGroupVariableValueByGroup)
+	gdconf.RegScriptLibFunc("GetRegionEntityCount", GetRegionEntityCount)
 }
 
 func GetEntityType(luaState *lua.LState) int {
@@ -366,8 +369,10 @@ func AddQuestProgress(luaState *lua.LState) int {
 }
 
 type LuaTableParam struct {
-	ConfigId  int32 `json:"config_id"`
-	DelayTime int32 `json:"delay_time"`
+	ConfigId   int32 `json:"config_id"`
+	DelayTime  int32 `json:"delay_time"`
+	RegionEid  int32 `json:"region_eid"`
+	EntityType int32 `json:"entity_type"`
 }
 
 func CreateMonster(luaState *lua.LState) int {
@@ -645,5 +650,78 @@ func ChangeGroupVariableValueByGroup(luaState *lua.LState) int {
 	value := dbSceneGroup.GetVariableByName(name)
 	dbSceneGroup.SetVariable(name, value+int32(change))
 	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func GetRegionEntityCount(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	groupId, ok := luaState.GetField(ctx, "groupId").(lua.LNumber)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	luaTable, ok := luaState.Get(2).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	luaTableParam := new(LuaTableParam)
+	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
+	groupConfig := gdconf.GetSceneGroup(int32(groupId))
+	if groupConfig == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	regionConfig := groupConfig.RegionMap[luaTableParam.RegionEid]
+	if regionConfig == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	shape := alg.NewShape()
+	switch uint8(regionConfig.Shape) {
+	case constant.REGION_SHAPE_SPHERE:
+		shape.NewSphere(&alg.Vector3{X: regionConfig.Pos.X, Y: regionConfig.Pos.Y, Z: regionConfig.Pos.Z}, regionConfig.Radius)
+	case constant.REGION_SHAPE_CUBIC:
+		shape.NewCubic(&alg.Vector3{X: regionConfig.Pos.X, Y: regionConfig.Pos.Y, Z: regionConfig.Pos.Z},
+			&alg.Vector3{X: regionConfig.Size.X, Y: regionConfig.Size.Y, Z: regionConfig.Size.Z})
+	case constant.REGION_SHAPE_CYLINDER:
+		shape.NewCylinder(&alg.Vector3{X: regionConfig.Pos.X, Y: regionConfig.Pos.Y, Z: regionConfig.Pos.Z},
+			regionConfig.Radius, regionConfig.Height)
+	case constant.REGION_SHAPE_POLYGON:
+		vector2PointArray := make([]*alg.Vector2, 0)
+		for _, vector := range regionConfig.PointArray {
+			// z就是y
+			vector2PointArray = append(vector2PointArray, &alg.Vector2{X: vector.X, Z: vector.Y})
+		}
+		shape.NewPolygon(&alg.Vector3{X: regionConfig.Pos.X, Y: regionConfig.Pos.Y, Z: regionConfig.Pos.Z},
+			vector2PointArray, regionConfig.Height)
+	}
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	scene := world.GetSceneById(player.SceneId)
+	count := 0
+	for _, entity := range scene.GetAllEntity() {
+		contain := shape.Contain(&alg.Vector3{X: float32(entity.GetPos().X), Y: float32(entity.GetPos().Y), Z: float32(entity.GetPos().Z)})
+		if !contain {
+			continue
+		}
+		if entity.GetEntityType() != uint8(luaTableParam.EntityType) {
+			continue
+		}
+		count++
+	}
+	luaState.Push(lua.LNumber(count))
 	return 1
 }

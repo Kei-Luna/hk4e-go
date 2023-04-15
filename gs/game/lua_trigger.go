@@ -134,7 +134,7 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 					if triggerConfig.Condition != "" {
 						cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
 							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
-							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId})
+							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId, sourceEntityId: uint32(regionConfig.ConfigId)})
 						if !cond {
 							continue
 						}

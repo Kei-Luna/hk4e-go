@@ -163,6 +163,7 @@ func (g *GMCmd) GMAddQuest(userId uint32, questId uint32) {
 	}
 	dbQuest := player.GetDbQuest()
 	dbQuest.AddQuest(questId)
+	dbQuest.StartQuest(questId)
 	ntf := &proto.QuestListUpdateNotify{
 		QuestList: make([]*proto.Quest, 0),
 	}
@@ -390,6 +391,9 @@ func (g *GMCmd) ServerAnnounce(announceId uint32, announceMsg string, isRevoke b
 }
 
 func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
+	if cmdProtoMap == nil {
+		cmdProtoMap = cmd.NewCmdProtoMap()
+	}
 	cmdId := cmdProtoMap.GetCmdIdByCmdName(cmdName)
 	if cmdId == 0 {
 		logger.Error("cmd name not found")

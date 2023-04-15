@@ -108,4 +108,4 @@ gen_client_proto:
 	rm -rf client_proto_gen.go && \
 	go test -count=1 -v -run TestClientProtoGen . && \
 	rm -rf proto/*.pb.go && \
-	find proto -name '*.proto' | xargs -n 1000 protoc --proto_path=proto --go_out=proto
+	find proto -name '*.proto' | xargs -n 1 protoc --proto_path=proto --go_out=proto
