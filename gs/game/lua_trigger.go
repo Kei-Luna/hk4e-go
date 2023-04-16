@@ -103,7 +103,7 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 					if triggerConfig.Condition != "" {
 						cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
 							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
-							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId})
+							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId, sourceEntityId: uint32(regionConfig.ConfigId)})
 						if !cond {
 							continue
 						}
@@ -155,16 +155,16 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 	})
 }
 
-// MonsterDieTriggerCheck 怪物死亡触发器检测
-func (g *Game) MonsterDieTriggerCheck(player *model.Player, group *Group) {
-	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
-		if triggerConfig.Event != constant.LUA_EVENT_ANY_MONSTER_DIE {
+// QuestStartTriggerCheck 任务开始触发器检测
+func (g *Game) QuestStartTriggerCheck(player *model.Player, questId uint32) {
+	forEachPlayerSceneGroupTrigger(player, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
+		if triggerConfig.Event != constant.LUA_EVENT_QUEST_START {
 			return
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
 				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
-				&LuaEvt{})
+				&LuaEvt{param1: int32(questId)})
 			if !cond {
 				return
 			}
@@ -181,16 +181,42 @@ func (g *Game) MonsterDieTriggerCheck(player *model.Player, group *Group) {
 	})
 }
 
-// QuestStartTriggerCheck 任务开始触发器检测
-func (g *Game) QuestStartTriggerCheck(player *model.Player, questId uint32) {
-	forEachPlayerSceneGroupTrigger(player, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
-		if triggerConfig.Event != constant.LUA_EVENT_QUEST_START {
+// MonsterCreateTriggerCheck 怪物创建触发器检测
+func (g *Game) MonsterCreateTriggerCheck(player *model.Player, group *Group, configId uint32) {
+	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
+		if triggerConfig.Event != constant.LUA_EVENT_ANY_MONSTER_LIVE {
 			return
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
 				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
-				&LuaEvt{param1: int32(questId)})
+				&LuaEvt{param1: int32(configId)})
+			if !cond {
+				return
+			}
+		}
+		if triggerConfig.Action != "" {
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{})
+			if !ok {
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			}
+		}
+	})
+}
+
+// MonsterDieTriggerCheck 怪物死亡触发器检测
+func (g *Game) MonsterDieTriggerCheck(player *model.Player, group *Group) {
+	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
+		if triggerConfig.Event != constant.LUA_EVENT_ANY_MONSTER_DIE {
+			return
+		}
+		if triggerConfig.Condition != "" {
+			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{})
 			if !cond {
 				return
 			}
@@ -259,6 +285,32 @@ func (g *Game) GadgetStateChangeTriggerCheck(player *model.Player, group *Group,
 	})
 }
 
+// GadgetDieTriggerCheck 物件死亡触发器检测
+func (g *Game) GadgetDieTriggerCheck(player *model.Player, group *Group, configId uint32) {
+	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
+		if triggerConfig.Event != constant.LUA_EVENT_ANY_GADGET_DIE {
+			return
+		}
+		if triggerConfig.Condition != "" {
+			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{param1: int32(configId)})
+			if !cond {
+				return
+			}
+		}
+		if triggerConfig.Action != "" {
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{})
+			if !ok {
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			}
+		}
+	})
+}
+
 // GroupLoadTriggerCheck 场景组加载触发器检测
 func (g *Game) GroupLoadTriggerCheck(player *model.Player, group *Group) {
 	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
@@ -269,6 +321,37 @@ func (g *Game) GroupLoadTriggerCheck(player *model.Player, group *Group) {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
 				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
+			if !cond {
+				return
+			}
+		}
+		if triggerConfig.Action != "" {
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{})
+			if !ok {
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			}
+		}
+	})
+}
+
+// TimerEventTriggerCheck 场景组定时事件触发器检测
+func (g *Game) TimerEventTriggerCheck(player *model.Player, group *Group, source string) {
+	forEachGroupTrigger(player, group, func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group) {
+		if triggerConfig.Event != constant.LUA_EVENT_TIMER_EVENT {
+			return
+		}
+		if triggerConfig.Source != "" {
+			if triggerConfig.Source != source {
+				return
+			}
+		}
+		if triggerConfig.Condition != "" {
+			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
+				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaEvt{sourceName: source})
 			if !cond {
 				return
 			}

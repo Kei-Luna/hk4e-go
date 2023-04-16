@@ -3,6 +3,7 @@ package game
 import (
 	"time"
 
+	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -108,6 +109,7 @@ func (t *TickManager) onUserTickMinute(userId uint32, now int64) {
 const (
 	UserTimerActionTest = iota
 	UserTimerActionLuaCreateMonster
+	UserTimerActionLuaGroupTimerEvent
 )
 
 func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
@@ -122,7 +124,23 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 		logger.Debug("UserTimerActionLuaCreateMonster, groupId: %v, configId: %v, uid: %v", data[0], data[1], userId)
 		groupId := data[0].(uint32)
 		configId := data[1].(uint32)
-		GAME.AddSceneGroupMonster(player, groupId, configId)
+		GAME.SceneGroupCreateEntity(player, groupId, configId, constant.ENTITY_TYPE_MONSTER)
+	case UserTimerActionLuaGroupTimerEvent:
+		logger.Debug("UserTimerActionLuaGroupTimerEvent, groupId: %v, source: %v, uid: %v", data[0], data[1], userId)
+		groupId := data[0].(uint32)
+		source := data[1].(string)
+		world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+		if world == nil {
+			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
+			return
+		}
+		scene := world.GetSceneById(player.SceneId)
+		group := scene.GetGroupById(groupId)
+		if group == nil {
+			logger.Error("get group is nil, groupId: %v, uid: %v", groupId, userId)
+			return
+		}
+		GAME.TimerEventTriggerCheck(player, group, source)
 	}
 }
 

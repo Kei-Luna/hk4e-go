@@ -623,9 +623,15 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	dbSceneGroup.AddKill(entity.GetConfigId())
 
 	group.DestroyEntity(entity.GetId())
-	// 怪物死亡触发器检测
-	if entity.GetEntityType() == constant.ENTITY_TYPE_MONSTER {
+
+	// 触发器检测
+	switch entity.GetEntityType() {
+	case constant.ENTITY_TYPE_MONSTER:
+		// 怪物死亡触发器检测
 		g.MonsterDieTriggerCheck(player, group)
+	case constant.ENTITY_TYPE_GADGET:
+		// 物件死亡触发器检测
+		g.GadgetDieTriggerCheck(player, group, entity.GetConfigId())
 	}
 }
 
@@ -724,6 +730,8 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 	return neighborGroup
 }
 
+// TODO Group和Suite的初始化和加载卸载逻辑还没完全理清 所以现在这里写得略答辩
+
 // AddSceneGroup 加载场景组
 func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
 	group := scene.GetGroupById(uint32(groupConfig.Id))
@@ -763,15 +771,6 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 	}
 	// 场景组加载触发器检测
 	g.GroupLoadTriggerCheck(player, group)
-	// 物件创建触发器检测
-	suiteConfig, exist := groupConfig.SuiteMap[initSuiteId]
-	if !exist {
-		logger.Error("invalid suiteId: %v, uid: %v", initSuiteId, player.PlayerID)
-		return
-	}
-	for _, gadgetConfigId := range suiteConfig.GadgetConfigIdList {
-		GAME.GadgetCreateTriggerCheck(player, group, uint32(gadgetConfigId))
-	}
 }
 
 // RemoveSceneGroup 卸载场景组
@@ -789,6 +788,38 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 	}
 	ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
 	g.SendMsg(cmd.GroupUnloadNotify, player.PlayerID, player.ClientSeq, ntf)
+}
+
+// AddSceneGroupSuite 向场景组中添加场景小组
+func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
+	groupConfig := gdconf.GetSceneGroup(int32(groupId))
+	if groupConfig == nil {
+		logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
+		return
+	}
+	_, exist := groupConfig.SuiteMap[int32(suiteId)]
+	if !exist {
+		logger.Error("invalid suite id: %v, uid: %v", suiteId, player.PlayerID)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.AddSceneGroupSuiteCore(player, scene, groupId, suiteId)
+	ntf := &proto.GroupSuiteNotify{
+		GroupMap: make(map[uint32]uint32),
+	}
+	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(suiteId)
+	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerID, player.ClientSeq, ntf)
+	group := scene.GetGroupById(groupId)
+	suite := group.GetSuiteById(suiteId)
+	entityIdList := make([]uint32, 0)
+	for _, entity := range suite.GetAllEntity() {
+		entityIdList = append(entityIdList, entity.GetId())
+	}
+	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, entityIdList, true, false)
 }
 
 func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupId uint32, suiteId uint8) {
@@ -938,40 +969,9 @@ func getTempFightPropMap() map[uint32]float32 {
 	return fpm
 }
 
-// TODO Group和Suite的初始化和加载卸载逻辑还没完全理清 所以现在这里写得略答辩
-
-func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
-	groupConfig := gdconf.GetSceneGroup(int32(groupId))
-	if groupConfig == nil {
-		logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
-		return
-	}
-	_, exist := groupConfig.SuiteMap[int32(suiteId)]
-	if !exist {
-		logger.Error("invalid suite id: %v, uid: %v", suiteId, player.PlayerID)
-		return
-	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if world == nil {
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
-	g.AddSceneGroupSuiteCore(player, scene, groupId, suiteId)
-	ntf := &proto.GroupSuiteNotify{
-		GroupMap: make(map[uint32]uint32),
-	}
-	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(suiteId)
-	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerID, player.ClientSeq, ntf)
-	group := scene.GetGroupById(groupId)
-	suite := group.GetSuiteById(suiteId)
-	entityIdList := make([]uint32, 0)
-	for _, entity := range suite.GetAllEntity() {
-		entityIdList = append(entityIdList, entity.GetId())
-	}
-	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, entityIdList, true, false)
-}
-
-func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, configId uint32) {
+// SceneGroupCreateEntity 创建场景组配置物件实体
+func (g *Game) SceneGroupCreateEntity(player *model.Player, groupId uint32, configId uint32, entityType uint8) {
+	// 添加到初始小组
 	groupConfig := gdconf.GetSceneGroup(int32(groupId))
 	if groupConfig == nil {
 		logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
@@ -983,32 +983,78 @@ func (g *Game) AddSceneGroupMonster(player *model.Player, groupId uint32, config
 		logger.Error("invalid init suite id: %v, uid: %v", initSuiteId, player.PlayerID)
 		return
 	}
+	// 添加场景实体
 	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
 	if world == nil {
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	group, exist := scene.groupMap[groupId]
-	if !exist {
-		logger.Error("group not exist, groupId: %v", groupId)
+	var entityConfig any = nil
+	switch entityType {
+	case constant.ENTITY_TYPE_MONSTER:
+		monsterConfig, exist := groupConfig.MonsterMap[int32(configId)]
+		if !exist {
+			logger.Error("monster config not exist, configId: %v", configId)
+			return
+		}
+		entityConfig = monsterConfig
+	case constant.ENTITY_TYPE_GADGET:
+		gadgetConfig, exist := groupConfig.GadgetMap[int32(configId)]
+		if !exist {
+			logger.Error("gadget config not exist, configId: %v", configId)
+			return
+		}
+		entityConfig = gadgetConfig
+	default:
+		logger.Error("unknown entity type: %v", entityType)
 		return
 	}
-	suite, exist := group.suiteMap[uint8(initSuiteId)]
-	if !exist {
-		logger.Error("suite not exist, suiteId: %v", initSuiteId)
-		return
-	}
-	monsterConfig, exist := groupConfig.MonsterMap[int32(configId)]
-	if !exist {
-		logger.Error("monster config not exist, configId: %v", configId)
-		return
-	}
-	entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), monsterConfig)
+	entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), entityConfig)
 	if entityId == 0 {
 		return
 	}
 	entity := scene.GetEntity(entityId)
-	suite.entityMap[entityId] = entity
+	// 实体添加到场景小组
+	scene.AddGroupSuite(groupId, uint8(initSuiteId), map[uint32]*Entity{entity.GetId(): entity})
+	// 通知客户端
+	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
+	// 触发器检测
+	group := scene.GetGroupById(groupId)
+	if group == nil {
+		logger.Error("group not exist, groupId: %v, uid: %v", groupId, player.PlayerID)
+		return
+	}
+	switch entityType {
+	case constant.ENTITY_TYPE_MONSTER:
+		// 怪物创建触发器检测
+		GAME.MonsterCreateTriggerCheck(player, group, configId)
+	case constant.ENTITY_TYPE_GADGET:
+		// 物件创建触发器检测
+		GAME.GadgetCreateTriggerCheck(player, group, configId)
+	}
+}
+
+// CreateMonster 创建怪物实体
+func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId uint32) {
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	if pos == nil {
+		pos = &model.Vector{
+			X: player.Pos.X + random.GetRandomFloat64(1.0, 10.0),
+			Y: player.Pos.Y + 1.0,
+			Z: player.Pos.Z + random.GetRandomFloat64(1.0, 10.0),
+		}
+	}
+	rot := new(model.Vector)
+	rot.Y = random.GetRandomFloat64(0.0, 360.0)
+	entityId := scene.CreateEntityMonster(
+		pos, rot,
+		monsterId, uint8(random.GetRandomInt32(1, 90)), getTempFightPropMap(),
+		0, 0,
+	)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
 }
 
@@ -1026,13 +1072,18 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
+	if pos == nil {
+		pos = &model.Vector{
+			X: player.Pos.X + random.GetRandomFloat64(1.0, 10.0),
+			Y: player.Pos.Y + 1.0,
+			Z: player.Pos.Z + random.GetRandomFloat64(1.0, 10.0),
+		}
+	}
 	rot := new(model.Vector)
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
 	entityId := scene.CreateEntityGadgetNormal(
 		pos, rot,
-		gadgetId,
-		constant.GADGET_STATE_DEFAULT,
-		normalEntity,
+		gadgetId, constant.GADGET_STATE_DEFAULT, normalEntity,
 		0, 0,
 	)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)

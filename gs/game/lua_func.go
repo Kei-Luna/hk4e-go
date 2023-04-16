@@ -13,6 +13,12 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+const (
+	MaxCallLuaFuncLoopCount = 10 // 调用LUA方法递归层数限制
+)
+
+var CallLuaFuncLoopCount = 0
+
 type LuaCtx struct {
 	uid            uint32
 	ownerUid       uint32
@@ -36,6 +42,14 @@ type LuaEvt struct {
 
 // CallLuaFunc 调用LUA方法
 func CallLuaFunc(luaState *lua.LState, luaFuncName string, luaCtx *LuaCtx, luaEvt *LuaEvt) bool {
+	if CallLuaFuncLoopCount > MaxCallLuaFuncLoopCount {
+		logger.Error("above max call lua func loop count, stack: %v", logger.Stack())
+		return false
+	}
+	CallLuaFuncLoopCount++
+	defer func() {
+		CallLuaFuncLoopCount--
+	}()
 	ctx := luaState.NewTable()
 	luaState.SetField(ctx, "uid", lua.LNumber(luaCtx.uid))
 	luaState.SetField(ctx, "owner_uid", lua.LNumber(luaCtx.ownerUid))
@@ -59,7 +73,7 @@ func CallLuaFunc(luaState *lua.LState, luaFuncName string, luaCtx *LuaCtx, luaEv
 		Protect: true,
 	}, ctx, evt)
 	if err != nil {
-		logger.Error("call lua error, func: %v, error: %v", luaFuncName, err)
+		logger.Error("call lua error, groupId: %v, func: %v, error: %v", luaCtx.groupId, luaFuncName, err)
 		return false
 	}
 	luaRet := luaState.Get(-1)
@@ -139,6 +153,7 @@ func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("ChangeGroupVariableValue", ChangeGroupVariableValue)
 	gdconf.RegScriptLibFunc("ChangeGroupVariableValueByGroup", ChangeGroupVariableValueByGroup)
 	gdconf.RegScriptLibFunc("GetRegionEntityCount", GetRegionEntityCount)
+	gdconf.RegScriptLibFunc("CreateGroupTimerEvent", CreateGroupTimerEvent)
 }
 
 func GetEntityType(luaState *lua.LState) int {
@@ -427,18 +442,7 @@ func CreateGadget(luaState *lua.LState) int {
 	}
 	luaTableParam := new(LuaTableParam)
 	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
-	groupConfig := gdconf.GetSceneGroup(int32(groupId))
-	if groupConfig == nil {
-		luaState.Push(lua.LNumber(-1))
-		return 1
-	}
-	gadget := groupConfig.GadgetMap[luaTableParam.ConfigId]
-	if gadget == nil {
-		luaState.Push(lua.LNumber(-1))
-		return 1
-	}
-	GAME.CreateGadget(player, &model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
-		uint32(gadget.GadgetId), nil)
+	GAME.SceneGroupCreateEntity(player, uint32(groupId), uint32(luaTableParam.ConfigId), constant.ENTITY_TYPE_GADGET)
 	luaState.Push(lua.LNumber(0))
 	return 1
 }
@@ -723,5 +727,25 @@ func GetRegionEntityCount(luaState *lua.LState) int {
 		count++
 	}
 	luaState.Push(lua.LNumber(count))
+	return 1
+}
+
+func CreateGroupTimerEvent(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	groupId := luaState.ToInt(2)
+	source := luaState.ToString(3)
+	delay := luaState.ToInt(4)
+	TICK_MANAGER.CreateUserTimer(player.PlayerID, UserTimerActionLuaGroupTimerEvent, uint32(delay),
+		uint32(groupId), source)
+	luaState.Push(lua.LNumber(0))
 	return 1
 }

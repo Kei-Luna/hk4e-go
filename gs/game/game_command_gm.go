@@ -235,18 +235,24 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 	})
 }
 
-// GMCreateGadget 在玩家附近创建物件实体
-func (g *GMCmd) GMCreateGadget(userId uint32, posX, posY, posZ float64, gadgetId uint32) {
+// GMCreateMonster 在玩家附近创建怪物
+func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	GAME.CreateGadget(player, &model.Vector{
-		X: posX,
-		Y: posY,
-		Z: posZ,
-	}, gadgetId, nil)
+	GAME.CreateMonster(player, nil, monsterId)
+}
+
+// GMCreateGadget 在玩家附近创建物件
+func (g *GMCmd) GMCreateGadget(userId uint32, gadgetId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	GAME.CreateGadget(player, nil, gadgetId, nil)
 }
 
 // 系统级GM指令

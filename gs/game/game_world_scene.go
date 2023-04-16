@@ -312,9 +312,16 @@ func (s *Scene) AddGroupSuite(groupId uint32, suiteId uint8, entityMap map[uint3
 		}
 		s.groupMap[groupId] = group
 	}
-	group.suiteMap[suiteId] = &Suite{
-		id:        suiteId,
-		entityMap: entityMap,
+	suite, exist := group.suiteMap[suiteId]
+	if !exist {
+		suite = &Suite{
+			id:        suiteId,
+			entityMap: make(map[uint32]*Entity),
+		}
+		group.suiteMap[suiteId] = suite
+	}
+	for k, v := range entityMap {
+		suite.entityMap[k] = v
 	}
 }
 
