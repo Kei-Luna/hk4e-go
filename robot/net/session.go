@@ -4,6 +4,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"hk4e/common/config"
+
 	"hk4e/gate/client_proto"
 	"hk4e/gate/kcp"
 	hk4egatenet "hk4e/gate/net"
@@ -15,14 +17,16 @@ import (
 )
 
 type Session struct {
-	Conn              *kcp.UDPSession
-	XorKey            []byte
-	SendChan          chan *hk4egatenet.ProtoMsg
-	RecvChan          chan *hk4egatenet.ProtoMsg
-	ServerCmdProtoMap *cmd.CmdProtoMap
-	ClientCmdProtoMap *client_proto.ClientCmdProtoMap
-	ClientSeq         uint32
-	DeadEvent         chan bool
+	Conn                   *kcp.UDPSession
+	XorKey                 []byte
+	SendChan               chan *hk4egatenet.ProtoMsg
+	RecvChan               chan *hk4egatenet.ProtoMsg
+	ServerCmdProtoMap      *cmd.CmdProtoMap
+	ClientCmdProtoMap      *client_proto.ClientCmdProtoMap
+	ClientSeq              uint32
+	DeadEvent              chan bool
+	ClientVersionRandomKey string
+	SecurityCmdBuffer      []byte
 }
 
 func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, error) {
@@ -36,15 +40,21 @@ func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, e
 	}
 	conn.SetACKNoDelay(true)
 	conn.SetWriteDelay(false)
+	conn.SetWindowSize(255, 255)
 	r := &Session{
-		Conn:              conn,
-		XorKey:            dispatchKey,
-		SendChan:          make(chan *hk4egatenet.ProtoMsg, 1000),
-		RecvChan:          make(chan *hk4egatenet.ProtoMsg, 1000),
-		ServerCmdProtoMap: cmd.NewCmdProtoMap(),
-		ClientCmdProtoMap: client_proto.NewClientCmdProtoMap(),
-		ClientSeq:         0,
-		DeadEvent:         make(chan bool, 10),
+		Conn:                   conn,
+		XorKey:                 dispatchKey,
+		SendChan:               make(chan *hk4egatenet.ProtoMsg, 1000),
+		RecvChan:               make(chan *hk4egatenet.ProtoMsg, 1000),
+		ServerCmdProtoMap:      cmd.NewCmdProtoMap(),
+		ClientCmdProtoMap:      nil,
+		ClientSeq:              0,
+		DeadEvent:              make(chan bool, 10),
+		ClientVersionRandomKey: "",
+		SecurityCmdBuffer:      nil,
+	}
+	if config.GetConfig().Hk4e.ClientProtoProxyEnable {
+		r.ClientCmdProtoMap = client_proto.NewClientCmdProtoMap()
 	}
 	go r.recvHandle()
 	go r.sendHandle()

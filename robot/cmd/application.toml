@@ -3,3 +3,20 @@ level = "DEBUG"
 mode = "CONSOLE"
 track = true
 max_size = 10485760
+
+[hk4e]
+client_proto_proxy_enable = false
+
+[hk4e_robot]
+region_list_url = "https://hk4e.flswld.com" # 一级dispatch地址
+region_list_param = "" # 一级dispatch的url参数
+cur_region_url = "https://hk4e.flswld.com/query_cur_region" # 二级dispatch地址
+cur_region_param = "?version=OSRELWin3.2.0&key_id=5" # 二级dispatch的url参数
+key_id = "5" # 客户端密钥编号
+login_sdk_url = "https://hk4e.flswld.com" # sdk登录服务器地址
+account = "flswld" # 帐号
+password = "" # base64编码的rsa公钥加密后的密码
+client_version = "CNRELWin3.2.0_R11611027_S11212885_D11793813" # 客户端版本号
+dos_enable = false # 是否开启压力测试
+dos_num = 1 # 压力测试并发数量 帐号自动添加后缀编号
+dos_loop_login = false # 压力测试是否循环登录退出

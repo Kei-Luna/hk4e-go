@@ -52,6 +52,10 @@ func GateLogin(dispatchInfo *DispatchInfo, accountInfo *AccountInfo, keyId strin
 		AccountUid:    strconv.Itoa(int(accountInfo.AccountId)),
 		KeyId:         uint32(keyIdInt),
 		ClientRandKey: clientSeedBase64,
+		AccountType:   1,
+		ChannelId:     1,
+		SubChannelId:  1,
+		PlatformType:  3,
 	})
 	protoMsg := <-session.RecvChan
 	if protoMsg.CmdId != cmd.GetPlayerTokenRsp {
@@ -92,5 +96,7 @@ func GateLogin(dispatchInfo *DispatchInfo, accountInfo *AccountInfo, keyId strin
 	key := make([]byte, 4096)
 	copy(key, xorKey[:])
 	session.XorKey = key
+	session.ClientVersionRandomKey = getPlayerTokenRsp.ClientVersionRandomKey
+	session.SecurityCmdBuffer = getPlayerTokenRsp.SecurityCmdBuffer
 	return session, nil
 }

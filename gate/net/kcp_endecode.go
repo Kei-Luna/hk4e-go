@@ -94,7 +94,13 @@ func EncodePayloadToBin(kcpMsg *KcpMsg, xorKey []byte) (bin []byte) {
 	if kcpMsg.ProtoData == nil {
 		kcpMsg.ProtoData = make([]byte, 0)
 	}
-	bin = make([]byte, len(kcpMsg.HeadData)+len(kcpMsg.ProtoData)+12)
+	// 检查长度
+	packetLen := len(kcpMsg.HeadData) + len(kcpMsg.ProtoData) + 12
+	if packetLen > PacketMaxLen {
+		logger.Error("packet len too long")
+		return make([]byte, 0)
+	}
+	bin = make([]byte, packetLen)
 	// 头部幻数
 	bin[0] = 0x45
 	bin[1] = 0x67

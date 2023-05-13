@@ -903,39 +903,33 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 		network = "udp"
 	}
 
-	conn, err := net.ListenUDP(network, nil)
+	conn, err := net.DialUDP(network, nil, udpaddr)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-
-	hsconn, err := net.DialUDP(network, nil, udpaddr)
-	if err != nil {
-		return nil, err
-	}
 	enet := &Enet{
-		Addr:     raddr,
+		Addr:     udpaddr.String(),
 		ConvId:   0,
 		ConnType: ConnEnetSyn,
 		EnetType: EnetClientConnectKey,
 	}
 	data := BuildEnet(enet.ConnType, enet.EnetType, enet.ConvId)
-	_, err = hsconn.Write(data)
+	_, err = conn.Write(data)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	buf := make([]byte, mtuLimit)
-	n, addr, err := hsconn.ReadFrom(buf)
+	n, addr, err := conn.ReadFrom(buf)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
-	if addr.String() != raddr {
-		// TODO 本质是为了安全考虑 但是用域名连接会出现这种情况看之后找个方法解决一下
-		// return nil, errors.New("recv packet remote addr not match")
+	if addr.String() != udpaddr.String() {
+		return nil, errors.WithStack(errors.New("recv packet remote addr not match"))
 	}
 	udpPayload := buf[:n]
 	connType, enetType, conv, err := ParseEnet(udpPayload)
 	if err != nil || connType != ConnEnetEst || enetType != EnetClientConnectKey {
-		return nil, errors.New("recv packet format error")
+		return nil, errors.WithStack(errors.New("recv packet format error"))
 	}
 
 	return newUDPSession(conv, nil, conn, true, udpaddr), nil
