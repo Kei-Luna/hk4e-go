@@ -61,8 +61,9 @@ func GateLogin(dispatchInfo *DispatchInfo, accountInfo *AccountInfo, keyId strin
 	if protoMsg.CmdId != cmd.GetPlayerTokenRsp {
 		return nil, errors.New("recv pkt is not GetPlayerTokenRsp")
 	}
-	// XOR密钥切换
 	getPlayerTokenRsp := protoMsg.PayloadMessage.(*proto.GetPlayerTokenRsp)
+	logger.Info("gate login ok, uid: %v", getPlayerTokenRsp.Uid)
+	// XOR密钥切换
 	seedEnc, err := base64.StdEncoding.DecodeString(getPlayerTokenRsp.ServerRandKey)
 	if err != nil {
 		logger.Error("base64 decode error: %v", err)

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 
+	"hk4e/common/config"
 	"hk4e/common/region"
 	"hk4e/dispatch/api"
 	"hk4e/pkg/endec"
@@ -44,7 +45,7 @@ func GetDispatchInfo(regionListUrl string, regionListParam string, curRegionUrl 
 		return nil, errors.New("no region found")
 	}
 	if curRegionUrl == "" {
-		selectRegion := queryRegionListHttpRsp.RegionList[0]
+		selectRegion := queryRegionListHttpRsp.RegionList[int(config.GetConfig().Hk4eRobot.SelectRegionIndex)]
 		logger.Info("select region: %v", selectRegion)
 		curRegionUrl = selectRegion.DispatchUrl
 	}
