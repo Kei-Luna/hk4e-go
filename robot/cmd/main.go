@@ -155,13 +155,19 @@ func clientLogic(account string, session *net.Session) {
 			tickCounter++
 			if config.GetConfig().Hk4eRobot.ClientMoveEnable {
 				if enterSceneDone {
-					currPos.X -= float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Sin(float64(moveRot)))
-					currPos.Z += float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Cos(float64(moveRot)))
-					if currPos.X > bornPos.X+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
-						currPos.Z > bornPos.Z+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
-						currPos.X < bornPos.X-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
-						currPos.Z < bornPos.Z-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) {
-						moveRot = random.GetRandomFloat32(0.0, 359.9)
+					for {
+						dx := float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Cos(float64(moveRot/360.0*2*math.Pi)))
+						dz := float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Sin(float64(moveRot/360.0*2*math.Pi)))
+						if currPos.X-dx > bornPos.X+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
+							currPos.Z-dz > bornPos.Z+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
+							currPos.X-dx < bornPos.X-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
+							currPos.Z-dz < bornPos.Z-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) {
+							moveRot = random.GetRandomFloat32(0.0, 359.9)
+							continue
+						}
+						currPos.X -= dx
+						currPos.Z -= dz
+						break
 					}
 					moveReliableSeq += 100
 					entityMoveInfo := &proto.EntityMoveInfo{
