@@ -53,11 +53,12 @@ func main() {
 	}
 
 	if config.GetConfig().Hk4eRobot.DosEnable {
-		for i := 0; i < int(config.GetConfig().Hk4eRobot.DosTotalNum); i++ {
+		dosBatchNum := int(config.GetConfig().Hk4eRobot.DosBatchNum)
+		for i := 0; i < int(config.GetConfig().Hk4eRobot.DosTotalNum); i += dosBatchNum {
 			wg := new(sync.WaitGroup)
-			wg.Add(int(config.GetConfig().Hk4eRobot.DosBatchNum))
-			for j := 0; j < int(config.GetConfig().Hk4eRobot.DosBatchNum); j++ {
-				go httpLogin(config.GetConfig().Hk4eRobot.Account+"_"+strconv.Itoa(i), dispatchInfo, wg)
+			wg.Add(dosBatchNum)
+			for j := 0; j < dosBatchNum; j++ {
+				go httpLogin(config.GetConfig().Hk4eRobot.Account+"_"+strconv.Itoa(i+j), dispatchInfo, wg)
 			}
 			wg.Wait()
 		}
