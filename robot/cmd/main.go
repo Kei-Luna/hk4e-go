@@ -13,7 +13,9 @@ import (
 	"time"
 
 	pb "google.golang.org/protobuf/proto"
+	hk4egatenet "hk4e/gate/net"
 	"hk4e/pkg/endec"
+	"hk4e/pkg/object"
 	"hk4e/pkg/random"
 	"hk4e/robot/net"
 
@@ -46,6 +48,7 @@ func main() {
 		config.GetConfig().Hk4eRobot.KeyId)
 	if err != nil {
 		logger.Error("get dispatch info error: %v", err)
+		time.Sleep(time.Second)
 		return
 	}
 
@@ -84,12 +87,12 @@ func httpLogin(account string, dispatchInfo *login.DispatchInfo, wg *sync.WaitGr
 			wg.Done()
 		}
 	}()
-	logger.Info("robot start, account: %v", account)
 	accountInfo, err := login.AccountLogin(config.GetConfig().Hk4eRobot.LoginSdkUrl, account, config.GetConfig().Hk4eRobot.Password)
 	if err != nil {
 		logger.Error("account login error: %v", err)
 		return
 	}
+	logger.Info("robot http login ok, account: %v", account)
 	go func() {
 		for {
 			gateLogin(account, dispatchInfo, accountInfo)
@@ -108,6 +111,7 @@ func gateLogin(account string, dispatchInfo *login.DispatchInfo, accountInfo *lo
 		logger.Error("gate login error: %v", err)
 		return
 	}
+	logger.Info("robot gate login ok, account: %v", account)
 	clientVersionHashData, err := hex.DecodeString(
 		endec.Sha1Str(config.GetConfig().Hk4eRobot.ClientVersion + session.ClientVersionRandomKey + "mhy2020"),
 	)
@@ -185,7 +189,20 @@ func clientLogic(account string, session *net.Session) {
 							ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
 						}},
 					}
-					body, err := pb.Marshal(combatInvocationsNotify)
+					var combatInvocationsNotifyPb pb.Message = combatInvocationsNotify
+					if config.GetConfig().Hk4e.ClientProtoProxyEnable {
+						clientProtoObj := hk4egatenet.GetClientProtoObjByName("CombatInvocationsNotify", session.ClientCmdProtoMap)
+						if clientProtoObj == nil {
+							continue
+						}
+						_, err := object.CopyProtoBufSameField(clientProtoObj, combatInvocationsNotify)
+						if err != nil {
+							continue
+						}
+						hk4egatenet.ConvServerPbDataToClient(clientProtoObj, session.ClientCmdProtoMap)
+						combatInvocationsNotifyPb = clientProtoObj
+					}
+					body, err := pb.Marshal(combatInvocationsNotifyPb)
 					if err != nil {
 						logger.Error("marshal CombatInvocationsNotify error: %v, account: %v", err, account)
 						continue
@@ -195,6 +212,9 @@ func clientLogic(account string, session *net.Session) {
 							Body:      body,
 							MessageId: cmd.CombatInvocationsNotify,
 						}},
+					}
+					if config.GetConfig().Hk4e.ClientProtoProxyEnable {
+						unionCmdNotify.CmdList[0].MessageId = uint32(session.ClientCmdProtoMap.GetClientCmdIdByCmdName("CombatInvocationsNotify"))
 					}
 					session.SendMsg(cmd.UnionCmdNotify, unionCmdNotify)
 				}
@@ -217,7 +237,7 @@ func clientLogic(account string, session *net.Session) {
 					logger.Error("login fail, retCode: %v, account: %v", rsp.Retcode, account)
 					return
 				}
-				logger.Info("login ok, account: %v", account)
+				logger.Info("robot gs login ok, account: %v", account)
 			case cmd.DoSetPlayerBornDataNotify:
 				session.SendMsg(cmd.SetPlayerBornDataReq, &proto.SetPlayerBornDataReq{
 					AvatarId: 10000007,
