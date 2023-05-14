@@ -158,9 +158,9 @@ func clientLogic(account string, session *net.Session) {
 					currPos.X -= float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Sin(float64(moveRot)))
 					currPos.Z += float32(float64(config.GetConfig().Hk4eRobot.ClientMoveSpeed) * math.Cos(float64(moveRot)))
 					if currPos.X > bornPos.X+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
-						currPos.Y > bornPos.Y+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
+						currPos.Z > bornPos.Z+float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
 						currPos.X < bornPos.X-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) ||
-						currPos.Y < bornPos.Y-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) {
+						currPos.Z < bornPos.Z-float32(config.GetConfig().Hk4eRobot.ClientMoveRangeExt) {
 						moveRot = random.GetRandomFloat32(0.0, 359.9)
 					}
 					moveReliableSeq += 100
