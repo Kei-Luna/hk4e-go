@@ -172,18 +172,31 @@ func clientLogic(account string, session *net.Session) {
 						ReliableSeq: moveReliableSeq,
 						IsReliable:  true,
 					}
+					logger.Debug("EntityMoveInfo: %v, account: %v", entityMoveInfo, account)
 					combatData, err := pb.Marshal(entityMoveInfo)
 					if err != nil {
 						logger.Error("marshal EntityMoveInfo error: %v, account: %v", err, account)
 						continue
 					}
-					session.SendMsg(cmd.CombatInvocationsNotify, &proto.CombatInvocationsNotify{
+					combatInvocationsNotify := &proto.CombatInvocationsNotify{
 						InvokeList: []*proto.CombatInvokeEntry{{
 							CombatData:   combatData,
 							ForwardType:  proto.ForwardType_FORWARD_TO_ALL_EXCEPT_CUR,
 							ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
 						}},
-					})
+					}
+					body, err := pb.Marshal(combatInvocationsNotify)
+					if err != nil {
+						logger.Error("marshal CombatInvocationsNotify error: %v, account: %v", err, account)
+						continue
+					}
+					unionCmdNotify := &proto.UnionCmdNotify{
+						CmdList: []*proto.UnionCmd{{
+							Body:      body,
+							MessageId: cmd.CombatInvocationsNotify,
+						}},
+					}
+					session.SendMsg(cmd.UnionCmdNotify, unionCmdNotify)
 				}
 			}
 			if tickCounter%5 != 0 {
