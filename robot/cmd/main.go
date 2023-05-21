@@ -12,12 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	pb "google.golang.org/protobuf/proto"
 	hk4egatenet "hk4e/gate/net"
 	"hk4e/pkg/endec"
 	"hk4e/pkg/object"
 	"hk4e/pkg/random"
 	"hk4e/robot/net"
+
+	pb "google.golang.org/protobuf/proto"
 
 	"hk4e/common/config"
 	"hk4e/pkg/logger"
