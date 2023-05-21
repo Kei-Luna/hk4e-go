@@ -16,7 +16,7 @@ clean:
 # 构建服务器二进制文件
 .PHONY: build
 build:
-	mkdir -p bin && CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./cmd/...
+	mkdir -p bin && go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./cmd/...
 
 # 清理镜像
 .PHONY: docker_clean
@@ -109,3 +109,11 @@ gen_client_proto:
 	go test -count=1 -v -run TestClientProtoGen . && \
 	rm -rf proto/*.pb.go && \
 	find proto -name '*.proto' | xargs -n 1 protoc --proto_path=proto --go_out=proto
+
+.PHONY: test
+test:
+	cd tests && go test -v
+
+.PHONY: fmt
+fmt:
+	go fmt ./...

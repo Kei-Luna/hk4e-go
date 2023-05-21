@@ -30,7 +30,7 @@
 * Docker >= 20.10
 * Docker Compose >= 1.29
 
-#### 本项目未使用CGO构建，理论上Windows、Linux、macOS系统都可以编译运行
+#### 本项目未使用CGO构建，理论上Windows、Linux系统都可以编译运行，macOS下没有`unix.Gettid`的实现，需要使用CGO构建
 
 ## 快速启动
 
