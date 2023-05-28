@@ -10,12 +10,14 @@
         body {
             margin: 0;
         }
+
         .title {
             margin: 15px;
             font-size: 18px;
             line-height: 18px;
             height: 18px;
         }
+
         #log {
             margin: 10px;
             display: none;
@@ -28,6 +30,7 @@
 
         #log p {
         }
+
         #loading {
             position: fixed;
             top: 50%;
@@ -41,9 +44,14 @@
 <div id="captcha"></div>
 <div id="log"></div>
 <div id="loading">
-    <svg version="1.1" id="loader-1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="40px" height="40px" viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;" xml:space="preserve">
-  <path fill="#c7c5c5" d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615c8.072,0,14.615,6.543,14.615,14.615H43.935z" transform="rotate(340 25 25)">
-    <animateTransform attributeType="xml" attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="0.6s" repeatCount="indefinite"></animateTransform>
+    <svg version="1.1" id="loader-1" xmlns="http://www.w3.org/2000/svg"
+         x="0px" y="0px" width="40px" height="40px" viewBox="0 0 50 50" style="enable-background:new 0 0 50 50;"
+         xml:space="preserve">
+  <path fill="#c7c5c5"
+        d="M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615c8.072,0,14.615,6.543,14.615,14.615H43.935z"
+        transform="rotate(340 25 25)">
+    <animateTransform attributeType="xml" attributeName="transform" type="rotate" from="0 25 25" to="360 25 25"
+                      dur="0.6s" repeatCount="indefinite"></animateTransform>
     </path>
   </svg>
 </div>
@@ -135,12 +143,12 @@
         log('Error Ocurred.');
         try {
             if (typeof JSInterface !== 'undefined') {
-            	if (typeof JSInterface.gtError === 'function') {
-                	JSInterface.gtError();
-            	}
-	            if (typeof JSInterface.gt3Error === 'function') {
-	            	JSInterface.gt3Error(JSON.stringify(err))
-	            }
+                if (typeof JSInterface.gtError === 'function') {
+                    JSInterface.gtError();
+                }
+                if (typeof JSInterface.gt3Error === 'function') {
+                    JSInterface.gt3Error(JSON.stringify(err))
+                }
             }
             loadingEle.style.display = 'none'
         } catch (e) {
@@ -149,14 +157,14 @@
         try {
             if (window.webkit
                 && window.webkit.messageHandlers) {
-            	err = err || {};
-	            err.error = '1';
-	            var message = JSON.stringify(err);
-            	if (window.webkit.messageHandlers.gtError) {
-	                window.webkit.messageHandlers.gtError.postMessage(message);
-            	}
+                err = err || {};
+                err.error = '1';
+                var message = JSON.stringify(err);
+                if (window.webkit.messageHandlers.gtError) {
+                    window.webkit.messageHandlers.gtError.postMessage(message);
+                }
                 if (window.webkit.messageHandlers.gt3Error) {
-	                window.webkit.messageHandlers.gt3Error.postMessage(message);
+                    window.webkit.messageHandlers.gt3Error.postMessage(message);
                 }
             }
         } catch (e) {
@@ -261,9 +269,9 @@
             }
         });
         captchaObj.onError(errorHandler);
-        if(typeof captchaObj.onChangeCaptcha === 'function'){
+        if (typeof captchaObj.onChangeCaptcha === 'function') {
             captchaObj.onChangeCaptcha(function (type) {
-                var notification = { aspect_radio: args[('aspect_radio_'+type)] }
+                var notification = {aspect_radio: args[('aspect_radio_' + type)]}
                 try {
                     if (typeof JSInterface !== 'undefined') {
                         JSInterface.gtNotify(JSON.stringify(notification));
@@ -309,8 +317,8 @@
         s.onload = s.onreadystatechange = function () {
             if (!loaded &&
                 (!s.readyState
-                || s.readyState === "loaded"
-                || s.readyState === 'complete')) {
+                    || s.readyState === "loaded"
+                    || s.readyState === 'complete')) {
                 if (test()) {
                     loaded = true;
                     callback(null);
@@ -328,7 +336,7 @@
         head.appendChild(s);
     };
 
-    function init(js){
+    function init(js) {
         loadJS(static_servers, js, function () {
             return window.Geetest;
         }, function (err) {
@@ -340,6 +348,7 @@
             handler(config);
         });
     }
+
     init(js);
 </script>
 </body>
