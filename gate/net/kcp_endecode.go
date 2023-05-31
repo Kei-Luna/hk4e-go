@@ -2,7 +2,6 @@ package net
 
 import (
 	"encoding/binary"
-
 	"hk4e/pkg/endec"
 	"hk4e/pkg/logger"
 )
@@ -32,10 +31,11 @@ type KcpMsg struct {
 	ProtoData []byte
 }
 
-func DecodeBinToPayload(data []byte, convId uint64, kcpMsgList *[]*KcpMsg, xorKey []byte) {
+func DecodeBinToPayload(data []byte, session *Session, kcpMsgList *[]*KcpMsg, xorKey []byte) {
 	// xor解密
 	endec.Xor(data, xorKey)
-	DecodeLoop(data, convId, kcpMsgList)
+	DecodeLoop(data, session.conn.GetConv(), kcpMsgList)
+	return
 }
 
 func DecodeLoop(data []byte, convId uint64, kcpMsgList *[]*KcpMsg) {

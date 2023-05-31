@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -96,7 +97,13 @@ func (k *KcpConnectManager) run() {
 	}
 	regionEc2b := random.NewEc2b()
 	regionEc2b.SetSeed(ec2b.Seed())
-	k.dispatchKey = regionEc2b.XorKey()
+	// 3.7的时候修改了xor 首包无需使用加密密钥
+	if k.getGateMaxVersion() < 3.7 {
+		k.dispatchKey = regionEc2b.XorKey()
+	} else {
+		// 全部填充为0 不然会出问题
+		k.dispatchKey = make([]byte, 4096)
+	}
 	// kcp
 	port := strconv.Itoa(int(config.GetConfig().Hk4e.KcpPort))
 	listener, err := kcp.ListenWithOptions("0.0.0.0:" + port)
@@ -115,6 +122,22 @@ func (k *KcpConnectManager) run() {
 
 func (k *KcpConnectManager) Close() {
 	k.closeAllKcpConn()
+}
+
+// getGateMaxVersion 获取gate最大可兼容的版本
+func (k *KcpConnectManager) getGateMaxVersion() (maxVersion float64) {
+	versionSplit := strings.Split(config.GetConfig().Hk4e.Version, ",")
+	for _, verStr := range versionSplit {
+		version, err := strconv.ParseFloat(verStr, 64)
+		if err != nil {
+			logger.Error("version a to i error: %v", err)
+			return
+		}
+		if version > maxVersion {
+			maxVersion = version
+		}
+	}
+	return
 }
 
 func (k *KcpConnectManager) gateNetInfo() {
@@ -313,7 +336,7 @@ func (k *KcpConnectManager) recvHandle(session *Session) {
 		}
 		recvData := recvBuf[:recvLen]
 		kcpMsgList := make([]*KcpMsg, 0)
-		DecodeBinToPayload(recvData, convId, &kcpMsgList, session.xorKey)
+		DecodeBinToPayload(recvData, session, &kcpMsgList, session.xorKey)
 		for _, v := range kcpMsgList {
 			protoMsgList := ProtoDecode(v, k.serverCmdProtoMap, k.clientCmdProtoMap)
 			for _, vv := range protoMsgList {

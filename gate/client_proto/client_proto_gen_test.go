@@ -79,7 +79,7 @@ func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
 	}
 }
 `)
-	err = os.WriteFile("./client_proto_gen.go", []byte(fileDataBuffer.String()), 0644)
+	err = os.WriteFile("./client_proto_gen.go", fileDataBuffer.Bytes(), 0644)
 	if err != nil {
 		panic(err)
 	}
