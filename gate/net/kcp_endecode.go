@@ -31,10 +31,10 @@ type KcpMsg struct {
 	ProtoData []byte
 }
 
-func DecodeBinToPayload(data []byte, session *Session, kcpMsgList *[]*KcpMsg, xorKey []byte) {
+func DecodeBinToPayload(data []byte, convId uint64, kcpMsgList *[]*KcpMsg, xorKey []byte) {
 	// xor解密
 	endec.Xor(data, xorKey)
-	DecodeLoop(data, session.conn.GetConv(), kcpMsgList)
+	DecodeLoop(data, convId, kcpMsgList)
 	return
 }
 

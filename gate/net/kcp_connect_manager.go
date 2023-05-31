@@ -336,7 +336,7 @@ func (k *KcpConnectManager) recvHandle(session *Session) {
 		}
 		recvData := recvBuf[:recvLen]
 		kcpMsgList := make([]*KcpMsg, 0)
-		DecodeBinToPayload(recvData, session, &kcpMsgList, session.xorKey)
+		DecodeBinToPayload(recvData, convId, &kcpMsgList, session.xorKey)
 		for _, v := range kcpMsgList {
 			protoMsgList := ProtoDecode(v, k.serverCmdProtoMap, k.clientCmdProtoMap)
 			for _, vv := range protoMsgList {
