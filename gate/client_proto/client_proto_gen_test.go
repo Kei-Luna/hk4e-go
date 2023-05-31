@@ -1,6 +1,8 @@
 package client_proto
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -31,13 +33,15 @@ func TestClientProtoGen(t *testing.T) {
 	clientCmdData := string(clientCmdFile)
 	clientCmdLineList := strings.Split(clientCmdData, "\n")
 	// 生成代码文件
-	fileData := "package client_proto\n"
-	fileData += "\n"
-	fileData += "import (\n"
-	fileData += "\t\"hk4e/gate/client_proto/proto\"\n"
-	fileData += ")\n"
-	fileData += "\n"
-	fileData += "func (c *ClientCmdProtoMap) LoadClientCmdIdAndCmdName() {\n"
+	var fileDataBuilder strings.Builder
+	fileDataBuilder.WriteString(`package client_proto
+
+import (
+	"hk4e/gate/client_proto/proto"
+)
+
+func (c *ClientCmdProtoMap) LoadClientCmdIdAndCmdName() {
+`)
 	for _, clientCmdLine := range clientCmdLineList {
 		// 清理空格以及换行符之类的
 		clientCmdLine = strings.TrimSpace(clientCmdLine)
@@ -50,21 +54,32 @@ func TestClientProtoGen(t *testing.T) {
 		}
 		cmdName := item[0]
 		cmdId := item[1]
-		fileData += "\tc.clientCmdIdCmdNameMap[uint16(" + cmdId + ")] = \"" + cmdName + "\"\n"
-		fileData += "\tc.clientCmdNameCmdIdMap[\"" + cmdName + "\"] = uint16(" + cmdId + ")\n"
+		_, err = fmt.Fprintf(&fileDataBuilder, `	c.clientCmdIdCmdNameMap[uint16(%s)] = "%s"
+	c.clientCmdNameCmdIdMap["%s"] = uint16(%s)
+`, cmdId, cmdName, cmdName, cmdId)
+		if err != nil {
+			panic(err)
+		}
 	}
-	fileData += "}\n"
-	fileData += "\n"
-	fileData += "func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {\n"
-	fileData += "\tswitch protoObjName {\n"
+	fileDataBuilder.WriteString(`}
+
+func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
+	switch protoObjName {
+`)
 	for _, protoObjName := range protoObjNameList {
-		fileData += "\tcase \"" + protoObjName + "\":\n\t\treturn new(proto." + protoObjName + ")\n"
+		_, err = fmt.Fprintf(&fileDataBuilder, `	case "%s":
+		return new(proto.%s)
+`, protoObjName, protoObjName)
+		if err != nil {
+			panic(err)
+		}
 	}
-	fileData += "\tdefault:\n"
-	fileData += "\t\treturn nil\n"
-	fileData += "\t}\n"
-	fileData += "}\n"
-	err = os.WriteFile("./client_proto_gen.go", []byte(fileData), 0644)
+	fileDataBuilder.WriteString(`	default:
+		return nil
+	}
+}
+`)
+	err = os.WriteFile("./client_proto_gen.go", []byte(fileDataBuilder.String()), 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -76,10 +91,10 @@ func TestClientProtoGen(t *testing.T) {
 		}
 		rawFileStr := string(rawFileData)
 		rawFileLine := strings.Split(rawFileStr, "\n")
-		newFileStr := ""
+		var newFileBuilder bytes.Buffer
 		for i := 0; i < len(rawFileLine); i++ {
 			line := rawFileLine[i]
-			newFileStr += line + "\n"
+			newFileBuilder.WriteString(line + "\n")
 			if !strings.Contains(line, "enum") {
 				continue
 			}
@@ -94,7 +109,7 @@ func TestClientProtoGen(t *testing.T) {
 				continue
 			}
 			for _, ref := range refEnum {
-				newFileStr += ref + "\n"
+				newFileBuilder.WriteString(ref + "\n")
 			}
 			i++
 			for {
@@ -102,12 +117,12 @@ func TestClientProtoGen(t *testing.T) {
 				if !strings.Contains(nextLine, "}") {
 					i++
 				} else {
-					newFileStr += nextLine + "\n"
+					newFileBuilder.WriteString(nextLine + "\n")
 					break
 				}
 			}
 		}
-		err = os.WriteFile("./proto/"+entry.Name(), []byte(newFileStr), 0644)
+		err = os.WriteFile("./proto/"+entry.Name(), newFileBuilder.Bytes(), 0644)
 		if err != nil {
 			panic(err)
 		}
