@@ -33,8 +33,8 @@ func TestClientProtoGen(t *testing.T) {
 	clientCmdData := string(clientCmdFile)
 	clientCmdLineList := strings.Split(clientCmdData, "\n")
 	// 生成代码文件
-	var fileDataBuilder strings.Builder
-	fileDataBuilder.WriteString(`package client_proto
+	var fileDataBuffer bytes.Buffer
+	fileDataBuffer.WriteString(`package client_proto
 
 import (
 	"hk4e/gate/client_proto/proto"
@@ -54,32 +54,32 @@ func (c *ClientCmdProtoMap) LoadClientCmdIdAndCmdName() {
 		}
 		cmdName := item[0]
 		cmdId := item[1]
-		_, err = fmt.Fprintf(&fileDataBuilder, `	c.clientCmdIdCmdNameMap[uint16(%s)] = "%s"
+		_, err = fmt.Fprintf(&fileDataBuffer, `	c.clientCmdIdCmdNameMap[uint16(%s)] = "%s"
 	c.clientCmdNameCmdIdMap["%s"] = uint16(%s)
 `, cmdId, cmdName, cmdName, cmdId)
 		if err != nil {
 			panic(err)
 		}
 	}
-	fileDataBuilder.WriteString(`}
+	fileDataBuffer.WriteString(`}
 
 func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
 	switch protoObjName {
 `)
 	for _, protoObjName := range protoObjNameList {
-		_, err = fmt.Fprintf(&fileDataBuilder, `	case "%s":
+		_, err = fmt.Fprintf(&fileDataBuffer, `	case "%s":
 		return new(proto.%s)
 `, protoObjName, protoObjName)
 		if err != nil {
 			panic(err)
 		}
 	}
-	fileDataBuilder.WriteString(`	default:
+	fileDataBuffer.WriteString(`	default:
 		return nil
 	}
 }
 `)
-	err = os.WriteFile("./client_proto_gen.go", []byte(fileDataBuilder.String()), 0644)
+	err = os.WriteFile("./client_proto_gen.go", []byte(fileDataBuffer.String()), 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -91,10 +91,10 @@ func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
 		}
 		rawFileStr := string(rawFileData)
 		rawFileLine := strings.Split(rawFileStr, "\n")
-		var newFileBuilder bytes.Buffer
+		var newFileBuffer bytes.Buffer
 		for i := 0; i < len(rawFileLine); i++ {
 			line := rawFileLine[i]
-			newFileBuilder.WriteString(line + "\n")
+			newFileBuffer.WriteString(line + "\n")
 			if !strings.Contains(line, "enum") {
 				continue
 			}
@@ -109,7 +109,7 @@ func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
 				continue
 			}
 			for _, ref := range refEnum {
-				newFileBuilder.WriteString(ref + "\n")
+				newFileBuffer.WriteString(ref + "\n")
 			}
 			i++
 			for {
@@ -117,12 +117,12 @@ func (c *ClientCmdProtoMap) GetClientProtoObjByName(protoObjName string) any {
 				if !strings.Contains(nextLine, "}") {
 					i++
 				} else {
-					newFileBuilder.WriteString(nextLine + "\n")
+					newFileBuffer.WriteString(nextLine + "\n")
 					break
 				}
 			}
 		}
-		err = os.WriteFile("./proto/"+entry.Name(), newFileBuilder.Bytes(), 0644)
+		err = os.WriteFile("./proto/"+entry.Name(), newFileBuffer.Bytes(), 0644)
 		if err != nil {
 			panic(err)
 		}
