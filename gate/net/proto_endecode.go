@@ -56,13 +56,10 @@ func ProtoDecode(kcpMsg *KcpMsg,
 			logger.Error("get server proto obj is nil, serverCmdId: %v", serverCmdId)
 			return protoMsgList
 		}
-		delList, err := object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
+		err = object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
 		if err != nil {
 			logger.Error("copy proto obj error: %v", err)
 			return protoMsgList
-		}
-		if len(delList) != 0 {
-			logger.Error("delete field name list: %v, cmdName: %v", delList, cmdName)
 		}
 		ConvClientPbDataToServer(serverProtoObj, clientCmdProtoMap)
 		serverProtoData, err := pb.Marshal(serverProtoObj)
@@ -168,13 +165,10 @@ func ProtoDecodePayloadLoop(cmdId uint16, protoData []byte, protoMessageList *[]
 					logger.Error("get server proto obj is nil, serverCmdId: %v", serverCmdId)
 					continue
 				}
-				delList, err := object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
+				err = object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
 				if err != nil {
 					logger.Error("copy proto obj error: %v", err)
 					continue
-				}
-				if len(delList) != 0 {
-					logger.Error("delete field name list: %v, cmdName: %v", delList, cmdName)
 				}
 				ConvClientPbDataToServer(serverProtoObj, clientCmdProtoMap)
 				serverProtoData, err := pb.Marshal(serverProtoObj)
@@ -251,13 +245,10 @@ func ProtoEncode(protoMsg *ProtoMsg,
 			logger.Error("get client proto obj is nil, cmdName: %v", cmdName)
 			return nil
 		}
-		delList, err := object.CopyProtoBufSameField(clientProtoObj, serverProtoObj)
+		err = object.CopyProtoBufSameField(clientProtoObj, serverProtoObj)
 		if err != nil {
 			logger.Error("copy proto obj error: %v", err)
 			return nil
-		}
-		if len(delList) != 0 {
-			logger.Error("delete field name list: %v, cmdName: %v", delList, cmdName)
 		}
 		ConvServerPbDataToClient(clientProtoObj, clientCmdProtoMap)
 		clientProtoData, err := pb.Marshal(clientProtoObj)
@@ -327,7 +318,7 @@ func ConvClientPbDataToServerCore(protoObjName string, serverProtoObj pb.Message
 	if err != nil {
 		return
 	}
-	_, err = object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
+	err = object.CopyProtoBufSameField(serverProtoObj, clientProtoObj)
 	if err != nil {
 		return
 	}
@@ -347,7 +338,7 @@ func ConvServerPbDataToClientCore(protoObjName string, serverProtoObj pb.Message
 	if clientProtoObj == nil {
 		return
 	}
-	_, err = object.CopyProtoBufSameField(clientProtoObj, serverProtoObj)
+	err = object.CopyProtoBufSameField(clientProtoObj, serverProtoObj)
 	if err != nil {
 		return
 	}

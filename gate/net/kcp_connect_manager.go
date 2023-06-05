@@ -98,7 +98,7 @@ func (k *KcpConnectManager) run() {
 	regionEc2b := random.NewEc2b()
 	regionEc2b.SetSeed(ec2b.Seed())
 	// 3.7的时候修改了xor 首包无需使用加密密钥
-	if k.getGateMaxVersion() < 3.7 {
+	if k.getGateMaxVersion() < 370 {
 		k.dispatchKey = regionEc2b.XorKey()
 	} else {
 		// 全部填充为0 不然会出问题
@@ -125,10 +125,10 @@ func (k *KcpConnectManager) Close() {
 }
 
 // getGateMaxVersion 获取gate最大可兼容的版本
-func (k *KcpConnectManager) getGateMaxVersion() (maxVersion float64) {
+func (k *KcpConnectManager) getGateMaxVersion() (maxVersion int) {
 	versionSplit := strings.Split(config.GetConfig().Hk4e.Version, ",")
 	for _, verStr := range versionSplit {
-		version, err := strconv.ParseFloat(verStr, 64)
+		version, err := strconv.Atoi(verStr)
 		if err != nil {
 			logger.Error("version a to i error: %v", err)
 			return

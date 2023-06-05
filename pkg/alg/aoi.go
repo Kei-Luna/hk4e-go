@@ -1,5 +1,9 @@
 package alg
 
+import (
+	"math"
+)
+
 // AoiManager aoi管理模块
 type AoiManager struct {
 	// 区域边界坐标
@@ -22,17 +26,27 @@ func NewAoiManager() (r *AoiManager) {
 }
 
 // SetAoiRange 设置aoi区域边界坐标
-func (a *AoiManager) SetAoiRange(minX, maxX, minY, maxY, minZ, maxZ int16) {
+func (a *AoiManager) SetAoiRange(minX, maxX, minY, maxY, minZ, maxZ int16) bool {
+	if minX >= maxX || minY >= maxY || minZ >= maxZ {
+		return false
+	}
 	a.minX = minX
 	a.maxX = maxX
 	a.minY = minY
 	a.maxY = maxY
 	a.minZ = minZ
 	a.maxZ = maxZ
+	return true
 }
 
 // Init3DRectAoiManager 初始化3D矩形aoi区域
-func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ int16) {
+func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ int16) bool {
+	if numX <= 0 || numY <= 0 || numZ <= 0 {
+		return false
+	}
+	if uint64(numX)*uint64(numY)*uint64(numZ) >= math.MaxUint32 {
+		return false
+	}
 	a.numX = numX
 	a.numY = numY
 	a.numZ = numZ
@@ -43,19 +57,12 @@ func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ int16) {
 				// 利用格子坐标得到格子id gid从0开始按xzy的顺序增长
 				gid := uint32(y)*(uint32(a.numX)*uint32(a.numZ)) + uint32(z)*uint32(a.numX) + uint32(x)
 				// 初始化一个格子放在aoi中的map里 key是当前格子的id
-				grid := NewGrid(
-					gid,
-					a.minX+x*a.GridXLen(),
-					a.minX+(x+1)*a.GridXLen(),
-					a.minY+y*a.GridYLen(),
-					a.minY+(y+1)*a.GridYLen(),
-					a.minZ+z*a.GridZLen(),
-					a.minZ+(z+1)*a.GridZLen(),
-				)
+				grid := NewGrid(gid)
 				a.gridMap[gid] = grid
 			}
 		}
 	}
+	return true
 }
 
 // GridXLen 每个格子在x轴方向的长度
@@ -75,6 +82,9 @@ func (a *AoiManager) GridZLen() int16 {
 
 // GetGidByPos 通过坐标获取对应的格子id
 func (a *AoiManager) GetGidByPos(x, y, z float32) uint32 {
+	if !a.IsValidAoiPos(x, y, z) {
+		return math.MaxUint32
+	}
 	gx := (int16(x) - a.minX) / a.GridXLen()
 	gy := (int16(y) - a.minY) / a.GridYLen()
 	gz := (int16(z) - a.minZ) / a.GridZLen()
@@ -98,7 +108,7 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 	// 判断grid是否存在
 	grid, exist := a.gridMap[gid]
 	if !exist {
-		return gridList
+		return nil
 	}
 	// 添加自己
 	if grid != nil {
@@ -177,6 +187,9 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 func (a *AoiManager) GetObjectListByPos(x, y, z float32) map[int64]any {
 	// 根据坐标得到当前坐标属于哪个格子id
 	gid := a.GetGidByPos(x, y, z)
+	if gid == math.MaxUint32 {
+		return nil
+	}
 	// 根据格子id得到周边格子的信息
 	gridList := a.GetSurrGridListByGid(gid)
 	objectListLen := 0
@@ -205,59 +218,53 @@ func (a *AoiManager) GetObjectListByGid(gid uint32) map[int64]any {
 }
 
 // AddObjectToGrid 添加一个object到一个格子中
-func (a *AoiManager) AddObjectToGrid(objectId int64, object any, gid uint32) {
+func (a *AoiManager) AddObjectToGrid(objectId int64, object any, gid uint32) bool {
 	grid := a.gridMap[gid]
 	if grid == nil {
-		return
+		return false
 	}
 	grid.AddObject(objectId, object)
+	return true
 }
 
 // RemoveObjectFromGrid 移除一个格子中的object
-func (a *AoiManager) RemoveObjectFromGrid(objectId int64, gid uint32) {
+func (a *AoiManager) RemoveObjectFromGrid(objectId int64, gid uint32) bool {
 	grid := a.gridMap[gid]
 	if grid == nil {
-		return
+		return false
 	}
 	grid.RemoveObject(objectId)
+	return true
 }
 
 // AddObjectToGridByPos 通过坐标添加一个object到一个格子中
-func (a *AoiManager) AddObjectToGridByPos(objectId int64, object any, x, y, z float32) {
+func (a *AoiManager) AddObjectToGridByPos(objectId int64, object any, x, y, z float32) bool {
 	gid := a.GetGidByPos(x, y, z)
-	a.AddObjectToGrid(objectId, object, gid)
+	if gid == math.MaxUint32 {
+		return false
+	}
+	return a.AddObjectToGrid(objectId, object, gid)
 }
 
 // RemoveObjectFromGridByPos 通过坐标把一个object从对应的格子中删除
-func (a *AoiManager) RemoveObjectFromGridByPos(objectId int64, x, y, z float32) {
+func (a *AoiManager) RemoveObjectFromGridByPos(objectId int64, x, y, z float32) bool {
 	gid := a.GetGidByPos(x, y, z)
-	a.RemoveObjectFromGrid(objectId, gid)
+	if gid == math.MaxUint32 {
+		return false
+	}
+	return a.RemoveObjectFromGrid(objectId, gid)
 }
 
 // Grid 地图格子
 type Grid struct {
-	gid uint32 // 格子id
-	// 格子边界坐标
-	// 目前开发阶段暂时用不到 节省点内存
-	// minX      int16
-	// maxX      int16
-	// minY      int16
-	// maxY      int16
-	// minZ      int16
-	// maxZ      int16
+	gid       uint32        // 格子id
 	objectMap map[int64]any // k:objectId v:对象
 }
 
 // NewGrid 初始化格子
-func NewGrid(gid uint32, minX, maxX, minY, maxY, minZ, maxZ int16) (r *Grid) {
+func NewGrid(gid uint32) (r *Grid) {
 	r = new(Grid)
 	r.gid = gid
-	// r.minX = minX
-	// r.maxX = maxX
-	// r.minY = minY
-	// r.maxY = maxY
-	// r.minZ = minZ
-	// r.maxZ = maxZ
 	r.objectMap = make(map[int64]any)
 	return r
 }
