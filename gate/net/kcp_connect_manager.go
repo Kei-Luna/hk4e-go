@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -97,13 +96,7 @@ func (k *KcpConnectManager) run() {
 	}
 	regionEc2b := random.NewEc2b()
 	regionEc2b.SetSeed(ec2b.Seed())
-	// 3.7的时候修改了xor 首包无需使用加密密钥
-	if k.getGateMaxVersion() < 370 {
-		k.dispatchKey = regionEc2b.XorKey()
-	} else {
-		// 全部填充为0 不然会出问题
-		k.dispatchKey = make([]byte, 4096)
-	}
+	k.dispatchKey = regionEc2b.XorKey()
 	// kcp
 	port := strconv.Itoa(int(config.GetConfig().Hk4e.KcpPort))
 	listener, err := kcp.ListenWithOptions("0.0.0.0:" + port)
@@ -113,7 +106,9 @@ func (k *KcpConnectManager) run() {
 	}
 	go k.enetHandle(listener)
 	go k.eventHandle()
-	go k.sendMsgHandle()
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		go k.forwardServerMsgToClientHandle()
+	}
 	go k.acceptHandle(listener)
 	go k.gateNetInfo()
 	k.syncGlobalGsOnlineMap()
@@ -122,22 +117,6 @@ func (k *KcpConnectManager) run() {
 
 func (k *KcpConnectManager) Close() {
 	k.closeAllKcpConn()
-}
-
-// getGateMaxVersion 获取gate最大可兼容的版本
-func (k *KcpConnectManager) getGateMaxVersion() (maxVersion int) {
-	versionSplit := strings.Split(config.GetConfig().Hk4e.Version, ",")
-	for _, verStr := range versionSplit {
-		version, err := strconv.Atoi(verStr)
-		if err != nil {
-			logger.Error("version a to i error: %v", err)
-			return
-		}
-		if version > maxVersion {
-			maxVersion = version
-		}
-	}
-	return
 }
 
 func (k *KcpConnectManager) gateNetInfo() {
@@ -171,10 +150,17 @@ func (k *KcpConnectManager) acceptHandle(listener *kcp.Listener) {
 			_ = conn.Close()
 			continue
 		}
+		if config.GetConfig().Hk4e.ForwardModeEnable {
+			clientConnNum := atomic.LoadInt32(&CLIENT_CONN_NUM)
+			if clientConnNum != 0 {
+				logger.Error("forward mode only support one client conn now")
+				_ = conn.Close()
+				continue
+			}
+		}
 		conn.SetACKNoDelay(true)
 		conn.SetWriteDelay(false)
-		conn.SetWindowSize(255, 255)
-		atomic.AddInt32(&CLIENT_CONN_NUM, 1)
+		conn.SetWindowSize(256, 256)
 		logger.Info("client connect, convId: %v", convId)
 		kcpRawSendChan := make(chan *ProtoMsg, 1000)
 		session := &Session{
@@ -188,16 +174,38 @@ func (k *KcpConnectManager) acceptHandle(listener *kcp.Listener) {
 			gsServerAppId:          "",
 			anticheatServerAppId:   "",
 			pathfindingServerAppId: "",
+			robotServerAppId:       "",
 			useMagicSeed:           false,
+			keyId:                  0,
+			clientRandKey:          "",
+		}
+		if config.GetConfig().Hk4e.ForwardModeEnable {
+			robotServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+				ServerType: api.ROBOT,
+			})
+			if err != nil {
+				logger.Error("get robot server appid error: %v", err)
+				_ = conn.Close()
+				continue
+			}
+			session.robotServerAppId = robotServerAppId.AppId
+			k.messageQueue.SendToRobot(session.robotServerAppId, &mq.NetMsg{
+				MsgType: mq.MsgTypeServer,
+				EventId: mq.ServerForwardModeClientConnNotify,
+			})
 		}
 		go k.recvHandle(session)
 		go k.sendHandle(session)
+		if config.GetConfig().Hk4e.ForwardModeEnable {
+			go k.forwardRobotMsgToClientHandle(session)
+		}
 		// 连接建立成功通知
 		k.kcpEventOutput <- &KcpEvent{
 			ConvId:       convId,
 			EventId:      KcpConnEstNotify,
 			EventMessage: conn.RemoteAddr().String(),
 		}
+		atomic.AddInt32(&CLIENT_CONN_NUM, 1)
 	}
 }
 
@@ -302,7 +310,10 @@ type Session struct {
 	gsServerAppId          string
 	anticheatServerAppId   string
 	pathfindingServerAppId string
+	robotServerAppId       string
 	useMagicSeed           bool
+	keyId                  uint32
+	clientRandKey          string
 }
 
 // 接收
@@ -340,7 +351,11 @@ func (k *KcpConnectManager) recvHandle(session *Session) {
 		for _, v := range kcpMsgList {
 			protoMsgList := ProtoDecode(v, k.serverCmdProtoMap, k.clientCmdProtoMap)
 			for _, vv := range protoMsgList {
-				k.recvMsgHandle(vv, session)
+				if config.GetConfig().Hk4e.ForwardModeEnable {
+					k.forwardClientMsgToRobotHandle(vv, session)
+				} else {
+					k.forwardClientMsgToServerHandle(vv, session)
+				}
 			}
 		}
 	}
@@ -433,16 +448,23 @@ func (k *KcpConnectManager) closeKcpConn(session *Session, enetType uint32) {
 		ConvId:  convId,
 		EventId: KcpConnCloseNotify,
 	}
-	// 通知GS玩家下线
-	connCtrlMsg := new(mq.ConnCtrlMsg)
-	connCtrlMsg.UserId = session.userId
-	k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
-		MsgType:     mq.MsgTypeConnCtrl,
-		EventId:     mq.UserOfflineNotify,
-		ConnCtrlMsg: connCtrlMsg,
-	})
-	logger.Info("send to gs user offline, ConvId: %v, UserId: %v", convId, connCtrlMsg.UserId)
-	k.destroySessionChan <- session
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		// 通知GS玩家下线
+		connCtrlMsg := new(mq.ConnCtrlMsg)
+		connCtrlMsg.UserId = session.userId
+		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
+			MsgType:     mq.MsgTypeConnCtrl,
+			EventId:     mq.UserOfflineNotify,
+			ConnCtrlMsg: connCtrlMsg,
+		})
+		logger.Info("send to gs user offline, ConvId: %v, UserId: %v", convId, connCtrlMsg.UserId)
+		k.destroySessionChan <- session
+	} else {
+		k.messageQueue.SendToRobot(session.robotServerAppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerForwardModeClientCloseNotify,
+		})
+	}
 	atomic.AddInt32(&CLIENT_CONN_NUM, -1)
 }
 

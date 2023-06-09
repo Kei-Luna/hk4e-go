@@ -22,15 +22,6 @@ import (
 )
 
 const (
-	// 16-bytes nonce for each packet
-	nonceSize = 16
-
-	// 4-bytes packet checksum
-	crcSize = 4
-
-	// overall crypto header size
-	cryptHeaderSize = nonceSize + crcSize
-
 	// maximum packet size
 	mtuLimit = 1500
 
@@ -581,7 +572,7 @@ func (s *UDPSession) GetSRTT() int32 {
 	return s.kcp.rx_srtt
 }
 
-// GetRTTVar gets current rtt variance of the session
+// GetSRTTVar gets current rtt variance of the session
 func (s *UDPSession) GetSRTTVar() int32 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -693,7 +684,7 @@ func (l *Listener) packetInput(data []byte, addr net.Addr, convId uint64) {
 				s.kcpInput(data)
 			} else if sn == 0 { // should replace current connection
 				// 网络切换会话保持改造后 这里的逻辑可能永远也执行不到了
-				s.Close()
+				_ = s.Close()
 				s = nil
 			}
 		}
@@ -793,8 +784,8 @@ func (l *Listener) AcceptKCP() (*UDPSession, error) {
 
 // SetDeadline sets the deadline associated with the listener. A zero time value disables the deadline.
 func (l *Listener) SetDeadline(t time.Time) error {
-	l.SetReadDeadline(t)
-	l.SetWriteDeadline(t)
+	_ = l.SetReadDeadline(t)
+	_ = l.SetWriteDeadline(t)
 	return nil
 }
 
@@ -943,7 +934,7 @@ func NewConn3(convid uint64, raddr net.Addr, conn net.PacketConn) (*UDPSession, 
 // NewConn2 establishes a session and talks KCP protocol over a packet connection.
 func NewConn2(raddr net.Addr, conn net.PacketConn) (*UDPSession, error) {
 	var convid uint64
-	binary.Read(rand.Reader, binary.LittleEndian, &convid)
+	_ = binary.Read(rand.Reader, binary.LittleEndian, &convid)
 	return NewConn3(convid, raddr, conn)
 }
 

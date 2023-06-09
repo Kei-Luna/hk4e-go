@@ -3,19 +3,27 @@ package controller
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"math"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
+	"hk4e/common/config"
+	"hk4e/common/mq"
 	"hk4e/common/region"
 	httpapi "hk4e/dispatch/api"
 	"hk4e/node/api"
 	"hk4e/pkg/endec"
+	"hk4e/pkg/httpclient"
 	"hk4e/pkg/logger"
+	"hk4e/pkg/random"
+	"hk4e/protocol/proto"
 
 	"github.com/gin-gonic/gin"
+	pb "google.golang.org/protobuf/proto"
 )
 
 func (c *Controller) querySecurityFile(context *gin.Context) {
@@ -32,7 +40,45 @@ func (c *Controller) querySecurityFile(context *gin.Context) {
 
 func (c *Controller) queryRegionList(context *gin.Context) {
 	context.Header("Content-type", "text/html; charset=UTF-8")
-	regionListBase64 := region.GetRegionListBase64(c.ec2b)
+	var regionListBase64 = ""
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		regionList := region.GetRegionList(c.ec2b)
+		regionListData, err := pb.Marshal(regionList)
+		if err != nil {
+			logger.Error("pb marshal QueryRegionListHttpRsp error: %v", err)
+			_, _ = context.Writer.WriteString("500")
+			return
+		}
+		regionListBase64 = base64.StdEncoding.EncodeToString(regionListData)
+	} else {
+		var err error = nil
+		url := context.Request.RequestURI
+		param := url[strings.Index(url, "?"):]
+		regionListBase64Raw, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardRegionUrl + param)
+		if err != nil {
+			_, _ = context.Writer.WriteString("500")
+			return
+		}
+		regionListDataRaw, err := base64.StdEncoding.DecodeString(regionListBase64Raw)
+		if err != nil {
+			_, _ = context.Writer.WriteString("500")
+			return
+		}
+		queryRegionListHttpRsp := new(proto.QueryRegionListHttpRsp)
+		err = pb.Unmarshal(regionListDataRaw, queryRegionListHttpRsp)
+		if err != nil {
+			_, _ = context.Writer.WriteString("500")
+			return
+		}
+		logger.Debug("QueryRegionListHttpRsp: %+v", queryRegionListHttpRsp)
+		queryRegionListHttpRsp.RegionList[0].DispatchUrl = config.GetConfig().Hk4e.DispatchUrl
+		regionListData, err := pb.Marshal(queryRegionListHttpRsp)
+		if err != nil {
+			_, _ = context.Writer.WriteString("500")
+			return
+		}
+		regionListBase64 = base64.StdEncoding.EncodeToString(regionListData)
+	}
 	_, _ = context.Writer.WriteString(regionListBase64)
 }
 
@@ -81,6 +127,13 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 		rspError()
 		return
 	}
+	keyId := context.Query("key_id")
+	encPubPrivKey, exist := c.encRsaKeyMap[keyId]
+	if !exist {
+		logger.Error("can not found key id: %v", keyId)
+		rspError()
+		return
+	}
 	version, versionStr := c.getClientVersionByName(versionName)
 	if version == 0 {
 		rspError()
@@ -94,33 +147,113 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 		rspError()
 		return
 	}
-	regionCurrBase64 := region.GetRegionCurrBase64(addr.KcpAddr, int32(addr.KcpPort), c.ec2b)
+	var regionCurr *proto.QueryCurrRegionHttpRsp = nil
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		regionCurr = region.GetRegionCurr(addr.KcpAddr, int32(addr.KcpPort), c.ec2b)
+	} else {
+		url := context.Request.RequestURI
+		param := url[strings.Index(url, "?"):]
+		regionCurrJson, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardDispatchUrl + param)
+		if err != nil {
+			rspError()
+			return
+		}
+		queryCurRegionRspJson := new(httpapi.QueryCurRegionRspJson)
+		err = json.Unmarshal([]byte(regionCurrJson), queryCurRegionRspJson)
+		if err != nil {
+			rspError()
+			return
+		}
+		encryptedRegionInfo, err := base64.StdEncoding.DecodeString(queryCurRegionRspJson.Content)
+		if err != nil {
+			rspError()
+			return
+		}
+		chunkSize := 256
+		regionInfoLength := len(encryptedRegionInfo)
+		numChunks := int(math.Ceil(float64(regionInfoLength) / float64(chunkSize)))
+		regionCurrData := make([]byte, 0)
+		for i := 0; i < numChunks; i++ {
+			from := i * chunkSize
+			to := int(math.Min(float64((i+1)*chunkSize), float64(regionInfoLength)))
+			chunk := encryptedRegionInfo[from:to]
+			privKey, err := endec.RsaParsePrivKey(encPubPrivKey)
+			if err != nil {
+				logger.Error("parse rsa priv key error: %v", err)
+				rspError()
+				return
+			}
+			decrypt, err := endec.RsaDecrypt(chunk, privKey)
+			if err != nil {
+				logger.Error("rsa dec error: %v", err)
+				rspError()
+				return
+			}
+			regionCurrData = append(regionCurrData, decrypt...)
+		}
+		queryCurrRegionHttpRsp := new(proto.QueryCurrRegionHttpRsp)
+		err = pb.Unmarshal(regionCurrData, queryCurrRegionHttpRsp)
+		if err != nil {
+			rspError()
+			return
+		}
+		logger.Debug("QueryCurrRegionHttpRsp: %+v", queryCurrRegionHttpRsp)
+		robotServerAppId, err := c.discovery.GetServerAppId(context, &api.GetServerAppIdReq{
+			ServerType: api.ROBOT,
+		})
+		if err != nil {
+			logger.Error("get robot server appid error: %v", err)
+			rspError()
+			return
+		}
+		ec2b, err := random.LoadEc2bKey(queryCurrRegionHttpRsp.ClientSecretKey)
+		if err != nil {
+			logger.Error("parse ec2b error: %v", err)
+			rspError()
+			return
+		}
+		c.messageQueue.SendToRobot(robotServerAppId.AppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerForwardDispatchInfoNotify,
+			ServerMsg: &mq.ServerMsg{
+				ForwardDispatchInfo: &mq.ForwardDispatchInfo{
+					GateIp:      queryCurrRegionHttpRsp.RegionInfo.GateserverIp,
+					GatePort:    queryCurrRegionHttpRsp.RegionInfo.GateserverPort,
+					DispatchKey: ec2b.XorKey(),
+				},
+			},
+		})
+		regionCurr = queryCurrRegionHttpRsp
+		regionCurr.ClientSecretKey = c.ec2b.Bytes()
+		regionCurr.RegionInfo.GateserverIp = addr.KcpAddr
+		regionCurr.RegionInfo.GateserverPort = addr.KcpPort
+		endec.Xor(regionCurr.RegionCustomConfigEncrypted, ec2b.XorKey())
+		logger.Info("RegionCustomConfigEncrypted: %v", string(regionCurr.RegionCustomConfigEncrypted))
+		endec.Xor(regionCurr.RegionCustomConfigEncrypted, c.ec2b.XorKey())
+		endec.Xor(regionCurr.ClientRegionCustomConfigEncrypted, ec2b.XorKey())
+		logger.Info("ClientRegionCustomConfigEncrypted: %v", string(regionCurr.ClientRegionCustomConfigEncrypted))
+		endec.Xor(regionCurr.ClientRegionCustomConfigEncrypted, c.ec2b.XorKey())
+	}
+	regionCurrData, err := pb.Marshal(regionCurr)
+	if err != nil {
+		logger.Error("pb marshal QueryCurrRegionHttpRsp error: %v", err)
+		rspError()
+		return
+	}
 	if version < 275 {
 		context.Header("Content-type", "text/html; charset=UTF-8")
+		regionCurrBase64 := base64.StdEncoding.EncodeToString(regionCurrData)
 		_, _ = context.Writer.WriteString(regionCurrBase64)
 		return
 	}
-	keyId := context.Query("key_id")
-	encPubPrivKey, exist := c.encRsaKeyMap[keyId]
-	if !exist {
-		logger.Error("can not found key id: %v", keyId)
-		rspError()
-		return
-	}
-	regionInfo, err := base64.StdEncoding.DecodeString(regionCurrBase64)
-	if err != nil {
-		logger.Error("decode region info error: %v", err)
-		rspError()
-		return
-	}
 	chunkSize := 256 - 11
-	regionInfoLength := len(regionInfo)
+	regionInfoLength := len(regionCurrData)
 	numChunks := int(math.Ceil(float64(regionInfoLength) / float64(chunkSize)))
 	encryptedRegionInfo := make([]byte, 0)
 	for i := 0; i < numChunks; i++ {
 		from := i * chunkSize
 		to := int(math.Min(float64((i+1)*chunkSize), float64(regionInfoLength)))
-		chunk := regionInfo[from:to]
+		chunk := regionCurrData[from:to]
 		pubKey, err := endec.RsaParsePubKeyByPrivKey(encPubPrivKey)
 		if err != nil {
 			logger.Error("parse rsa pub key error: %v", err)
@@ -158,13 +291,13 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 		rspError()
 		return
 	}
-	signData, err := endec.RsaSign(regionInfo, signPrivkey)
+	signData, err := endec.RsaSign(regionCurrData, signPrivkey)
 	if err != nil {
 		logger.Error("rsa sign error: %v", err)
 		rspError()
 		return
 	}
-	ok, err := endec.RsaVerify(regionInfo, signData, &signPrivkey.PublicKey)
+	ok, err := endec.RsaVerify(regionCurrData, signData, &signPrivkey.PublicKey)
 	if err != nil {
 		logger.Error("rsa verify error: %v", err)
 		rspError()

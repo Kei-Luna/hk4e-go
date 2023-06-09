@@ -2,6 +2,7 @@
 kcp_addr = "127.0.0.1" # 该地址只用来注册到节点服务器 填网关的外网地址 网关本地监听为0.0.0.0
 kcp_port = 22222
 client_proto_proxy_enable = false
+forward_mode_enable = false
 version = "300,310,320" # 支持的客户端协议版本号 三位数字 多个以逗号分隔 如300,310,320
 gate_tcp_mq_addr = "127.0.0.1" # 访问网关tcp直连消息队列的地址 填网关的内网地址
 gate_tcp_mq_port = 33333

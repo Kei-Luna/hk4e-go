@@ -1,7 +1,6 @@
 package region
 
 import (
-	"encoding/base64"
 	"os"
 
 	"hk4e/common/config"
@@ -9,8 +8,6 @@ import (
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
 	"hk4e/protocol/proto"
-
-	pb "google.golang.org/protobuf/proto"
 )
 
 func LoadRsaKey() (signRsaKey []byte, encRsaKeyMap map[string][]byte, pwdRsaKey []byte) {
@@ -21,7 +18,7 @@ func LoadRsaKey() (signRsaKey []byte, encRsaKeyMap map[string][]byte, pwdRsaKey 
 		logger.Error("open region_sign_key.pem error: %v", err)
 		return nil, nil, nil
 	}
-	encKeyIdList := []string{"2", "3", "4", "5"}
+	encKeyIdList := []string{"1", "2", "3", "4", "5"}
 	for _, v := range encKeyIdList {
 		encRsaKeyMap[v], err = os.ReadFile("key/region_enc_key_" + v + ".pem")
 		if err != nil {
@@ -82,25 +79,6 @@ func GetRegionCurr(kcpAddr string, kcpPort int32, ec2b *random.Ec2b) *proto.Quer
 		GateserverPort: uint32(kcpPort),
 		SecretKey:      dispatchEc2bData,
 	}
+	regionCurr.ClientSecretKey = dispatchEc2bData
 	return regionCurr
-}
-
-func GetRegionListBase64(ec2b *random.Ec2b) string {
-	regionList := GetRegionList(ec2b)
-	regionListData, err := pb.Marshal(regionList)
-	if err != nil {
-		logger.Error("pb marshal QueryRegionListHttpRsp error: %v", err)
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(regionListData)
-}
-
-func GetRegionCurrBase64(kcpAddr string, kcpPort int32, ec2b *random.Ec2b) string {
-	regionCurr := GetRegionCurr(kcpAddr, kcpPort, ec2b)
-	regionCurrData, err := pb.Marshal(regionCurr)
-	if err != nil {
-		logger.Error("pb marshal QueryCurrRegionHttpRsp error: %v", err)
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString(regionCurrData)
 }

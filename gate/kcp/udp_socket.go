@@ -32,7 +32,7 @@ func (s *UDPSession) defaultReadLoop() {
 					continue
 				}
 				if connType == ConnEnetFin {
-					s.Close()
+					_ = s.Close()
 					continue
 				}
 			}

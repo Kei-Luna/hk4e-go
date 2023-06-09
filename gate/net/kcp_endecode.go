@@ -2,6 +2,7 @@ package net
 
 import (
 	"encoding/binary"
+
 	"hk4e/pkg/endec"
 	"hk4e/pkg/logger"
 )

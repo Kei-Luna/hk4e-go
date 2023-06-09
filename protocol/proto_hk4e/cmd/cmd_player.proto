@@ -43,6 +43,8 @@ message GetPlayerTokenReq {
     string country_code = 5;
     uint32 lang = 892;
     string psn_id = 13;
+    string gate_ticket = 9998;
+    uint32 un_x = 9999;
 }
 
 message GetPlayerTokenRsp {

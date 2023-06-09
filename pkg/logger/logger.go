@@ -79,6 +79,7 @@ func CloseLogger() {
 	// 等待所有日志打印完毕
 	for {
 		if len(LOG.LogInfoChan) == 0 {
+			time.Sleep(time.Millisecond * 100)
 			break
 		}
 		time.Sleep(time.Millisecond * 100)

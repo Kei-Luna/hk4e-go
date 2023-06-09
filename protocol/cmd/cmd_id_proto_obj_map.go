@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sync"
 
+	"hk4e/common/config"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
 
@@ -29,11 +30,15 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 	r.cmdNameCmdIdMap = make(map[string]uint16)
 	r.cmdIdProtoObjCacheMap = make(map[uint16]*sync.Pool)
 	r.cmdIdProtoObjFastNewMap = make(map[uint16]func() any)
-	r.registerAllMessage()
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		r.registerMessage()
+	} else {
+		r.registerAllMessage()
+	}
 	return r
 }
 
-func (c *CmdProtoMap) registerAllMessage() {
+func (c *CmdProtoMap) registerMessage() {
 	// 登录
 	c.regMsg(DoSetPlayerBornDataNotify, func() any { return new(proto.DoSetPlayerBornDataNotify) })       // 注册账号通知 新号播放开场动画
 	c.regMsg(SetPlayerBornDataReq, func() any { return new(proto.SetPlayerBornDataReq) })                 // 注册账号请求

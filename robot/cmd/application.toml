@@ -6,6 +6,7 @@ max_size = 10485760
 
 [hk4e]
 client_proto_proxy_enable = false
+forward_mode_enable = false
 
 [hk4e_robot]
 region_list_url = "https://hk4e.flswld.com" # 一级dispatch地址
@@ -25,3 +26,6 @@ dos_loop_login = false # 压力测试是否循环登录退出
 client_move_enable = false # 是否开启客户端模拟移动
 client_move_speed = 10 # 客户端模拟移动速度
 client_move_range_ext = 100 # 客户端模拟移动区域半径
+
+[mq]
+nats_url = "nats://nats:4222"

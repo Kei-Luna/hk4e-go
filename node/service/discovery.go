@@ -66,6 +66,8 @@ func NewDiscoveryService() *DiscoveryService {
 	r.serverInstanceMap[api.GS] = new(sync.Map)
 	r.serverInstanceMap[api.ANTICHEAT] = new(sync.Map)
 	r.serverInstanceMap[api.PATHFINDING] = new(sync.Map)
+	r.serverInstanceMap[api.ROBOT] = new(sync.Map)
+	r.serverInstanceMap[api.DISPATCH] = new(sync.Map)
 	r.serverAppIdMap = new(sync.Map)
 	r.globalGsOnlineMap = make(map[uint32]string)
 	go r.removeDeadServer()

@@ -81,7 +81,7 @@ func Run(ctx context.Context, configFile string) error {
 		outputChan := connectManager.GetKcpEventOutputChan()
 		for {
 			kcpEvent := <-outputChan
-			logger.Info("kcpEvent: %v", kcpEvent)
+			logger.Info("kcpEvent: %+v", kcpEvent)
 		}
 	}()
 

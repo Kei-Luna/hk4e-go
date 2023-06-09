@@ -52,7 +52,7 @@ func (s *UDPSession) readLoop() {
 						continue
 					}
 					if connType == ConnEnetFin {
-						s.Close()
+						_ = s.Close()
 						continue
 					}
 				}

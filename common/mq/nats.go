@@ -67,7 +67,7 @@ func NewMessageQueue(serverType string, appId string, discoveryClient *rpc.Disco
 	r.discoveryClient = discoveryClient
 	if serverType == api.GATE {
 		go r.runGateTcpMqServer()
-	} else if serverType == api.GS || serverType == api.ANTICHEAT || serverType == api.PATHFINDING {
+	} else if serverType == api.GS || serverType == api.ANTICHEAT || serverType == api.PATHFINDING || serverType == api.ROBOT {
 		go r.runGateTcpMqClient()
 	}
 	go r.natsMsgRecvHandler()
@@ -79,6 +79,7 @@ func (m *MessageQueue) Close() {
 	// 等待所有待发送的消息发送完毕
 	for {
 		if len(m.netMsgInput) == 0 {
+			time.Sleep(time.Millisecond * 100)
 			break
 		}
 		time.Sleep(time.Millisecond * 100)
@@ -173,6 +174,7 @@ func (m *MessageQueue) sendHandler() {
 		api.GS:          make(map[string]*GateTcpMqInst),
 		api.ANTICHEAT:   make(map[string]*GateTcpMqInst),
 		api.PATHFINDING: make(map[string]*GateTcpMqInst),
+		api.ROBOT:       make(map[string]*GateTcpMqInst),
 	}
 	for {
 		select {
@@ -321,6 +323,8 @@ func (m *MessageQueue) gateTcpMqHandshake(conn net.Conn) {
 		inst.serverType = api.ANTICHEAT
 	case api.PATHFINDING:
 		inst.serverType = api.PATHFINDING
+	case api.ROBOT:
+		inst.serverType = api.ROBOT
 	default:
 		logger.Error("invalid server type")
 		return

@@ -1200,6 +1200,7 @@ message QueryCurrRegionHttpRsp {
     bytes client_secret_key = 11;
     bytes region_custom_config_encrypted = 12;
     bytes client_region_custom_config_encrypted = 13;
+    string gate_ticket = 14;
     oneof detail {
         ForceUpdateInfo force_udpate = 4;
         StopServerInfo stop_server = 5;

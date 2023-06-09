@@ -55,6 +55,26 @@ func (m *MessageQueue) SendToPathfinding(appId string, netMsg *NetMsg) {
 	m.netMsgInput <- netMsg
 }
 
+func (m *MessageQueue) SendToRobot(appId string, netMsg *NetMsg) {
+	netMsg.Topic = m.getTopic(api.ROBOT, appId)
+	netMsg.ServerType = api.ROBOT
+	netMsg.AppId = appId
+	originServerType, originServerAppId := m.getOriginServer()
+	netMsg.OriginServerType = originServerType
+	netMsg.OriginServerAppId = originServerAppId
+	m.netMsgInput <- netMsg
+}
+
+func (m *MessageQueue) SendToDispatch(appId string, netMsg *NetMsg) {
+	netMsg.Topic = m.getTopic(api.DISPATCH, appId)
+	netMsg.ServerType = api.DISPATCH
+	netMsg.AppId = appId
+	originServerType, originServerAppId := m.getOriginServer()
+	netMsg.OriginServerType = originServerType
+	netMsg.OriginServerAppId = originServerAppId
+	m.netMsgInput <- netMsg
+}
+
 func (m *MessageQueue) SendToAll(netMsg *NetMsg) {
 	netMsg.Topic = "ALL_SERVER_HK4E"
 	netMsg.ServerType = "ALL_SERVER_HK4E"

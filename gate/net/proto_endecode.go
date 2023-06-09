@@ -92,7 +92,7 @@ func ProtoDecode(kcpMsg *KcpMsg,
 		logger.Error("decode proto object is nil")
 		return protoMsgList
 	}
-	if kcpMsg.CmdId == cmd.UnionCmdNotify {
+	if kcpMsg.CmdId == cmd.UnionCmdNotify && !config.GetConfig().Hk4e.ForwardModeEnable {
 		for _, protoMessage := range protoMessageList {
 			msg := new(ProtoMsg)
 			msg.ConvId = kcpMsg.ConvId
@@ -129,7 +129,7 @@ func ProtoDecodePayloadLoop(cmdId uint16, protoData []byte, protoMessageList *[]
 		logger.Error("decode proto object is nil")
 		return
 	}
-	if cmdId == cmd.UnionCmdNotify {
+	if cmdId == cmd.UnionCmdNotify && !config.GetConfig().Hk4e.ForwardModeEnable {
 		// 处理聚合消息
 		unionCmdNotify, ok := protoObj.(*proto.UnionCmdNotify)
 		if !ok {

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"hk4e/common/config"
+	"hk4e/common/mq"
 	"hk4e/common/region"
 	"hk4e/common/rpc"
 	"hk4e/dispatch/dao"
@@ -24,9 +25,10 @@ type Controller struct {
 	encRsaKeyMap map[string][]byte
 	pwdRsaKey    []byte
 	ec2b         *random.Ec2b
+	messageQueue *mq.MessageQueue
 }
 
-func NewController(dao *dao.Dao, discovery *rpc.DiscoveryClient) (r *Controller) {
+func NewController(dao *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq.MessageQueue) (r *Controller) {
 	r = new(Controller)
 	r.dao = dao
 	r.discovery = discovery
@@ -42,6 +44,7 @@ func NewController(dao *dao.Dao, discovery *rpc.DiscoveryClient) (r *Controller)
 		return nil
 	}
 	r.ec2b = ec2b
+	r.messageQueue = messageQueue
 	go r.registerRouter()
 	return r
 }

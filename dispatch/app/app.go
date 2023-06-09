@@ -6,25 +6,21 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"hk4e/common/config"
+	"hk4e/common/mq"
 	"hk4e/common/rpc"
 	"hk4e/dispatch/controller"
 	"hk4e/dispatch/dao"
+	"hk4e/node/api"
 	"hk4e/pkg/logger"
 )
 
+var APPID string
+
 func Run(ctx context.Context, configFile string) error {
 	config.InitConfig(configFile)
-
-	logger.InitLogger("dispatch")
-	logger.Warn("dispatch start")
-	defer func() {
-		logger.CloseLogger()
-	}()
-
-	db := dao.NewDao()
-	defer db.CloseDao()
 
 	// natsrpc client
 	discoveryClient, err := rpc.NewDiscoveryClient()
@@ -32,7 +28,47 @@ func Run(ctx context.Context, configFile string) error {
 		return err
 	}
 
-	_ = controller.NewController(db, discoveryClient)
+	// 注册到节点服务器
+	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
+		ServerType: api.DISPATCH,
+	})
+	if err != nil {
+		return err
+	}
+	APPID = rsp.GetAppId()
+	go func() {
+		ticker := time.NewTicker(time.Second * 15)
+		for {
+			<-ticker.C
+			_, err := discoveryClient.KeepaliveServer(context.TODO(), &api.KeepaliveServerReq{
+				ServerType: api.DISPATCH,
+				AppId:      APPID,
+			})
+			if err != nil {
+				logger.Error("keepalive error: %v", err)
+			}
+		}
+	}()
+	defer func() {
+		_, _ = discoveryClient.CancelServer(context.TODO(), &api.CancelServerReq{
+			ServerType: api.DISPATCH,
+			AppId:      APPID,
+		})
+	}()
+
+	logger.InitLogger("dispatch_" + APPID)
+	logger.Warn("dispatch start, appid: %v", APPID)
+	defer func() {
+		logger.CloseLogger()
+	}()
+
+	messageQueue := mq.NewMessageQueue(api.DISPATCH, APPID, discoveryClient)
+	defer messageQueue.Close()
+
+	db := dao.NewDao()
+	defer db.CloseDao()
+
+	_ = controller.NewController(db, discoveryClient, messageQueue)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)

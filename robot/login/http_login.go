@@ -98,7 +98,7 @@ func GetDispatchInfo(regionListUrl string, regionListParam string, curRegionUrl 
 	if regionInfo == nil {
 		return nil, errors.New("region info is nil")
 	}
-	ec2b, err := random.LoadEc2bKey(regionInfo.SecretKey)
+	ec2b, err := random.LoadEc2bKey(queryCurrRegionHttpRsp.ClientSecretKey)
 	if err != nil {
 		return nil, err
 	}
