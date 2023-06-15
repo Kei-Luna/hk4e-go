@@ -250,7 +250,7 @@ func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, confi
 	s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntityGadgetVehicle(player *model.Player, pos, rot *model.Vector, vehicleId uint32) uint32 {
+func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vector, vehicleId uint32) uint32 {
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_GADGET)
 	entity := &Entity{
 		id:                  entityId,
@@ -272,7 +272,8 @@ func (s *Scene) CreateEntityGadgetVehicle(player *model.Player, pos, rot *model.
 			gadgetType: GADGET_TYPE_VEHICLE,
 			gadgetVehicleEntity: &GadgetVehicleEntity{
 				vehicleId:  vehicleId,
-				owner:      player,
+				worldId:    s.world.id,
+				ownerUid:   ownerUid,
 				maxStamina: 240, // TODO 应该也能在配置表找到
 				curStamina: 240, // TODO 与maxStamina一致
 				memberMap:  make(map[uint32]*model.Player),
@@ -636,7 +637,8 @@ func (g *GadgetClientEntity) GetPropOwnerEntityId() uint32 {
 
 type GadgetVehicleEntity struct {
 	vehicleId  uint32
-	owner      *model.Player
+	worldId    uint32
+	ownerUid   uint32
 	maxStamina float32
 	curStamina float32
 	memberMap  map[uint32]*model.Player // uint32 = pos
@@ -646,8 +648,8 @@ func (g *GadgetVehicleEntity) GetVehicleId() uint32 {
 	return g.vehicleId
 }
 
-func (g *GadgetVehicleEntity) GetOwner() *model.Player {
-	return g.owner
+func (g *GadgetVehicleEntity) GetOwnerUid() uint32 {
+	return g.ownerUid
 }
 
 func (g *GadgetVehicleEntity) GetMaxStamina() float32 {

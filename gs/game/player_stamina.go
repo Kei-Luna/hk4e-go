@@ -168,23 +168,26 @@ func (g *Game) VehicleRestoreStaminaHandler(player *model.Player) {
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	// 获取玩家创建的载具实体
-	entity := scene.GetEntity(player.VehicleInfo.InVehicleEntityId)
-	if entity == nil {
-		return
-	}
-	// 确保实体类型是否为载具
-	gadgetEntity := entity.GetGadgetEntity()
-	if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
-		return
-	}
-	// 判断玩家处于载具中
-	if g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
-		// 角色回复耐力
-		g.UpdatePlayerStamina(player, constant.STAMINA_COST_IN_SKIFF)
-	} else {
-		// 载具回复耐力
-		g.UpdateVehicleStamina(player, entity, constant.STAMINA_COST_SKIFF_NOBODY)
+	// 遍历玩家创建的载具实体
+	for _, entityId := range player.VehicleInfo.CreateEntityIdMap {
+		// 获取载具实体
+		entity := scene.GetEntity(entityId)
+		if entity == nil {
+			continue
+		}
+		// 确保实体类型是否为载具
+		gadgetEntity := entity.GetGadgetEntity()
+		if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
+			continue
+		}
+		// 判断玩家处于载具中
+		if g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
+			// 角色回复耐力
+			g.UpdatePlayerStamina(player, constant.STAMINA_COST_IN_SKIFF)
+		} else {
+			// 载具回复耐力
+			g.UpdateVehicleStamina(player, entity, constant.STAMINA_COST_SKIFF_NOBODY)
+		}
 	}
 }
 

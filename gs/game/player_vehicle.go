@@ -51,7 +51,7 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	// TODO 验证将要创建的载具位置是否有效 Retcode_RET_CREATE_VEHICLE_POS_INVALID
 
 	// 清除已创建的载具
-	lastEntityId, ok := player.VehicleInfo.LastCreateEntityIdMap[req.VehicleId]
+	lastEntityId, ok := player.VehicleInfo.CreateEntityIdMap[req.VehicleId]
 	if ok {
 		g.DestroyVehicleEntity(player, scene, req.VehicleId, lastEntityId)
 	}
@@ -59,7 +59,7 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	// 创建载具实体
 	pos := &model.Vector{X: float64(req.Pos.X), Y: float64(req.Pos.Y), Z: float64(req.Pos.Z)}
 	rot := &model.Vector{X: float64(req.Rot.X), Y: float64(req.Rot.Y), Z: float64(req.Rot.Z)}
-	entityId := scene.CreateEntityGadgetVehicle(player, pos, rot, req.VehicleId)
+	entityId := scene.CreateEntityGadgetVehicle(player.PlayerID, pos, rot, req.VehicleId)
 	if entityId == 0 {
 		logger.Error("vehicle entityId is 0, uid: %v", player.PlayerID)
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
@@ -67,8 +67,15 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	GAME.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
 	// 记录创建的载具信息
-	player.VehicleInfo.LastCreateEntityIdMap[req.VehicleId] = entityId
+	player.VehicleInfo.CreateEntityIdMap[req.VehicleId] = entityId
 	player.VehicleInfo.LastCreateTime = time.Now().UnixMilli()
+	// 记录房主的载具位置
+	owner := world.GetOwner()
+	if owner == player {
+		dbWorld := owner.GetDbWorld()
+		dbScene := dbWorld.GetSceneById(scene.GetId())
+		dbScene.GetVehicleMap()[req.VehicleId] = model.NewDbVehicle(req.VehicleId, player.PlayerID, pos, rot)
+	}
 
 	// PacketCreateVehicleRsp
 	createVehicleRsp := &proto.CreateVehicleRsp{
@@ -108,7 +115,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 		return
 	}
 	// 该载具是否为此玩家的
-	if gadgetEntity.GetGadgetVehicleEntity().GetOwner() != player {
+	if gadgetEntity.GetGadgetVehicleEntity().GetOwnerUid() != player.PlayerID {
 		return
 	}
 	// 如果玩家正在载具中
@@ -121,6 +128,17 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	// 删除已创建的载具
 	scene.DestroyEntity(entity.GetId())
 	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()}, false, 0)
+	// 删除玩家载具在线数据
+	delete(player.VehicleInfo.CreateEntityIdMap, vehicleId)
+	// 删除房主的载具存档
+	world := scene.world
+	owner := world.GetOwner()
+	if owner == player {
+		dbWorld := owner.GetDbWorld()
+		dbScene := dbWorld.GetSceneById(scene.GetId())
+		delete(dbScene.GetVehicleMap(), vehicleId)
+	}
+
 }
 
 // EnterVehicle 进入载具

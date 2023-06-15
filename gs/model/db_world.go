@@ -15,6 +15,7 @@ type DbScene struct {
 	SceneId        uint32
 	UnlockPointMap map[uint32]bool
 	SceneGroupMap  map[uint32]*DbSceneGroup
+	VehicleMap     map[uint32]*DbVehicle
 }
 
 type DbWorld struct {
@@ -40,6 +41,7 @@ func NewScene(sceneId uint32) *DbScene {
 		SceneId:        sceneId,
 		UnlockPointMap: make(map[uint32]bool),
 		SceneGroupMap:  make(map[uint32]*DbSceneGroup),
+		VehicleMap:     make(map[uint32]*DbVehicle),
 	}
 	return r
 }
@@ -91,6 +93,13 @@ func (s *DbScene) GetSceneGroupById(groupId uint32) *DbSceneGroup {
 		s.SceneGroupMap[groupId] = dbSceneGroup
 	}
 	return dbSceneGroup
+}
+
+func (s *DbScene) GetVehicleMap() map[uint32]*DbVehicle {
+	if s.VehicleMap == nil {
+		s.VehicleMap = make(map[uint32]*DbVehicle)
+	}
+	return s.VehicleMap
 }
 
 func (g *DbSceneGroup) GetVariableByName(name string) int32 {

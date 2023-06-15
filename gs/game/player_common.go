@@ -190,7 +190,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 			}
 			scenePlayerLocationNotify.PlayerLocList = append(scenePlayerLocationNotify.PlayerLocList, playerLocationInfo)
 			// 载具位置
-			for _, entityId := range scenePlayer.VehicleInfo.LastCreateEntityIdMap {
+			for _, entityId := range scenePlayer.VehicleInfo.CreateEntityIdMap {
 				entity := scene.GetEntity(entityId)
 				// 确保实体类型是否为载具
 				if entity != nil && entity.GetEntityType() == constant.ENTITY_TYPE_GADGET && entity.gadgetEntity.gadgetVehicleEntity != nil {
@@ -202,7 +202,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 						},
 						EntityId: entity.id,
 						CurHp:    entity.fightProp[constant.FIGHT_PROP_CUR_HP],
-						OwnerUid: entity.gadgetEntity.gadgetVehicleEntity.owner.PlayerID,
+						OwnerUid: entity.gadgetEntity.gadgetVehicleEntity.ownerUid,
 						Pos: &proto.Vector{
 							X: float32(entity.pos.X),
 							Y: float32(entity.pos.Y),

@@ -404,6 +404,13 @@ func (g *Game) UserWorldRemovePlayer(world *World, player *model.Player) {
 	delTeamEntityNotify := g.PacketDelTeamEntityNotify(scene, player)
 	g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerID, player.ClientSeq, delTeamEntityNotify)
 
+	// 清除其他玩家的载具
+	if world.owner != player {
+		for vehicleId, entityId := range player.VehicleInfo.CreateEntityIdMap {
+			g.DestroyVehicleEntity(player, scene, vehicleId, entityId)
+		}
+	}
+
 	if world.GetMultiplayer() {
 		playerQuitFromMpNotify := &proto.PlayerQuitFromMpNotify{
 			Reason: proto.PlayerQuitFromMpNotify_BACK_TO_MY_WORLD,

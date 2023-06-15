@@ -317,6 +317,11 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		entityIdList = append(entityIdList, entityId)
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
+	// 加载该场景的载具
+	if world.owner == player {
+		vehicleEntityIdList := g.CreateSceneVehicle(scene)
+		g.AddSceneEntityNotify(player, visionType, vehicleEntityIdList, false, false)
+	}
 	if WORLD_MANAGER.IsBigWorld(world) {
 		bigWorldAoi := world.GetBigWorldAoi()
 		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
@@ -699,6 +704,27 @@ func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Enti
 	return visionEntity
 }
 
+// CreateSceneVehicle 创建场景内的载具
+func (g *Game) CreateSceneVehicle(scene *Scene) []uint32 {
+	world := scene.GetWorld()
+	owner := world.GetOwner()
+	dbWorld := owner.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(scene.GetId())
+	entityIdList := make([]uint32, 0, len(dbScene.GetVehicleMap()))
+	for _, vehicle := range dbScene.GetVehicleMap() {
+		// 创建载具
+		entityId := scene.CreateEntityGadgetVehicle(vehicle.OwnerUid, vehicle.Pos, vehicle.Rot, vehicle.VehicleId)
+		if entityId == 0 {
+			logger.Error("create vehicle error, sceneId: %v", dbScene.SceneId)
+			return entityIdList
+		}
+		entityIdList = append(entityIdList, entityId)
+		// 记录数据
+		owner.VehicleInfo.CreateEntityIdMap[vehicle.VehicleId] = entityId
+	}
+	return entityIdList
+}
+
 // GetNeighborGroup 获取某位置附近的场景组
 func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*gdconf.Group {
 	aoiManager, exist := WORLD_MANAGER.GetSceneBlockAoiMap()[sceneId]
@@ -734,6 +760,9 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 
 // AddSceneGroup 加载场景组
 func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
+	if groupConfig == nil {
+		return
+	}
 	group := scene.GetGroupById(uint32(groupConfig.Id))
 	if group != nil {
 		return
@@ -1616,14 +1645,19 @@ func (g *Game) PacketSceneGadgetInfoClient(gadgetClientEntity *GadgetClientEntit
 }
 
 func (g *Game) PacketSceneGadgetInfoVehicle(gadgetVehicleEntity *GadgetVehicleEntity) *proto.SceneGadgetInfo {
+	player := USER_MANAGER.GetOnlineUser(gadgetVehicleEntity.ownerUid)
+	if player == nil {
+		logger.Error("player is nil, userId: %v", gadgetVehicleEntity.ownerUid)
+		return new(proto.SceneGadgetInfo)
+	}
 	sceneGadgetInfo := &proto.SceneGadgetInfo{
 		GadgetId:         gadgetVehicleEntity.GetVehicleId(),
-		AuthorityPeerId:  WORLD_MANAGER.GetWorldByID(gadgetVehicleEntity.GetOwner().WorldId).GetPlayerPeerId(gadgetVehicleEntity.GetOwner()),
+		AuthorityPeerId:  WORLD_MANAGER.GetWorldByID(gadgetVehicleEntity.worldId).GetPlayerPeerId(player),
 		IsEnableInteract: true,
 		Content: &proto.SceneGadgetInfo_VehicleInfo{
 			VehicleInfo: &proto.VehicleInfo{
 				MemberList: make([]*proto.VehicleMember, 0, len(gadgetVehicleEntity.GetMemberMap())),
-				OwnerUid:   gadgetVehicleEntity.GetOwner().PlayerID,
+				OwnerUid:   gadgetVehicleEntity.GetOwnerUid(),
 				CurStamina: gadgetVehicleEntity.GetCurStamina(),
 			},
 		},
