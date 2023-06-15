@@ -75,9 +75,11 @@ func (c *CommandManager) InitRouter() {
 	c.commandPermMap = make(map[string]CommandPerm)
 	{
 		// 权限等级 0: 普通玩家
-		c.RegisterRouter(CommandPermNormal, c.HelpCommand, "help")
-		c.RegisterRouter(CommandPermNormal, c.TeleportCommand, "teleport", "tp")
-		c.RegisterRouter(CommandPermNormal, c.GiveCommand, "give", "item")
+		c.RegisterRouter(CommandPermNormal, c.HelpCommand, "help", "帮助")
+		c.RegisterRouter(CommandPermNormal, c.TeleportCommand, "teleport", "tp", "传送")
+		c.RegisterRouter(CommandPermNormal, c.GiveCommand, "give", "item", "物品", "给予")
+		c.RegisterRouter(CommandPermNormal, c.QuestCommand, "quest", "任务")
+		c.RegisterRouter(CommandPermNormal, c.UnlockAllPointCommand, "unlock", "解锁")
 		// c.RegisterRouter(CommandPermNormal, c.GcgCommand, "gcg")
 		c.RegisterRouter(CommandPermNormal, c.XLuaDebugCommand, "xluadebug")
 	}

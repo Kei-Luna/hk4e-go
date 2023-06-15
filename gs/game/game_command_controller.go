@@ -16,7 +16,9 @@ func (c *CommandManager) HelpCommand(cmd *CommandMessage) {
 	c.SendMessage(cmd.Executor,
 		"========== 帮助 / Help ==========\n\n"+
 			"传送：tp [--u <UID>] [--s <场景ID>] {--t <目标UID> | --x <坐标X> | --y <坐标Y> | --z <坐标Z>}\n\n"+
-			"给予：give [--u <UID>] [--c <数量>] --i <ID / 物品 / 武器 / 圣遗物 / 角色 / 时装 / 风之翼 / 全部>\n",
+			"给予：give [--u <UID>] [--c <数量>] --i <ID / 物品 / 武器 / 圣遗物 / 角色 / 时装 / 风之翼 / 全部>\n\n"+
+			"任务：quest [--u <UID>] [--q <任务ID>] --i <添加/完成/完成全部>\n\n"+
+			"解锁所有锚点：unlock\n",
 	)
 }
 
@@ -331,6 +333,100 @@ func (c *CommandManager) GcgCommand(cmd *CommandMessage) {
 	player := cmd.Executor.(*model.Player)
 	GAME.GCGStartChallenge(player)
 	c.SendMessage(cmd.Executor, "收到命令")
+}
+
+// QuestCommand 任务控制命令
+// quest [--u <userId>] [--q <questId>] --i <add/finish/finishall>
+func (c *CommandManager) QuestCommand(cmd *CommandMessage) {
+	// 执行者如果不是玩家则必须输入UID
+	player, ok := cmd.Executor.(*model.Player)
+	if !ok && cmd.Args["u"] == "" {
+		c.SendMessage(cmd.Executor, "你不是玩家请指定UID。")
+		return
+	}
+
+	// 判断是否填写必备参数
+	if cmd.Args["i"] == "" {
+		c.SendMessage(cmd.Executor, "参数不足，正确用法：%v [--u <UID>] [--q <任务ID>] --i <添加/完成/完成全部>。", cmd.Name)
+		return
+	}
+	// 当参数不为完成全部时需要指定任务Id
+	if cmd.Args["i"] != "finishall" && cmd.Args["i"] != "完成全部" {
+		c.SendMessage(cmd.Executor, "你需要指定任务ID。", cmd.Name)
+		return
+	}
+
+	// 初始值
+	var questId uint32 // 任务Id
+	// 操控任务的模式
+	// add 添加任务
+	// finish 完成任务
+	// finishall 完成全部任务
+	var mode string
+
+	// 选择每个参数
+	for k, v := range cmd.Args {
+		var err error
+
+		switch k {
+		case "u":
+			var uid uint64
+			if uid, err = strconv.ParseUint(v, 10, 32); err == nil {
+				// 判断目标用户是否在线
+				if user := USER_MANAGER.GetOnlineUser(uint32(uid)); user != nil {
+					player = user
+				} else {
+					c.SendMessage(cmd.Executor, "目标玩家不在线，UID：%v。", v)
+					return
+				}
+			}
+		case "q":
+			var id uint64
+			if id, err = strconv.ParseUint(v, 10, 32); err == nil {
+				questId = uint32(id)
+			}
+		case "i":
+			switch v {
+			case "add", "添加", "finish", "完成", "finishall", "完成全部":
+				// 将模式修改为参数的值
+				mode = v
+			default:
+				c.SendMessage(cmd.Executor, "参数 --%v 只允许使用 <添加/完成/完成全部>。", k)
+				return
+			}
+		default:
+			c.SendMessage(cmd.Executor, "参数 --%v 冗余。", k)
+			return
+		}
+
+		// 解析错误的话应该是参数类型问题
+		if err != nil {
+			c.SendMessage(cmd.Executor, "参数 --%v 有误，类型错误。", k)
+			return
+		}
+	}
+
+	switch mode {
+	case "add", "添加":
+		// 添加指定任务
+		c.gmCmd.GMAddQuest(player.PlayerID, questId)
+		c.SendMessage(cmd.Executor, "已添加玩家 UID：%v, 的任务，任务ID：%v。", player.PlayerID, questId)
+	case "finish", "完成":
+		// 完成指定任务
+		c.gmCmd.GMFinishQuest(player.PlayerID, questId)
+		c.SendMessage(cmd.Executor, "已完成玩家 UID：%v, 的任务，任务ID：%v。", player.PlayerID, questId)
+	case "finishall", "完成全部":
+		// 强制完成当前所有任务
+		c.gmCmd.GMForceFinishAllQuest(player.PlayerID)
+		c.SendMessage(cmd.Executor, "已完成玩家 UID：%v, 当前全部任务。", player.PlayerID, questId)
+	}
+}
+
+// UnlockAllPointCommand 解锁所有锚点命令
+func (c *CommandManager) UnlockAllPointCommand(cmd *CommandMessage) {
+	player := cmd.Executor.(*model.Player)
+	c.gmCmd.GMUnlockAllPoint(player.PlayerID, player.SceneId)
+	c.SendMessage(cmd.Executor, "已解锁玩家 UID：%v, 场景：%v，所有锚点。", player.PlayerID, player.SceneId)
 }
 
 // XLuaDebugCommand 主动开启客户端XLUA调试命令
