@@ -1,6 +1,8 @@
 package net
 
 import (
+	"encoding/json"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,8 +15,18 @@ import (
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 
+	"github.com/gorilla/websocket"
 	pb "google.golang.org/protobuf/proto"
 )
+
+type Packet struct {
+	Time       uint64 `json:"time"`
+	Dir        string `json:"dir"`
+	CmdId      uint32 `json:"cmd_id"`
+	CmdName    string `json:"cmd_name"`
+	HeadMsg    string `json:"head_msg"`
+	PayloadMsg string `json:"payload_msg"`
+}
 
 type Session struct {
 	Conn                   *kcp.UDPSession
@@ -29,6 +41,9 @@ type Session struct {
 	SecurityCmdBuffer      []byte
 	Uid                    uint32
 	IsClose                bool
+	PktList                []*Packet
+	PktListLock            sync.Mutex
+	PktCapWsConn           *websocket.Conn
 }
 
 func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, error) {
@@ -56,6 +71,8 @@ func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, e
 		SecurityCmdBuffer:      nil,
 		Uid:                    0,
 		IsClose:                false,
+		PktList:                make([]*Packet, 0),
+		PktCapWsConn:           nil,
 	}
 	if config.GetConfig().Hk4e.ClientProtoProxyEnable {
 		r.ClientCmdProtoMap = client_proto.NewClientCmdProtoMap()
@@ -120,6 +137,29 @@ func (s *Session) recvHandle() {
 			protoMsgList := hk4egatenet.ProtoDecode(v, s.ServerCmdProtoMap, s.ClientCmdProtoMap)
 			for _, vv := range protoMsgList {
 				s.RecvChan <- vv
+				if config.GetConfig().Hk4e.ForwardModeEnable {
+					cmdName := string(vv.PayloadMessage.ProtoReflect().Descriptor().FullName())
+					headMsg, _ := json.Marshal(vv.HeadMessage)
+					payloadMsg, _ := json.Marshal(vv.PayloadMessage)
+					packet := &Packet{
+						Time:       uint64(time.Now().UnixMilli()),
+						Dir:        "RECV",
+						CmdId:      uint32(vv.CmdId),
+						CmdName:    cmdName,
+						HeadMsg:    string(headMsg),
+						PayloadMsg: string(payloadMsg),
+					}
+					if s.PktCapWsConn != nil {
+						packetData, _ := json.Marshal(packet)
+						err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
+						if err != nil {
+							s.PktCapWsConn = nil
+						}
+					}
+					s.PktListLock.Lock()
+					s.PktList = append(s.PktList, packet)
+					s.PktListLock.Unlock()
+				}
 			}
 		}
 	}
@@ -148,6 +188,29 @@ func (s *Session) sendHandle() {
 			logger.Error("exit send loop, conn write err: %v, convId: %v", err, convId)
 			s.Close()
 			break
+		}
+		if config.GetConfig().Hk4e.ForwardModeEnable {
+			cmdName := string(protoMsg.PayloadMessage.ProtoReflect().Descriptor().FullName())
+			headMsg, _ := json.Marshal(protoMsg.HeadMessage)
+			payloadMsg, _ := json.Marshal(protoMsg.PayloadMessage)
+			packet := &Packet{
+				Time:       uint64(time.Now().UnixMilli()),
+				Dir:        "SEND",
+				CmdId:      uint32(protoMsg.CmdId),
+				CmdName:    cmdName,
+				HeadMsg:    string(headMsg),
+				PayloadMsg: string(payloadMsg),
+			}
+			if s.PktCapWsConn != nil {
+				packetData, _ := json.Marshal(packet)
+				err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
+				if err != nil {
+					s.PktCapWsConn = nil
+				}
+			}
+			s.PktListLock.Lock()
+			s.PktList = append(s.PktList, packet)
+			s.PktListLock.Unlock()
 		}
 	}
 }

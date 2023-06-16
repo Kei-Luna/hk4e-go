@@ -26,6 +26,8 @@ dos_loop_login = false # 压力测试是否循环登录退出
 client_move_enable = false # 是否开启客户端模拟移动
 client_move_speed = 10 # 客户端模拟移动速度
 client_move_range_ext = 100 # 客户端模拟移动区域半径
+forward_checksum = "" # 转发模式强制指定校验和
+forward_checksum_client_version = "" # 转发模式强制指定校验和客户端版本
 
 [mq]
 nats_url = "nats://nats:4222"

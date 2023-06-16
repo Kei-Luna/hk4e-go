@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,6 +26,8 @@ import (
 	"hk4e/robot/login"
 	"hk4e/robot/net"
 
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	pb "google.golang.org/protobuf/proto"
 )
 
@@ -106,7 +109,52 @@ func main() {
 	}
 }
 
+var ForwardSession *net.Session = nil
+
+func packetCaptureWebsocket(ctx *gin.Context) {
+	upgrader := websocket.Upgrader{
+		HandshakeTimeout: 10 * time.Second,
+		ReadBufferSize:   1024,
+		WriteBufferSize:  1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+	wsConn, err := upgrader.Upgrade(ctx.Writer, ctx.Request, nil)
+	if err != nil {
+		logger.Error("websocket upgrade error: %v", err)
+		_, _ = ctx.Writer.WriteString("500")
+		return
+	}
+	if ForwardSession == nil {
+		_ = wsConn.Close()
+		_, _ = ctx.Writer.WriteString("500")
+		return
+	}
+	ForwardSession.PktCapWsConn = wsConn
+}
+
+func packetCaptureAll(ctx *gin.Context) {
+	if ForwardSession == nil {
+		_, _ = ctx.Writer.WriteString("500")
+		return
+	}
+	ForwardSession.PktListLock.Lock()
+	data, _ := json.Marshal(ForwardSession.PktList)
+	ForwardSession.PktListLock.Unlock()
+	_, _ = ctx.Writer.WriteString(string(data))
+}
+
 func runForward(messageQueue *mq.MessageQueue) {
+	gin.SetMode(gin.DebugMode)
+	engine := gin.Default()
+	engine.GET("/packet/capture/websocket", packetCaptureWebsocket)
+	engine.GET("/packet/capture/all", packetCaptureAll)
+	err := engine.Run(":9999")
+	if err != nil {
+		logger.Error("gin run error: %v", err)
+		return
+	}
 	for {
 		netMsg := <-messageQueue.GetNetMsg()
 		if netMsg.OriginServerType != api.DISPATCH {
@@ -155,6 +203,7 @@ func waitClientConn(messageQueue *mq.MessageQueue, dispatchInfo *login.DispatchI
 				logger.Error("remote gate login error: %v", err)
 				continue
 			}
+			ForwardSession = session
 			logger.Info("remote gate login ok, uid: %v", session.Uid)
 			messageQueue.SendToGate(gateAppId, &mq.NetMsg{
 				MsgType: mq.MsgTypeGame,
@@ -185,11 +234,18 @@ func forwardLoop(session *net.Session, messageQueue *mq.MessageQueue, gateAppId 
 					continue
 				}
 				gameMsg := netMsg.GameMsg
-				session.SendMsgFwd(gameMsg.CmdId, gameMsg.ClientSeq, gameMsg.PayloadMessage)
 				if gameMsg.CmdId == cmd.PlayerLoginReq {
-					data, _ := json.Marshal(gameMsg.PayloadMessage)
+					req := gameMsg.PayloadMessage.(*proto.PlayerLoginReq)
+					data, _ := json.Marshal(req)
 					logger.Debug("PlayerLoginReq: %v", string(data))
+					if config.GetConfig().Hk4eRobot.ForwardChecksum != "" {
+						req.Checksum = config.GetConfig().Hk4eRobot.ForwardChecksum
+					}
+					if config.GetConfig().Hk4eRobot.ForwardChecksumClientVersion != "" {
+						req.ChecksumClientVersion = config.GetConfig().Hk4eRobot.ForwardChecksumClientVersion
+					}
 				}
+				session.SendMsgFwd(gameMsg.CmdId, gameMsg.ClientSeq, gameMsg.PayloadMessage)
 			case mq.MsgTypeServer:
 				switch netMsg.EventId {
 				case mq.ServerForwardModeClientCloseNotify:
