@@ -110,6 +110,7 @@ func (r *RouteManager) initRoute() {
 	r.registerRouter(cmd.PlayerEnterDungeonReq, GAME.PlayerEnterDungeonReq)
 	r.registerRouter(cmd.PlayerQuitDungeonReq, GAME.PlayerQuitDungeonReq)
 	r.registerRouter(cmd.GadgetInteractReq, GAME.GadgetInteractReq)
+	r.registerRouter(cmd.GmTalkReq, GAME.GmTalkReq)
 }
 
 type HandlerFunc func(player *model.Player, payloadMsg pb.Message)

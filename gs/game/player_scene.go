@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/base64"
 	"math"
 	"strconv"
 	"time"
@@ -389,6 +390,24 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 		EnterSceneToken: req.EnterSceneToken,
 	}
 	g.SendMsg(cmd.PostEnterSceneRsp, player.PlayerID, player.ClientSeq, postEnterSceneRsp)
+
+	// 开启live版本客户端的GM按钮 虽然没什么卵用
+	// local btnGm = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMainPage/GrpMainPage/GrpMainBtn/GrpMainToggle/GrpTopPanel/BtnGm")
+	// btnGm:SetActive(true)
+	luac, err := base64.StdEncoding.DecodeString("G0x1YVMBGZMNChoKBAQICHhWAAAAAAAAAAAAAAAod0ABCEBnbS5sdWEAAAAAAAAAAAABBAoAAAAkAEAAKUBAACmAQAApwEAAVgABACyAAAFdQEEA2ACAAGxAgAEZAIAABgAAAAQDQ1MEDFVuaXR5RW5naW5lBAtHYW1lT2JqZWN0BAVGaW5kFFUvQ2FudmFzL1BhZ2VzL0luTGV2ZWxNYWluUGFnZS9HcnBNYWluUGFnZS9HcnBNYWluQnRuL0dycE1haW5Ub2dnbGUvR3JwVG9wUGFuZWwvQnRuR20EClNldEFjdGl2ZQEAAAABAAAAAAAKAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAgAAAAIAAAACAAAAAgAAAAEAAAAGYnRuR20GAAAACgAAAAEAAAAFX0VOVg==")
+	if err != nil {
+		logger.Error("decode luac error: %v", err)
+		return
+	}
+	GAME.SendMsg(cmd.WindSeedClientNotify, player.PlayerID, 0, &proto.WindSeedClientNotify{
+		Notify: &proto.WindSeedClientNotify_AreaNotify_{
+			AreaNotify: &proto.WindSeedClientNotify_AreaNotify{
+				AreaCode: luac,
+				AreaId:   1,
+				AreaType: 1,
+			},
+		},
+	})
 }
 
 func (g *Game) SceneEntityDrownReq(player *model.Player, payloadMsg pb.Message) {

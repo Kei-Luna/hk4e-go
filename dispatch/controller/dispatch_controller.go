@@ -71,7 +71,9 @@ func (c *Controller) queryRegionList(context *gin.Context) {
 			return
 		}
 		logger.Debug("QueryRegionListHttpRsp: %+v", queryRegionListHttpRsp)
-		queryRegionListHttpRsp.RegionList[0].DispatchUrl = config.GetConfig().Hk4e.DispatchUrl
+		for _, regionSimpleInfo := range queryRegionListHttpRsp.RegionList {
+			regionSimpleInfo.DispatchUrl = config.GetConfig().Hk4e.DispatchUrl
+		}
 		regionListData, err := pb.Marshal(queryRegionListHttpRsp)
 		if err != nil {
 			_, _ = context.Writer.WriteString("500")

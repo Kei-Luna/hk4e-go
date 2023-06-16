@@ -89,6 +89,7 @@ func main() {
 		defer messageQueue.Close()
 
 		go runForward(messageQueue)
+		go runPacketCaptureApi()
 	} else {
 		go runRobot()
 	}
@@ -106,6 +107,18 @@ func main() {
 		default:
 			return
 		}
+	}
+}
+
+func runPacketCaptureApi() {
+	gin.SetMode(gin.DebugMode)
+	engine := gin.Default()
+	engine.GET("/packet/capture/websocket", packetCaptureWebsocket)
+	engine.GET("/packet/capture/all", packetCaptureAll)
+	err := engine.Run(":9999")
+	if err != nil {
+		logger.Error("gin run error: %v", err)
+		return
 	}
 }
 
@@ -146,15 +159,6 @@ func packetCaptureAll(ctx *gin.Context) {
 }
 
 func runForward(messageQueue *mq.MessageQueue) {
-	gin.SetMode(gin.DebugMode)
-	engine := gin.Default()
-	engine.GET("/packet/capture/websocket", packetCaptureWebsocket)
-	engine.GET("/packet/capture/all", packetCaptureAll)
-	err := engine.Run(":9999")
-	if err != nil {
-		logger.Error("gin run error: %v", err)
-		return
-	}
 	for {
 		netMsg := <-messageQueue.GetNetMsg()
 		if netMsg.OriginServerType != api.DISPATCH {

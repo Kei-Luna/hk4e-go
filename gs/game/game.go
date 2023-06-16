@@ -376,7 +376,7 @@ func (g *Game) SendSucc(cmdId uint16, player *model.Player, rsp pb.Message) {
 // SendToWorldA 给世界内所有玩家发消息
 func (g *Game) SendToWorldA(world *World, cmdId uint16, seq uint32, msg pb.Message) {
 	for _, v := range world.GetAllPlayer() {
-		GAME.SendMsg(cmdId, v.PlayerID, seq, msg)
+		g.SendMsg(cmdId, v.PlayerID, seq, msg)
 	}
 }
 
@@ -386,13 +386,13 @@ func (g *Game) SendToWorldAEC(world *World, cmdId uint16, seq uint32, msg pb.Mes
 		if aecUid == v.PlayerID {
 			continue
 		}
-		GAME.SendMsg(cmdId, v.PlayerID, seq, msg)
+		g.SendMsg(cmdId, v.PlayerID, seq, msg)
 	}
 }
 
 // SendToWorldH 给世界房主发消息
 func (g *Game) SendToWorldH(world *World, cmdId uint16, seq uint32, msg pb.Message) {
-	GAME.SendMsg(cmdId, world.GetOwner().PlayerID, seq, msg)
+	g.SendMsg(cmdId, world.GetOwner().PlayerID, seq, msg)
 }
 
 // SendToSceneA 给场景内所有玩家发消息
@@ -402,11 +402,11 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 		bigWorldAoi := world.GetBigWorldAoi()
 		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {
-			GAME.SendMsg(cmdId, uint32(uid), seq, msg)
+			g.SendMsg(cmdId, uint32(uid), seq, msg)
 		}
 	} else {
 		for _, v := range scene.GetAllPlayer() {
-			GAME.SendMsg(cmdId, v.PlayerID, seq, msg)
+			g.SendMsg(cmdId, v.PlayerID, seq, msg)
 		}
 	}
 }
@@ -421,14 +421,14 @@ func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 			if aecUid == uint32(uid) {
 				continue
 			}
-			GAME.SendMsg(cmdId, uint32(uid), seq, msg)
+			g.SendMsg(cmdId, uint32(uid), seq, msg)
 		}
 	} else {
 		for _, v := range scene.GetAllPlayer() {
 			if aecUid == v.PlayerID {
 				continue
 			}
-			GAME.SendMsg(cmdId, v.PlayerID, seq, msg)
+			g.SendMsg(cmdId, v.PlayerID, seq, msg)
 		}
 	}
 }

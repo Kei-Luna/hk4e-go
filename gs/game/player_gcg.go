@@ -59,7 +59,7 @@ func (g *Game) GCGStartChallenge(player *model.Player) {
 	game := GCG_MANAGER.CreateGame(30101, []*model.Player{player})
 
 	// GCG游戏简要信息通知
-	GAME.SendMsg(cmd.GCGGameBriefDataNotify, player.PlayerID, player.ClientSeq,
+	g.SendMsg(cmd.GCGGameBriefDataNotify, player.PlayerID, player.ClientSeq,
 		g.PacketGCGGameBriefDataNotify(player, proto.GCGGameBusinessType_GCG_GAME_GUIDE_GROUP, game))
 
 	// 玩家进入GCG界面
@@ -266,7 +266,7 @@ func (g *Game) GCGAskDuelReq(player *model.Player, payloadMsg pb.Message) {
 	// 	})
 	// }
 
-	GAME.SendMsg(cmd.GCGAskDuelRsp, player.PlayerID, player.ClientSeq, gcgAskDuelRsp)
+	g.SendMsg(cmd.GCGAskDuelRsp, player.PlayerID, player.ClientSeq, gcgAskDuelRsp)
 }
 
 // GCGInitFinishReq GCG初始化完成请求
@@ -287,7 +287,7 @@ func (g *Game) GCGInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 	// 更改操控者加载状态
 	gameController.loadState = ControllerLoadState_InitFinish
 
-	GAME.SendMsg(cmd.GCGInitFinishRsp, player.PlayerID, player.ClientSeq, &proto.GCGInitFinishRsp{})
+	g.SendMsg(cmd.GCGInitFinishRsp, player.PlayerID, player.ClientSeq, &proto.GCGInitFinishRsp{})
 
 	// 检查所有玩家是否已加载完毕
 	game.CheckAllInitFinish()
@@ -317,7 +317,7 @@ func (g *Game) GCGOperationReq(player *model.Player, payloadMsg pb.Message) {
 		// 操作者是否拥有该卡牌
 		cardInfo := gameController.GetCharCardByGuid(op.CardGuid)
 		if cardInfo == nil {
-			GAME.SendError(cmd.GCGOperationRsp, player, &proto.GCGOperationRsp{}, proto.Retcode_RET_GCG_SELECT_HAND_CARD_GUID_ERROR)
+			g.SendError(cmd.GCGOperationRsp, player, &proto.GCGOperationRsp{}, proto.Retcode_RET_GCG_SELECT_HAND_CARD_GUID_ERROR)
 			return
 		}
 		// 操控者选择角色牌
@@ -364,7 +364,7 @@ func (g *Game) GCGOperationReq(player *model.Player, payloadMsg pb.Message) {
 	gcgOperationRsp := &proto.GCGOperationRsp{
 		OpSeq: req.OpSeq,
 	}
-	GAME.SendMsg(cmd.GCGOperationRsp, player.PlayerID, player.ClientSeq, gcgOperationRsp)
+	g.SendMsg(cmd.GCGOperationRsp, player.PlayerID, player.ClientSeq, gcgOperationRsp)
 }
 
 // PacketGCGSkillPreviewNotify GCG游戏技能预览通知
@@ -470,7 +470,7 @@ func (g *Game) SendGCGMessagePackNotify(controller *GCGController, serverSeq uin
 	// 根据操控者的类型发送消息包
 	switch controller.controllerType {
 	case ControllerType_Player:
-		GAME.SendMsg(cmd.GCGMessagePackNotify, controller.player.PlayerID, controller.player.ClientSeq, gcgMessagePackNotify)
+		g.SendMsg(cmd.GCGMessagePackNotify, controller.player.PlayerID, controller.player.ClientSeq, gcgMessagePackNotify)
 	case ControllerType_AI:
 		controller.ai.ReceiveGCGMessagePackNotify(gcgMessagePackNotify)
 	default:

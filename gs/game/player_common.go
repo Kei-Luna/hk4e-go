@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"strings"
 	"time"
 
 	"hk4e/common/constant"
@@ -136,7 +137,7 @@ func (g *Game) WorldPlayerRTTNotify(world *World) {
 		playerRTTInfo := &proto.PlayerRTTInfo{Uid: worldPlayer.PlayerID, Rtt: worldPlayer.ClientRTT}
 		worldPlayerRTTNotify.PlayerRttList = append(worldPlayerRTTNotify.PlayerRttList, playerRTTInfo)
 	}
-	GAME.SendToWorldA(world, cmd.WorldPlayerRTTNotify, 0, worldPlayerRTTNotify)
+	g.SendToWorldA(world, cmd.WorldPlayerRTTNotify, 0, worldPlayerRTTNotify)
 }
 
 // WorldPlayerLocationNotify 多人世界其他玩家的坐标位置广播
@@ -163,7 +164,7 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 		}
 		worldPlayerLocationNotify.PlayerWorldLocList = append(worldPlayerLocationNotify.PlayerWorldLocList, playerWorldLocationInfo)
 	}
-	GAME.SendToWorldA(world, cmd.WorldPlayerLocationNotify, 0, worldPlayerLocationNotify)
+	g.SendToWorldA(world, cmd.WorldPlayerLocationNotify, 0, worldPlayerLocationNotify)
 }
 
 func (g *Game) ScenePlayerLocationNotify(world *World) {
@@ -219,7 +220,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 				}
 			}
 		}
-		GAME.SendToSceneA(scene, cmd.ScenePlayerLocationNotify, 0, scenePlayerLocationNotify)
+		g.SendToSceneA(scene, cmd.ScenePlayerLocationNotify, 0, scenePlayerLocationNotify)
 	}
 }
 
@@ -230,7 +231,7 @@ func (g *Game) SceneTimeNotify(world *World) {
 				SceneId:   player.SceneId,
 				SceneTime: uint64(scene.GetSceneTime()),
 			}
-			GAME.SendMsg(cmd.SceneTimeNotify, player.PlayerID, 0, sceneTimeNotify)
+			g.SendMsg(cmd.SceneTimeNotify, player.PlayerID, 0, sceneTimeNotify)
 		}
 	}
 }
@@ -242,6 +243,22 @@ func (g *Game) PlayerTimeNotify(world *World) {
 			PlayerTime: uint64(player.TotalOnlineTime),
 			ServerTime: uint64(time.Now().UnixMilli()),
 		}
-		GAME.SendMsg(cmd.PlayerTimeNotify, player.PlayerID, 0, playerTimeNotify)
+		g.SendMsg(cmd.PlayerTimeNotify, player.PlayerID, 0, playerTimeNotify)
 	}
+}
+
+func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.GmTalkReq)
+	logger.Info("GmTalkReq: %v", req.Msg)
+	commandText := strings.TrimSpace(req.Msg)
+	beginIndex := strings.Index(commandText, "(")
+	endIndex := strings.Index(commandText, ")")
+	if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
+		return
+	}
+	funcName := commandText[:beginIndex]
+	paramList := strings.Split(commandText[beginIndex:endIndex+1], ",")
+	COMMAND_MANAGER.HandleCommand(&CommandMessage{FuncName: funcName, ParamList: paramList})
+	g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
 }
