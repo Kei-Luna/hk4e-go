@@ -202,6 +202,8 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 			GAME.ServerChatMsgNotify(serverMsg.ChatMsgInfo)
 		case mq.ServerAddFriendNotify:
 			GAME.ServerAddFriendNotify(serverMsg.AddFriendInfo)
+		case mq.ServerStopNotify:
+			go GAME.Close()
 		}
 	}
 }

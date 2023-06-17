@@ -23,7 +23,15 @@ service Discovery {
     // 获取主游戏服务器的appid
     rpc GetMainGameServerAppId (NullMsg) returns (GetMainGameServerAppIdRsp) {}
     // 获取全服玩家GS在线列表
-    rpc GetGlobalGsOnlineMap (NullMsg) returns (GetGlobalGsOnlineMapRsp) {}
+    rpc GetGlobalGsOnlineMap (NullMsg) returns (GlobalGsOnlineMap) {}
+    // 获取停服维护信息
+    rpc GetStopServerInfo (GetStopServerInfoReq) returns (StopServerInfo) {}
+    // 修改停服维护信息
+    rpc SetStopServerInfo (StopServerInfo) returns (NullMsg) {}
+    // 获取停服维护白名单
+    rpc GetWhiteList (NullMsg) returns (GetWhiteListRsp) {}
+    // 修改停服维护白名单
+    rpc SetWhiteList (SetWhiteListReq) returns (NullMsg) {}
 }
 
 message NullMsg {
@@ -88,6 +96,25 @@ message GateServerInfoList {
     repeated GateServerInfo gate_server_info_list = 1;
 }
 
-message GetGlobalGsOnlineMapRsp {
-    map<uint32, string> GlobalGsOnlineMap = 1;
+message GlobalGsOnlineMap {
+    map<uint32, string> online_map = 1;
+}
+
+message GetStopServerInfoReq {
+    string client_ip_addr = 1;
+}
+
+message StopServerInfo {
+    bool stop_server = 1;
+    uint32 start_time = 2;
+    uint32 end_time = 3;
+}
+
+message GetWhiteListRsp {
+    repeated string ip_addr_list = 1;
+}
+
+message SetWhiteListReq {
+    bool is_add = 1;
+    string ip_addr = 2;
 }

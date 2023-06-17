@@ -233,13 +233,12 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 
 // HandleCommand 处理命令
 // 主协程接收到命令消息后执行
-func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
+func (c *CommandManager) HandleCommand(cmd *CommandMessage) bool {
 	// 系统GM 直接执行GM函数
 	if cmd.FuncName != "" {
 		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", cmd.FuncName, cmd.ParamList)
 		// 反射调用command_gm.go中的函数并反射解析传入参数类型
-		c.CallGMCmd(cmd.FuncName, cmd.ParamList)
-		return
+		return c.CallGMCmd(cmd.FuncName, cmd.ParamList)
 	}
 
 	executor := cmd.Executor
@@ -251,7 +250,7 @@ func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
 	// 分割出来啥也没有可能是个空的字符串
 	// 此时将会返回的命令名和命令参数都为空
 	if len(cmdSplit) == 0 {
-		return
+		return false
 	}
 
 	// 命令参数 初始化
@@ -270,7 +269,7 @@ func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
 		// 分割出来的参数只有一个那肯定不是键值对
 		if len(cmdArg) < 2 {
 			c.SendMessage(executor, "格式错误，用法: %v --[参数名] [参数]。", cmd.Name)
-			return
+			return false
 		}
 
 		argKey := cmdArg[0]   // 参数的键
@@ -282,6 +281,7 @@ func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
 
 	// 执行命令
 	c.ExecCommand(cmd)
+	return true
 }
 
 // GetFriendList 获取包含系统的玩家好友列表

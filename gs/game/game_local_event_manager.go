@@ -157,6 +157,7 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 		logger.Info("run save user copy cost time: %v ns, save user count: %v", costTime, saveCount)
 		if localEvent.EventId == ExitRunUserCopyAndSave {
 			// 在此阻塞掉主协程 不再进行任何消息和任务的处理
+			logger.Warn("game main loop block")
 			select {}
 		}
 	case UserOfflineSaveToDbFinish:

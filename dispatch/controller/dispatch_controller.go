@@ -13,7 +13,6 @@ import (
 
 	"hk4e/common/config"
 	"hk4e/common/mq"
-	"hk4e/common/region"
 	httpapi "hk4e/dispatch/api"
 	"hk4e/node/api"
 	"hk4e/pkg/endec"
@@ -25,6 +24,115 @@ import (
 	"github.com/gin-gonic/gin"
 	pb "google.golang.org/protobuf/proto"
 )
+
+// RegionCustomConfig 区服相关的配置 避免在http中使用Json格式
+type RegionCustomConfig struct {
+	CloseAntiDebug   bool `json:"close_antidebug"`  // 默认打开反调开关 默认false
+	ForceKill        bool `json:"force_kill"`       // 默认false
+	AntiDebugPc      bool `json:"antidebug_pc"`     // pc默认不开启反调 默认false
+	AntiDebugIos     bool `json:"antidubug_ios"`    // ios默认不开启反调 默认false
+	AntiDebugAndroid bool `json:"antidubug_androd"` // android默认不开启反调 默认false
+}
+
+// ClientCustomConfig 客户端版本定义的配置 客户端版本号对应的配置 需要兼容老的json格式
+type ClientCustomConfig struct {
+	Visitor        bool              `json:"visitor"`        // 游客功能
+	SdkEnv         string            `json:"sdkenv"`         // sdk环境类型
+	DebugMenu      bool              `json:"debugmenu"`      // debug菜单
+	DebugLogSwitch []int32           `json:"debuglogswitch"` // 打开的log类型
+	DebugLog       bool              `json:"debuglog"`       // log总开关
+	DeviceList     map[string]string `json:"devicelist"`
+	LoadJsonData   bool              `json:"loadjsondata"`  // 用json读取InLevel数据
+	ShowException  bool              `json:"showexception"` // 是否显示异常提示框 默认为true
+	CheckDevice    bool              `json:"checkdevice"`
+	LoadPatch      bool              `json:"loadPatch"`
+	RegionConfig   string            `json:"regionConfig"`
+	DownloadMode   int32             `json:"downloadMode"`
+}
+
+func GetRegionList(ec2b *random.Ec2b) *proto.QueryRegionListHttpRsp {
+	regionList := new(proto.QueryRegionListHttpRsp)
+	regionList.Retcode = 0
+	serverList := make([]*proto.RegionSimpleInfo, 0)
+	server := &proto.RegionSimpleInfo{
+		Name:        "os_usa",
+		Title:       "America",
+		Type:        "DEV_PUBLIC",
+		DispatchUrl: config.GetConfig().Hk4e.DispatchUrl,
+	}
+	serverList = append(serverList, server)
+	regionList.RegionList = serverList
+	dispatchEc2bData := ec2b.Bytes()
+	regionList.ClientSecretKey = dispatchEc2bData // 客户端使用密钥
+	dispatchXorKey := ec2b.XorKey()
+	clientCustomConfig, _ := json.Marshal(&ClientCustomConfig{
+		SdkEnv:         "2",
+		CheckDevice:    false,
+		LoadPatch:      false,
+		ShowException:  true,
+		RegionConfig:   "pm|fk|add",
+		DownloadMode:   0,
+		DebugMenu:      true,
+		DebugLogSwitch: []int32{0},
+		DebugLog:       true,
+	})
+	endec.Xor(clientCustomConfig, dispatchXorKey)
+	regionList.ClientCustomConfigEncrypted = clientCustomConfig // 加密后的客户端版本定义的配置
+	regionList.EnableLoginPc = true
+	return regionList
+}
+
+func GetRegionCurr(ec2b *random.Ec2b, gateServerAddr *api.GateServerAddr, stopServerInfo *api.StopServerInfo) *proto.QueryCurrRegionHttpRsp {
+	regionCurr := new(proto.QueryCurrRegionHttpRsp)
+	// region_info retcode == 0 || RET_STOP_SERVER
+	// force_udpate retcode == RET_CLIENT_FORCE_UPDATE
+	// stop_server retcode == RET_STOP_SERVER
+	if !stopServerInfo.StopServer {
+		regionCurr.Retcode = 0 // 错误码
+	} else {
+		regionCurr.Retcode = int32(proto.Retcode_RET_STOP_SERVER)
+		regionCurr.Detail = &proto.QueryCurrRegionHttpRsp_StopServer{
+			StopServer: &proto.StopServerInfo{
+				StopBeginTime: stopServerInfo.StartTime,
+				StopEndTime:   stopServerInfo.EndTime,
+				Url:           "https://hk4e.flswld.com",
+				ContentMsg:    "服务器维护中",
+			},
+		}
+	}
+	regionCurr.Msg = "" // 错误信息
+	dispatchEc2bData := ec2b.Bytes()
+	regionCurr.RegionInfo = &proto.RegionInfo{
+		GateserverIp:   gateServerAddr.KcpAddr,
+		GateserverPort: gateServerAddr.KcpPort,
+		SecretKey:      dispatchEc2bData, // 第一条协议加密密钥
+	}
+	regionCurr.ClientSecretKey = dispatchEc2bData // 客户端使用密钥
+	dispatchXorKey := ec2b.XorKey()
+	regionCustomConfig, _ := json.Marshal(&RegionCustomConfig{
+		CloseAntiDebug:   true,
+		ForceKill:        false,
+		AntiDebugPc:      false,
+		AntiDebugIos:     false,
+		AntiDebugAndroid: false,
+	})
+	endec.Xor(regionCustomConfig, dispatchXorKey)
+	regionCurr.RegionCustomConfigEncrypted = regionCustomConfig // 加密后的区服定义的配置
+	clientCustomConfig, _ := json.Marshal(&ClientCustomConfig{
+		SdkEnv:         "2",
+		CheckDevice:    false,
+		LoadPatch:      false,
+		ShowException:  true,
+		RegionConfig:   "pm|fk|add",
+		DownloadMode:   0,
+		DebugMenu:      true,
+		DebugLogSwitch: []int32{0},
+		DebugLog:       true,
+	})
+	endec.Xor(clientCustomConfig, dispatchXorKey)
+	regionCurr.ClientRegionCustomConfigEncrypted = clientCustomConfig // 加密后的客户端区服定义的配置
+	return regionCurr
+}
 
 func (c *Controller) querySecurityFile(context *gin.Context) {
 	// 很早以前2.6.0版本的时候抓包为了完美还原写的 不清楚有没有副作用暂时不要了
@@ -42,7 +150,7 @@ func (c *Controller) queryRegionList(context *gin.Context) {
 	context.Header("Content-type", "text/html; charset=UTF-8")
 	var regionListBase64 = ""
 	if !config.GetConfig().Hk4e.ForwardModeEnable {
-		regionList := region.GetRegionList(c.ec2b)
+		regionList := GetRegionList(c.ec2b)
 		regionListData, err := pb.Marshal(regionList)
 		if err != nil {
 			logger.Error("pb marshal QueryRegionListHttpRsp error: %v", err)
@@ -141,7 +249,7 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 		rspError()
 		return
 	}
-	addr, err := c.discovery.GetGateServerAddr(context.Request.Context(), &api.GetGateServerAddrReq{
+	gateServerAddr, err := c.discovery.GetGateServerAddr(context.Request.Context(), &api.GetGateServerAddrReq{
 		Version: versionStr,
 	})
 	if err != nil {
@@ -151,7 +259,14 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 	}
 	var regionCurr *proto.QueryCurrRegionHttpRsp = nil
 	if !config.GetConfig().Hk4e.ForwardModeEnable {
-		regionCurr = region.GetRegionCurr(addr.KcpAddr, int32(addr.KcpPort), c.ec2b)
+		clientIp := context.ClientIP()
+		stopServerInfo, err := c.discovery.GetStopServerInfo(context.Request.Context(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
+		if err != nil {
+			logger.Error("get stop server info error: %v", err)
+			rspError()
+			return
+		}
+		regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, stopServerInfo)
 	} else {
 		url := context.Request.RequestURI
 		param := url[strings.Index(url, "?"):]
@@ -227,8 +342,8 @@ func (c *Controller) queryCurRegion(context *gin.Context) {
 		})
 		regionCurr = queryCurrRegionHttpRsp
 		regionCurr.ClientSecretKey = c.ec2b.Bytes()
-		regionCurr.RegionInfo.GateserverIp = addr.KcpAddr
-		regionCurr.RegionInfo.GateserverPort = addr.KcpPort
+		regionCurr.RegionInfo.GateserverIp = gateServerAddr.KcpAddr
+		regionCurr.RegionInfo.GateserverPort = gateServerAddr.KcpPort
 		endec.Xor(regionCurr.RegionCustomConfigEncrypted, ec2b.XorKey())
 		logger.Info("RegionCustomConfigEncrypted: %v", string(regionCurr.RegionCustomConfigEncrypted))
 		endec.Xor(regionCurr.RegionCustomConfigEncrypted, c.ec2b.XorKey())

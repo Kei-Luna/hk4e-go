@@ -15,11 +15,13 @@ import (
 type Controller struct {
 	gmClientMap     map[uint32]*rpc.GMClient
 	gmClientMapLock sync.RWMutex
+	discoveryClient *rpc.DiscoveryClient
 }
 
-func NewController() (r *Controller) {
+func NewController(discoveryClient *rpc.DiscoveryClient) (r *Controller) {
 	r = new(Controller)
 	r.gmClientMap = make(map[uint32]*rpc.GMClient)
+	r.discoveryClient = discoveryClient
 	go r.registerRouter()
 	return r
 }
@@ -40,6 +42,12 @@ func (c *Controller) authorize() gin.HandlerFunc {
 	}
 }
 
+type CommonRsp struct {
+	Code int32  `json:"code"`
+	Msg  string `json:"msg"`
+	Data any    `json:"data"`
+}
+
 func (c *Controller) registerRouter() {
 	if config.GetConfig().Logger.Level == "DEBUG" {
 		gin.SetMode(gin.DebugMode)
@@ -49,6 +57,11 @@ func (c *Controller) registerRouter() {
 	engine := gin.Default()
 	engine.Use(c.authorize())
 	engine.POST("/gm/cmd", c.gmCmd)
+	engine.GET("/server/stop/state", c.serverStopState)
+	engine.POST("/server/stop/change", c.serverStopChange)
+	engine.GET("/server/white/list", c.serverWhiteList)
+	engine.POST("/server/white/add", c.serverWhiteAdd)
+	engine.POST("/server/white/del", c.serverWhiteDel)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
 	err := engine.Run(addr)

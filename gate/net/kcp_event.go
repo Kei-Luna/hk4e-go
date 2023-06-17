@@ -3,15 +3,12 @@ package net
 import (
 	"reflect"
 
-	"hk4e/gate/kcp"
 	"hk4e/pkg/logger"
 )
 
 const (
 	KcpConnForceClose = iota
 	KcpAllConnForceClose
-	KcpGateOpenState
-	KcpConnRelogin
 	KcpConnCloseNotify
 	KcpConnEstNotify
 	KcpConnAddrChangeNotify
@@ -49,19 +46,6 @@ func (k *KcpConnectManager) eventHandle() {
 			// 强制关闭所有连接
 			k.closeAllKcpConn()
 			logger.Info("all conn has been force close")
-		case KcpGateOpenState:
-			// 改变网关开放状态
-			openState, ok := event.EventMessage.(bool)
-			if !ok {
-				logger.Error("event KcpGateOpenState msg type error")
-				continue
-			}
-			k.openState = openState
-			if openState == false {
-				k.closeAllKcpConn()
-			}
-		case KcpConnRelogin:
-			k.forceCloseKcpConn(event.ConvId, kcp.EnetServerRelogin)
 		}
 	}
 }

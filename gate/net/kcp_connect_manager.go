@@ -35,7 +35,6 @@ var CLIENT_CONN_NUM int32 = 0 // 当前客户端连接数
 
 type KcpConnectManager struct {
 	discovery *rpc.DiscoveryClient // node服务器客户端
-	openState bool                 // 网关开放状态
 	// 会话
 	sessionConvIdMap      map[uint64]*Session
 	sessionUserIdMap      map[uint32]*Session
@@ -62,7 +61,6 @@ type KcpConnectManager struct {
 func NewKcpConnectManager(messageQueue *mq.MessageQueue, discovery *rpc.DiscoveryClient) (r *KcpConnectManager) {
 	r = new(KcpConnectManager)
 	r.discovery = discovery
-	r.openState = true
 	r.sessionConvIdMap = make(map[uint64]*Session)
 	r.sessionUserIdMap = make(map[uint32]*Session)
 	r.createSessionChan = make(chan *Session, 1000)
@@ -82,7 +80,7 @@ func NewKcpConnectManager(messageQueue *mq.MessageQueue, discovery *rpc.Discover
 
 func (k *KcpConnectManager) run() {
 	// 读取密钥相关文件
-	k.signRsaKey, k.encRsaKeyMap, _ = region.LoadRsaKey()
+	k.signRsaKey, k.encRsaKeyMap, _ = region.LoadRegionRsaKey()
 	// key
 	rsp, err := k.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
 	if err != nil {
@@ -145,11 +143,6 @@ func (k *KcpConnectManager) acceptHandle(listener *kcp.Listener) {
 			return
 		}
 		convId := conn.GetConv()
-		if k.openState == false {
-			logger.Error("gate not open, convId: %v", convId)
-			_ = conn.Close()
-			continue
-		}
 		if config.GetConfig().Hk4e.ForwardModeEnable {
 			clientConnNum := atomic.LoadInt32(&CLIENT_CONN_NUM)
 			if clientConnNum != 0 {
@@ -524,7 +517,7 @@ func (k *KcpConnectManager) syncGlobalGsOnlineMap() {
 		return
 	}
 	copyMap := make(map[uint32]string)
-	for k, v := range rsp.GlobalGsOnlineMap {
+	for k, v := range rsp.OnlineMap {
 		copyMap[k] = v
 	}
 	copyMapLen := len(copyMap)

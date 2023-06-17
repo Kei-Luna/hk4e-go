@@ -37,7 +37,7 @@ func GateLogin(dispatchInfo *DispatchInfo, accountInfo *AccountInfo, keyId strin
 	}
 	clientSeed := clientSeedBuf.Bytes()
 	logger.Debug("clientSeed: %v, clientSeedUint64: %v", clientSeed, clientSeedUint64)
-	signRsaKey, encRsaKeyMap, _ := region.LoadRsaKey()
+	signRsaKey, encRsaKeyMap, _ := region.LoadRegionRsaKey()
 	if signRsaKey == nil || encRsaKeyMap == nil {
 		return nil, errors.New("load key error"), nil
 	}

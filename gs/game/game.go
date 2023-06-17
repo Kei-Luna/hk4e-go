@@ -52,6 +52,7 @@ type Game struct {
 	gsAppid     string
 	mainGsAppid string
 	ai          *model.Player // 本服的Ai玩家对象
+	isStop      bool
 }
 
 func NewGameCore(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
@@ -84,6 +85,7 @@ func NewGameCore(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsApp
 		sign = BigWorldAiSign
 	}
 	r.ai = r.CreateRobot(uid, name, sign)
+	r.isStop = false
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
 	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerID, 3)
@@ -247,18 +249,18 @@ func (g *Game) gameMainLoop() {
 var EXIT_SAVE_FIN_CHAN chan bool
 
 func (g *Game) Close() {
-	// 保存玩家数据
-	onlinePlayerMap := USER_MANAGER.GetAllOnlineUserList()
-	saveUserIdList := make([]uint32, 0, len(onlinePlayerMap))
-	for userId := range onlinePlayerMap {
-		saveUserIdList = append(saveUserIdList, userId)
+	if g.isStop {
+		return
 	}
+	g.isStop = true
+	logger.Warn("stop game server begin")
+	// 保存玩家数据
 	EXIT_SAVE_FIN_CHAN = make(chan bool)
 	LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 		EventId: ExitRunUserCopyAndSave,
-		Msg:     saveUserIdList,
 	}
 	<-EXIT_SAVE_FIN_CHAN
+	logger.Warn("stop game server save player finish")
 	// 告诉网关下线玩家并全服广播玩家离线
 	userList := USER_MANAGER.GetAllOnlineUserList()
 	for _, player := range userList {
@@ -272,6 +274,7 @@ func (g *Game) Close() {
 			},
 		})
 	}
+	logger.Warn("stop game server finish")
 }
 
 // SendMsgToGate 发送消息给客户端 指定网关

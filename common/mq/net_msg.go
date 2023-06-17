@@ -60,6 +60,7 @@ const (
 	ServerForwardModeClientCloseNotify        // 转发模式客户端断开连接通知
 	ServerForwardModeServerCloseNotify        // 转发模式服务器断开连接通知
 	ServerForwardDispatchInfoNotify           // 转发模式区服信息通知
+	ServerStopNotify                          // 停服通知
 )
 
 type ServerMsg struct {

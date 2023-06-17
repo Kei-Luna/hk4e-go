@@ -67,7 +67,7 @@ func GetDispatchInfo(regionListUrl string, regionListParam string, curRegionUrl 
 	regionInfoLength := len(encryptedRegionInfo)
 	numChunks := int(math.Ceil(float64(regionInfoLength) / float64(chunkSize)))
 	regionCurrData := make([]byte, 0)
-	_, encRsaKeyMap, _ := region.LoadRsaKey()
+	_, encRsaKeyMap, _ := region.LoadRegionRsaKey()
 	encPubPrivKey, exist := encRsaKeyMap[keyId]
 	if !exist {
 		logger.Error("can not found key id: %v", keyId)

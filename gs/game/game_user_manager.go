@@ -229,7 +229,7 @@ func (u *UserManager) syncRemotePlayerMap() {
 		return
 	}
 	copyMap := make(map[uint32]string)
-	for k, v := range rsp.GlobalGsOnlineMap {
+	for k, v := range rsp.OnlineMap {
 		player, exist := u.playerMap[k]
 		if exist && player.Online {
 			continue

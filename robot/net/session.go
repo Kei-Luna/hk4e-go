@@ -42,8 +42,8 @@ type Session struct {
 	Uid                    uint32
 	IsClose                bool
 	PktList                []*Packet
-	PktListLock            sync.Mutex
 	PktCapWsConn           *websocket.Conn
+	PktLock                sync.Mutex
 }
 
 func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, error) {
@@ -149,16 +149,16 @@ func (s *Session) recvHandle() {
 						HeadMsg:    string(headMsg),
 						PayloadMsg: string(payloadMsg),
 					}
+					packetData, _ := json.Marshal(packet)
+					s.PktLock.Lock()
+					s.PktList = append(s.PktList, packet)
 					if s.PktCapWsConn != nil {
-						packetData, _ := json.Marshal(packet)
 						err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
 						if err != nil {
 							s.PktCapWsConn = nil
 						}
 					}
-					s.PktListLock.Lock()
-					s.PktList = append(s.PktList, packet)
-					s.PktListLock.Unlock()
+					s.PktLock.Unlock()
 				}
 			}
 		}
@@ -201,16 +201,16 @@ func (s *Session) sendHandle() {
 				HeadMsg:    string(headMsg),
 				PayloadMsg: string(payloadMsg),
 			}
+			packetData, _ := json.Marshal(packet)
+			s.PktLock.Lock()
+			s.PktList = append(s.PktList, packet)
 			if s.PktCapWsConn != nil {
-				packetData, _ := json.Marshal(packet)
 				err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
 				if err != nil {
 					s.PktCapWsConn = nil
 				}
 			}
-			s.PktListLock.Lock()
-			s.PktList = append(s.PktList, packet)
-			s.PktListLock.Unlock()
+			s.PktLock.Unlock()
 		}
 	}
 }

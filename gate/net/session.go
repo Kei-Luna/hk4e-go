@@ -495,6 +495,18 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 		// 封号通知
 		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, tokenVerifyRsp.ForbidEndTime)
 	}
+	addr := session.conn.RemoteAddr().String()
+	addrSplit := strings.Split(addr, ":")
+	clientIp := addrSplit[0]
+	stopServerInfo, err := k.discovery.GetStopServerInfo(context.TODO(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
+	if err != nil {
+		logger.Error("get stop server info error: %v", err)
+		k.loginFailClose(session)
+		return nil
+	}
+	if stopServerInfo.StopServer {
+		return k.loginFailRsp(uid, proto.Retcode_RET_STOP_SERVER, false, 0)
+	}
 	clientConnNum := atomic.LoadInt32(&CLIENT_CONN_NUM)
 	if clientConnNum > MaxClientConnNumLimit {
 		logger.Error("gate conn num limit, uid: %v", uid)
@@ -528,8 +540,9 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 		if oldSession != nil {
 			// 本地顶号
 			k.kcpEventInput <- &KcpEvent{
-				ConvId:  oldSession.conn.GetConv(),
-				EventId: KcpConnRelogin,
+				ConvId:       oldSession.conn.GetConv(),
+				EventId:      KcpConnForceClose,
+				EventMessage: uint32(kcp.EnetServerRelogin),
 			}
 		} else {
 			// 远程顶号
@@ -587,7 +600,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 	logger.Debug("session anticheat appid: %v, uid: %v", session.anticheatServerAppId, uid)
 	logger.Debug("session pathfinding appid: %v, uid: %v", session.pathfindingServerAppId, uid)
 	// 构造响应
-	rsp := k.buildGateLoginRsp(session, uid, req.AccountUid, req.AccountToken)
+	rsp := k.buildGateLoginRsp(uid, req.AccountUid, req.AccountToken, clientIp)
 	// 密钥交换
 	session.keyId = req.KeyId
 	session.clientRandKey = req.ClientRandKey
@@ -599,9 +612,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 	return rsp
 }
 
-func (k *KcpConnectManager) buildGateLoginRsp(session *Session, uid uint32, accountUid string, token string) *proto.GetPlayerTokenRsp {
-	addr := session.conn.RemoteAddr().String()
-	addrSplit := strings.Split(addr, ":")
+func (k *KcpConnectManager) buildGateLoginRsp(uid uint32, accountUid string, token string, clientIp string) *proto.GetPlayerTokenRsp {
 	rsp := &proto.GetPlayerTokenRsp{
 		Uid:                    uid,
 		AccountUid:             accountUid,
@@ -614,7 +625,7 @@ func (k *KcpConnectManager) buildGateLoginRsp(session *Session, uid uint32, acco
 		IsProficientPlayer:     false,
 		CountryCode:            "US",
 		Birthday:               "2000-01-01",
-		ClientIpStr:            addrSplit[0],
+		ClientIpStr:            clientIp,
 		SecurityCmdBuffer:      random.GetRandomByte(32),
 		ClientVersionRandomKey: fmt.Sprintf("%03x-%012x", random.GetRandomByte(3), random.GetRandomByte(12)),
 	}

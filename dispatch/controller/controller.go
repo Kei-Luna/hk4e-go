@@ -32,7 +32,7 @@ func NewController(dao *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *m
 	r = new(Controller)
 	r.dao = dao
 	r.discovery = discovery
-	r.signRsaKey, r.encRsaKeyMap, r.pwdRsaKey = region.LoadRsaKey()
+	r.signRsaKey, r.encRsaKeyMap, r.pwdRsaKey = region.LoadRegionRsaKey()
 	rsp, err := r.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get region ec2b error: %v", err)

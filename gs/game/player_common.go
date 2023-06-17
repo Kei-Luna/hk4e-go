@@ -250,7 +250,7 @@ func (g *Game) PlayerTimeNotify(world *World) {
 func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GmTalkReq)
 	logger.Info("GmTalkReq: %v", req.Msg)
-	commandText := strings.TrimSpace(req.Msg)
+	commandText := strings.ReplaceAll(req.Msg, " ", "")
 	beginIndex := strings.Index(commandText, "(")
 	endIndex := strings.Index(commandText, ")")
 	if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
@@ -258,7 +258,11 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	funcName := commandText[:beginIndex]
-	paramList := strings.Split(commandText[beginIndex:endIndex+1], ",")
-	COMMAND_MANAGER.HandleCommand(&CommandMessage{FuncName: funcName, ParamList: paramList})
-	g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
+	paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
+	ok := COMMAND_MANAGER.HandleCommand(&CommandMessage{FuncName: funcName, ParamList: paramList})
+	if ok {
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
+	} else {
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行失败", Msg: req.Msg})
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"hk4e/common/mq"
 	"hk4e/common/region"
 	"hk4e/node/api"
 	"hk4e/pkg/logger"
@@ -49,17 +50,26 @@ type ServerInstance struct {
 	loadCount         uint32
 }
 
+type StopServerInfo struct {
+	stopServer      bool
+	startTime       uint32
+	endTime         uint32
+	ipAddrWhiteList map[string]struct{}
+}
+
 type DiscoveryService struct {
 	regionEc2b            *random.Ec2b         // 全局区服密钥信息
 	serverInstanceMap     map[string]*sync.Map // 全部服务器实例集合 key:服务器类型 value:服务器实例集合 -> key:appid value:服务器实例
 	serverAppIdMap        *sync.Map            // 服务器appid集合 key:appid value:是否存在
 	globalGsOnlineMap     map[uint32]string
 	globalGsOnlineMapLock sync.RWMutex
+	stopServerInfo        *StopServerInfo
+	messageQueue          *mq.MessageQueue
 }
 
-func NewDiscoveryService() *DiscoveryService {
+func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
 	r := new(DiscoveryService)
-	r.regionEc2b = region.NewRegionEc2b()
+	r.regionEc2b = region.LoadRegionEc2b()
 	logger.Info("region ec2b create ok, seed: %v", r.regionEc2b.Seed())
 	r.serverInstanceMap = make(map[string]*sync.Map)
 	r.serverInstanceMap[api.GATE] = new(sync.Map)
@@ -70,8 +80,39 @@ func NewDiscoveryService() *DiscoveryService {
 	r.serverInstanceMap[api.DISPATCH] = new(sync.Map)
 	r.serverAppIdMap = new(sync.Map)
 	r.globalGsOnlineMap = make(map[uint32]string)
+	r.stopServerInfo = &StopServerInfo{
+		stopServer:      true,
+		startTime:       0,
+		endTime:         0,
+		ipAddrWhiteList: make(map[string]struct{}),
+	}
+	r.messageQueue = messageQueue
 	go r.removeDeadServer()
+	go r.broadcastReceiver()
 	return r
+}
+
+func (s *DiscoveryService) broadcastReceiver() {
+	for {
+		netMsg := <-s.messageQueue.GetNetMsg()
+		if netMsg.MsgType != mq.MsgTypeServer {
+			continue
+		}
+		if netMsg.EventId != mq.ServerUserOnlineStateChangeNotify {
+			continue
+		}
+		if netMsg.OriginServerType != api.GS {
+			continue
+		}
+		serverMsg := netMsg.ServerMsg
+		s.globalGsOnlineMapLock.Lock()
+		if serverMsg.IsOnline {
+			s.globalGsOnlineMap[serverMsg.UserId] = netMsg.OriginServerAppId
+		} else {
+			delete(s.globalGsOnlineMap, serverMsg.UserId)
+		}
+		s.globalGsOnlineMapLock.Unlock()
+	}
 }
 
 // RegisterServer 服务器启动注册获取appid
@@ -287,16 +328,63 @@ func (s *DiscoveryService) GetMainGameServerAppId(ctx context.Context, req *api.
 }
 
 // GetGlobalGsOnlineMap 获取全服玩家GS在线列表
-func (s *DiscoveryService) GetGlobalGsOnlineMap(ctx context.Context, req *api.NullMsg) (*api.GetGlobalGsOnlineMapRsp, error) {
+func (s *DiscoveryService) GetGlobalGsOnlineMap(ctx context.Context, req *api.NullMsg) (*api.GlobalGsOnlineMap, error) {
 	copyMap := make(map[uint32]string)
 	s.globalGsOnlineMapLock.RLock()
 	for k, v := range s.globalGsOnlineMap {
 		copyMap[k] = v
 	}
 	s.globalGsOnlineMapLock.RUnlock()
-	return &api.GetGlobalGsOnlineMapRsp{
-		GlobalGsOnlineMap: copyMap,
+	return &api.GlobalGsOnlineMap{
+		OnlineMap: copyMap,
 	}, nil
+}
+
+// GetStopServerInfo 获取停服维护信息
+func (s *DiscoveryService) GetStopServerInfo(ctx context.Context, req *api.GetStopServerInfoReq) (*api.StopServerInfo, error) {
+	stopServer := s.stopServerInfo.stopServer
+	_, exist := s.stopServerInfo.ipAddrWhiteList[req.ClientIpAddr]
+	if exist {
+		stopServer = false
+	}
+	return &api.StopServerInfo{
+		StopServer: stopServer,
+		StartTime:  s.stopServerInfo.startTime,
+		EndTime:    s.stopServerInfo.endTime,
+	}, nil
+}
+
+// SetStopServerInfo 修改停服维护信息
+func (s *DiscoveryService) SetStopServerInfo(ctx context.Context, req *api.StopServerInfo) (*api.NullMsg, error) {
+	if s.stopServerInfo.stopServer == false && req.StopServer == true {
+		s.messageQueue.SendToAll(&mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerStopNotify,
+		})
+	}
+	s.stopServerInfo.stopServer = req.StopServer
+	s.stopServerInfo.startTime = req.StartTime
+	s.stopServerInfo.endTime = req.EndTime
+	return &api.NullMsg{}, nil
+}
+
+// GetWhiteList 获取停服维护白名单
+func (s *DiscoveryService) GetWhiteList(ctx context.Context, req *api.NullMsg) (*api.GetWhiteListRsp, error) {
+	ipAddrList := make([]string, 0)
+	for ipAddr := range s.stopServerInfo.ipAddrWhiteList {
+		ipAddrList = append(ipAddrList, ipAddr)
+	}
+	return &api.GetWhiteListRsp{IpAddrList: ipAddrList}, nil
+}
+
+// SetWhiteList 修改停服维护白名单
+func (s *DiscoveryService) SetWhiteList(ctx context.Context, req *api.SetWhiteListReq) (*api.NullMsg, error) {
+	if req.IsAdd {
+		s.stopServerInfo.ipAddrWhiteList[req.IpAddr] = struct{}{}
+	} else {
+		delete(s.stopServerInfo.ipAddrWhiteList, req.IpAddr)
+	}
+	return &api.NullMsg{}, nil
 }
 
 func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerInstance {
@@ -341,14 +429,14 @@ func (s *DiscoveryService) getServerInstanceMapLen(instMap *sync.Map) int {
 
 // 定时移除掉线服务器
 func (s *DiscoveryService) removeDeadServer() {
-	ticker := time.NewTicker(time.Second * 60)
+	ticker := time.NewTicker(time.Second * 1)
 	for {
 		<-ticker.C
 		nowTime := time.Now().Unix()
 		for _, instMap := range s.serverInstanceMap {
 			instMap.Range(func(key, value any) bool {
 				serverInstance := value.(*ServerInstance)
-				if nowTime-serverInstance.lastAliveTime > 60 {
+				if nowTime-serverInstance.lastAliveTime > 30 {
 					logger.Warn("remove dead server, server type: %v, appid: %v, last alive time: %v",
 						serverInstance.serverType, serverInstance.appId, serverInstance.lastAliveTime)
 					instMap.Delete(key)

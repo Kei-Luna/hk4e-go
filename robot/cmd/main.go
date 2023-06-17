@@ -111,11 +111,17 @@ func main() {
 }
 
 func runPacketCaptureApi() {
-	gin.SetMode(gin.DebugMode)
+	if config.GetConfig().Logger.Level == "DEBUG" {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	engine := gin.Default()
-	engine.GET("/packet/capture/websocket", packetCaptureWebsocket)
-	engine.GET("/packet/capture/all", packetCaptureAll)
-	err := engine.Run(":9999")
+	engine.GET("/packet/capture/ws", packetCaptureWs)
+	engine.GET("/packet/capture/list", packetCaptureList)
+	port := config.GetConfig().HttpPort
+	addr := ":" + strconv.Itoa(int(port))
+	err := engine.Run(addr)
 	if err != nil {
 		logger.Error("gin run error: %v", err)
 		return
@@ -124,7 +130,7 @@ func runPacketCaptureApi() {
 
 var ForwardSession *net.Session = nil
 
-func packetCaptureWebsocket(ctx *gin.Context) {
+func packetCaptureWs(ctx *gin.Context) {
 	upgrader := websocket.Upgrader{
 		HandshakeTimeout: 10 * time.Second,
 		ReadBufferSize:   1024,
@@ -147,14 +153,14 @@ func packetCaptureWebsocket(ctx *gin.Context) {
 	ForwardSession.PktCapWsConn = wsConn
 }
 
-func packetCaptureAll(ctx *gin.Context) {
+func packetCaptureList(ctx *gin.Context) {
 	if ForwardSession == nil {
 		_, _ = ctx.Writer.WriteString("500")
 		return
 	}
-	ForwardSession.PktListLock.Lock()
+	ForwardSession.PktLock.Lock()
 	data, _ := json.Marshal(ForwardSession.PktList)
-	ForwardSession.PktListLock.Unlock()
+	ForwardSession.PktLock.Unlock()
 	_, _ = ctx.Writer.WriteString(string(data))
 }
 

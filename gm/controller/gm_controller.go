@@ -21,6 +21,7 @@ func (c *Controller) gmCmd(context *gin.Context) {
 	err := context.ShouldBindJSON(gmCmdReq)
 	if err != nil {
 		logger.Error("parse json error: %v", err)
+		context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 		return
 	}
 	logger.Info("GmCmdReq: %v", gmCmdReq)
@@ -32,6 +33,7 @@ func (c *Controller) gmCmd(context *gin.Context) {
 		gmClient, err = rpc.NewGMClient(gmCmdReq.GsId)
 		if err != nil {
 			logger.Error("new gm client error: %v", err)
+			context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 			return
 		}
 		c.gmClientMapLock.Lock()
@@ -43,7 +45,7 @@ func (c *Controller) gmCmd(context *gin.Context) {
 		ParamList: gmCmdReq.ParamList,
 	})
 	if err != nil {
-		context.JSON(http.StatusInternalServerError, err)
+		context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 		return
 	}
 	context.JSON(http.StatusOK, rep)
