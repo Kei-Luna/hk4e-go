@@ -256,6 +256,14 @@ func (t *TickManager) onTick200MilliSecond(now int64) {
 }
 
 func (t *TickManager) onTick100MilliSecond(now int64) {
+	for _, world := range WORLD_MANAGER.GetAllWorld() {
+		for _, player := range world.GetAllPlayer() {
+			if player.SceneLoadState == model.SceneEnterDone {
+				// 耐力回复计数器
+				GAME.RestoreCountStaminaHandler(player)
+			}
+		}
+	}
 }
 
 func (t *TickManager) onTick50MilliSecond(now int64) {

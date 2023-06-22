@@ -157,6 +157,49 @@ func (g *Game) SkillStartStamina(player *model.Player, casterId uint32, skillId 
 	staminaInfo.LastSkillTime = time.Now().UnixMilli()
 }
 
+// RestoreCountStaminaHandler 处理耐力回复计数器
+func (g *Game) RestoreCountStaminaHandler(player *model.Player) {
+	// 玩家暂停状态不更新耐力
+	if player.Pause {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	// 处理载具
+	// 遍历玩家创建的载具实体
+	for _, entityId := range player.VehicleInfo.CreateEntityIdMap {
+		// 获取载具实体
+		entity := scene.GetEntity(entityId)
+		if entity == nil {
+			continue
+		}
+		// 确保实体类型是否为载具
+		gadgetEntity := entity.GetGadgetEntity()
+		if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
+			continue
+		}
+		// 获取载具配置表
+		vehicleDataConfig := gdconf.GetVehicleDataById(int32(gadgetEntity.GetGadgetVehicleEntity().GetVehicleId()))
+		if vehicleDataConfig == nil {
+			logger.Error("vehicle config error, vehicleId: %v", gadgetEntity.GetGadgetVehicleEntity().GetVehicleId())
+			continue
+		}
+		restoreDelay := gadgetEntity.GetGadgetVehicleEntity().GetRestoreDelay()
+		// 做个限制不然一直加就panic了
+		if restoreDelay < uint8(vehicleDataConfig.ConfigGadgetVehicle.Vehicle.Stamina.StaminaRecoverWaitTime*10) {
+			gadgetEntity.GetGadgetVehicleEntity().SetRestoreDelay(restoreDelay + 1)
+		}
+	}
+	// 处理玩家
+	// 做个限制不然一直加就panic了
+	if player.StaminaInfo.RestoreDelay < constant.STAMINA_PLAYER_RESTORE_DELAY {
+		player.StaminaInfo.RestoreDelay++
+	}
+}
+
 // VehicleRestoreStaminaHandler 处理载具持续回复耐力
 func (g *Game) VehicleRestoreStaminaHandler(player *model.Player) {
 	// 玩家暂停状态不更新耐力
@@ -241,27 +284,31 @@ func (g *Game) UpdateVehicleStamina(player *model.Player, vehicleEntity *Entity,
 		return
 	}
 	staminaInfo := player.StaminaInfo
-	// 添加的耐力大于0为恢复
-	if staminaCost > 0 {
-		// 耐力延迟2s(10 ticks)恢复 动作状态为加速将立刻恢复耐力
-		if staminaInfo.VehicleRestoreDelay < 10 && staminaInfo.State != proto.MotionState_MOTION_SKIFF_POWERED_DASH {
-			// logger.Debug("stamina delay add, restoreDelay: %v", staminaInfo.RestoreDelay)
-			staminaInfo.VehicleRestoreDelay++
-			return // 不恢复耐力
-		}
-	} else {
-		// 消耗耐力重新计算恢复需要延迟的tick
-		// logger.Debug("stamina delay reset, restoreDelay: %v", player.StaminaInfo.VehicleRestoreDelay)
-		staminaInfo.VehicleRestoreDelay = 0
-	}
 	// 确保载具实体存在
 	if vehicleEntity == nil {
 		return
 	}
+	gadgetEntity := vehicleEntity.GetGadgetEntity()
+	// 获取载具配置表
+	vehicleDataConfig := gdconf.GetVehicleDataById(int32(gadgetEntity.GetGadgetVehicleEntity().GetVehicleId()))
+	if vehicleDataConfig == nil {
+		logger.Error("vehicle config error, vehicleId: %v", gadgetEntity.GetGadgetVehicleEntity().GetVehicleId())
+		return
+	}
+	// 添加的耐力大于0为恢复
+	if staminaCost > 0 {
+		// 耐力延迟1.5s(15 ticks)恢复 动作状态为加速将立刻恢复耐力
+		restoreDelay := gadgetEntity.GetGadgetVehicleEntity().GetRestoreDelay()
+		if restoreDelay < uint8(vehicleDataConfig.ConfigGadgetVehicle.Vehicle.Stamina.StaminaRecoverWaitTime*10) && staminaInfo.State != proto.MotionState_MOTION_SKIFF_POWERED_DASH {
+			return // 不恢复耐力
+		}
+	} else {
+		// 消耗耐力重新计算恢复需要延迟的tick
+		gadgetEntity.GetGadgetVehicleEntity().SetRestoreDelay(0)
+	}
 	// 因为载具的耐力需要换算
 	// 这里先*100后面要用的时候再换算 为了确保精度
 	// 最大耐力值
-	gadgetEntity := vehicleEntity.GetGadgetEntity()
 	maxStamina := int32(gadgetEntity.GetGadgetVehicleEntity().GetMaxStamina() * 100)
 	// 现行耐力值
 	curStamina := int32(gadgetEntity.GetGadgetVehicleEntity().GetCurStamina() * 100)
@@ -284,16 +331,13 @@ func (g *Game) UpdatePlayerStamina(player *model.Player, staminaCost int32) {
 	staminaInfo := player.StaminaInfo
 	// 添加的耐力大于0为恢复
 	if staminaCost > 0 {
-		// 耐力延迟2s(10 ticks)恢复 动作状态为加速将立刻恢复耐力
-		if staminaInfo.PlayerRestoreDelay < 10 && staminaInfo.State != proto.MotionState_MOTION_POWERED_FLY {
-			// logger.Debug("stamina delay add, restoreDelay: %v", staminaInfo.RestoreDelay)
-			staminaInfo.PlayerRestoreDelay++
+		// 耐力延迟1.5s(15 ticks)恢复 动作状态为加速将立刻恢复耐力
+		if staminaInfo.RestoreDelay < constant.STAMINA_PLAYER_RESTORE_DELAY && staminaInfo.State != proto.MotionState_MOTION_POWERED_FLY {
 			return // 不恢复耐力
 		}
 	} else {
 		// 消耗耐力重新计算恢复需要延迟的tick
-		// logger.Debug("stamina delay reset, restoreDelay: %v", player.StaminaInfo.RestoreDelay)
-		staminaInfo.PlayerRestoreDelay = 0
+		staminaInfo.RestoreDelay = 0
 	}
 	// 最大耐力值
 	maxStamina := int32(player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA])

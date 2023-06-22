@@ -22,4 +22,6 @@ const (
 	STAMINA_COST_POWERED_SKIFF = 500  // 浪船加速(风圈等) (回复耐力)
 	STAMINA_COST_IN_SKIFF      = 500  // 处于浪船中回复角色耐力 (回复耐力)
 	STAMINA_COST_SKIFF_NOBODY  = 500  // 浪船无人时回复载具耐力 (回复耐力)
+	// 耐力回复延迟
+	STAMINA_PLAYER_RESTORE_DELAY = 15 // 玩家耐力回复延迟
 )

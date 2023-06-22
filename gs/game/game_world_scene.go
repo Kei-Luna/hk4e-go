@@ -1,6 +1,7 @@
 package game
 
 import (
+	"hk4e/gdconf"
 	"math"
 	"time"
 
@@ -251,6 +252,12 @@ func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, confi
 }
 
 func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vector, vehicleId uint32) uint32 {
+	// 获取载具配置表
+	vehicleDataConfig := gdconf.GetVehicleDataById(int32(vehicleId))
+	if vehicleDataConfig == nil {
+		logger.Error("vehicle config error, vehicleId: %v", vehicleId)
+		return 0
+	}
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_GADGET)
 	entity := &Entity{
 		id:                  entityId,
@@ -262,21 +269,22 @@ func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vecto
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
 		fightProp: map[uint32]float32{
-			// TODO 以后使用配置表
-			constant.FIGHT_PROP_CUR_HP:  114514,
-			constant.FIGHT_PROP_MAX_HP:  114514,
-			constant.FIGHT_PROP_BASE_HP: float32(1),
+			constant.FIGHT_PROP_BASE_DEFENSE: vehicleDataConfig.ConfigGadgetVehicle.Combat.Property.DefenseBase,
+			constant.FIGHT_PROP_CUR_HP:       vehicleDataConfig.ConfigGadgetVehicle.Combat.Property.HP,
+			constant.FIGHT_PROP_MAX_HP:       vehicleDataConfig.ConfigGadgetVehicle.Combat.Property.HP,
+			constant.FIGHT_PROP_CUR_ATTACK:   vehicleDataConfig.ConfigGadgetVehicle.Combat.Property.Attack,
 		},
 		entityType: constant.ENTITY_TYPE_GADGET,
 		gadgetEntity: &GadgetEntity{
 			gadgetType: GADGET_TYPE_VEHICLE,
 			gadgetVehicleEntity: &GadgetVehicleEntity{
-				vehicleId:  vehicleId,
-				worldId:    s.world.id,
-				ownerUid:   ownerUid,
-				maxStamina: 240, // TODO 应该也能在配置表找到
-				curStamina: 240, // TODO 与maxStamina一致
-				memberMap:  make(map[uint32]*model.Player),
+				vehicleId:    vehicleId,
+				worldId:      s.world.id,
+				ownerUid:     ownerUid,
+				maxStamina:   vehicleDataConfig.ConfigGadgetVehicle.Vehicle.Stamina.StaminaUpperLimit,
+				curStamina:   vehicleDataConfig.ConfigGadgetVehicle.Vehicle.Stamina.StaminaUpperLimit,
+				restoreDelay: 0,
+				memberMap:    make(map[uint32]*model.Player),
 			},
 		},
 	}
@@ -636,12 +644,13 @@ func (g *GadgetClientEntity) GetPropOwnerEntityId() uint32 {
 }
 
 type GadgetVehicleEntity struct {
-	vehicleId  uint32
-	worldId    uint32
-	ownerUid   uint32
-	maxStamina float32
-	curStamina float32
-	memberMap  map[uint32]*model.Player // uint32 = pos
+	vehicleId    uint32
+	worldId      uint32
+	ownerUid     uint32
+	maxStamina   float32
+	curStamina   float32
+	restoreDelay uint8                    // 载具耐力回复延时
+	memberMap    map[uint32]*model.Player // uint32 = pos
 }
 
 func (g *GadgetVehicleEntity) GetVehicleId() uint32 {
@@ -666,4 +675,12 @@ func (g *GadgetVehicleEntity) SetCurStamina(curStamina float32) {
 
 func (g *GadgetVehicleEntity) GetMemberMap() map[uint32]*model.Player {
 	return g.memberMap
+}
+
+func (g *GadgetVehicleEntity) GetRestoreDelay() uint8 {
+	return g.restoreDelay
+}
+
+func (g *GadgetVehicleEntity) SetRestoreDelay(restoreDelay uint8) {
+	g.restoreDelay = restoreDelay
 }

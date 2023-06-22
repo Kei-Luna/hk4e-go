@@ -1,6 +1,7 @@
 package game
 
 import (
+	"hk4e/gdconf"
 	"time"
 
 	"hk4e/gs/model"
@@ -143,9 +144,15 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 
 // EnterVehicle 进入载具
 func (g *Game) EnterVehicle(player *model.Player, entity *Entity, avatarGuid uint64) {
-	maxSlot := 1 // TODO 读取配置表
-	// 判断载具是否已满
 	gadgetEntity := entity.GetGadgetEntity()
+	// 获取载具配置表
+	vehicleDataConfig := gdconf.GetVehicleDataById(int32(gadgetEntity.GetGadgetVehicleEntity().vehicleId))
+	if vehicleDataConfig == nil {
+		logger.Error("vehicle config error, vehicleId: %v", gadgetEntity.GetGadgetVehicleEntity().vehicleId)
+		return
+	}
+	maxSlot := int(vehicleDataConfig.ConfigGadgetVehicle.Vehicle.MaxSeatCount)
+	// 判断载具是否已满
 	if len(gadgetEntity.GetGadgetVehicleEntity().GetMemberMap()) >= maxSlot {
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_VEHICLE_SLOT_OCCUPIED)
 		return

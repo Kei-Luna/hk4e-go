@@ -70,6 +70,7 @@ type GameDataConfig struct {
 	GCGSkillDataMap         map[int32]*GCGSkillData                 // 七圣召唤卡牌技能
 	GachaDropGroupDataMap   map[int32]*GachaDropGroupData           // 卡池掉落组 临时的
 	SkillStaminaDataMap     map[int32]*SkillStaminaData             // 角色技能消耗体力 临时的
+	VehicleDataMap          map[int32]*VehicleData                  // 载具
 }
 
 func InitGameDataConfig() {
@@ -172,6 +173,7 @@ func (g *GameDataConfig) load() {
 	g.loadGCGSkillData()         // 七圣召唤卡牌技能
 	g.loadGachaDropGroupData()   // 卡池掉落组 临时的
 	g.loadSkillStaminaData()     // 角色技能消耗体力 临时的
+	g.loadVehicleData()          // 载具
 }
 
 // CSV相关
