@@ -16,12 +16,12 @@ type GmCmdReq struct {
 	GsId      uint32   `json:"gs_id"`
 }
 
-func (c *Controller) gmCmd(context *gin.Context) {
+func (c *Controller) gmCmd(ctx *gin.Context) {
 	gmCmdReq := new(GmCmdReq)
-	err := context.ShouldBindJSON(gmCmdReq)
+	err := ctx.ShouldBindJSON(gmCmdReq)
 	if err != nil {
 		logger.Error("parse json error: %v", err)
-		context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 		return
 	}
 	logger.Info("GmCmdReq: %v", gmCmdReq)
@@ -33,20 +33,20 @@ func (c *Controller) gmCmd(context *gin.Context) {
 		gmClient, err = rpc.NewGMClient(gmCmdReq.GsId)
 		if err != nil {
 			logger.Error("new gm client error: %v", err)
-			context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+			ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 			return
 		}
 		c.gmClientMapLock.Lock()
 		c.gmClientMap[gmCmdReq.GsId] = gmClient
 		c.gmClientMapLock.Unlock()
 	}
-	rep, err := gmClient.Cmd(context.Request.Context(), &api.CmdRequest{
+	rep, err := gmClient.Cmd(ctx.Request.Context(), &api.CmdRequest{
 		FuncName:  gmCmdReq.FuncName,
 		ParamList: gmCmdReq.ParamList,
 	})
 	if err != nil {
-		context.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 		return
 	}
-	context.JSON(http.StatusOK, rep)
+	ctx.JSON(http.StatusOK, rep)
 }

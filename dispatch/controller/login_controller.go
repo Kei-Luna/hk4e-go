@@ -18,9 +18,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (c *Controller) apiLogin(context *gin.Context) {
+func (c *Controller) apiLogin(ctx *gin.Context) {
 	requestData := new(api.LoginAccountRequestJson)
-	err := context.ShouldBindJSON(requestData)
+	err := ctx.ShouldBindJSON(requestData)
 	if err != nil {
 		logger.Error("parse LoginAccountRequestJson error: %v", err)
 		return
@@ -56,13 +56,13 @@ func (c *Controller) apiLogin(context *gin.Context) {
 		if len(requestData.Account) > 20+20+2 {
 			responseData.Retcode = -201
 			responseData.Message = "用户名或密码长度超限"
-			context.JSON(http.StatusOK, responseData)
+			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
 		if !strings.Contains(requestData.Account, "@@") {
 			responseData.Retcode = -201
 			responseData.Message = "用户名同密码均填写到用户名输入框，填写格式为：用户名@@密码，密码输入框填写任意字符均可"
-			context.JSON(http.StatusOK, responseData)
+			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
 		atIndex := strings.Index(requestData.Account, "@@")
@@ -76,20 +76,20 @@ func (c *Controller) apiLogin(context *gin.Context) {
 	if len(username) < 6 || len(username) > 20 {
 		responseData.Retcode = -201
 		responseData.Message = "用户名为6-20位字符"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	if len(password) < 8 || len(password) > 20 {
 		responseData.Retcode = -201
 		responseData.Message = "密码为8-20位字符"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	ok, err := regexp.MatchString("^[a-zA-Z0-9]{6,20}$", username)
 	if err != nil || !ok {
 		responseData.Retcode = -201
 		responseData.Message = "用户名只能包含大小写字母和数字"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	account, err := c.dao.QueryAccountByField("Username", username)
@@ -104,7 +104,7 @@ func (c *Controller) apiLogin(context *gin.Context) {
 			logger.Error("get next account id error: %v", err)
 			responseData.Retcode = -201
 			responseData.Message = "服务器内部错误:-1"
-			context.JSON(http.StatusOK, responseData)
+			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
 		playerID, err := c.dao.GetNextYuanShenUid()
@@ -112,7 +112,7 @@ func (c *Controller) apiLogin(context *gin.Context) {
 			logger.Error("get next player id error: %v", err)
 			responseData.Retcode = -201
 			responseData.Message = "服务器内部错误:-2"
-			context.JSON(http.StatusOK, responseData)
+			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
 		regAccount := &model.Account{
@@ -130,7 +130,7 @@ func (c *Controller) apiLogin(context *gin.Context) {
 			logger.Error("insert account error: %v", err)
 			responseData.Retcode = -201
 			responseData.Message = "服务器内部错误:-3"
-			context.JSON(http.StatusOK, responseData)
+			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
 		account = regAccount
@@ -138,7 +138,7 @@ func (c *Controller) apiLogin(context *gin.Context) {
 	if endec.Md5Str(password) != account.Password {
 		responseData.Retcode = -201
 		responseData.Message = "用户名或密码错误"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	// 生成新的token
@@ -148,7 +148,7 @@ func (c *Controller) apiLogin(context *gin.Context) {
 		logger.Error("update account token error: %v", err)
 		responseData.Retcode = -201
 		responseData.Message = "服务器内部错误:-4"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "TokenCreateTime", time.Now().UnixMilli())
@@ -156,19 +156,19 @@ func (c *Controller) apiLogin(context *gin.Context) {
 		logger.Error("update account token time error: %v", err)
 		responseData.Retcode = -201
 		responseData.Message = "服务器内部错误:-5"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	responseData.Message = "OK"
 	responseData.Data.Account.Uid = strconv.FormatInt(int64(account.AccountID), 10)
 	responseData.Data.Account.Token = account.Token
 	responseData.Data.Account.Email = account.Username
-	context.JSON(http.StatusOK, responseData)
+	ctx.JSON(http.StatusOK, responseData)
 }
 
-func (c *Controller) apiVerify(context *gin.Context) {
+func (c *Controller) apiVerify(ctx *gin.Context) {
 	requestData := new(api.LoginTokenRequest)
-	err := context.ShouldBindJSON(requestData)
+	err := ctx.ShouldBindJSON(requestData)
 	if err != nil {
 		logger.Error("parse LoginTokenRequest error: %v", err)
 		return
@@ -187,25 +187,25 @@ func (c *Controller) apiVerify(context *gin.Context) {
 	if account == nil || account.Token != requestData.Token {
 		responseData.Retcode = -111
 		responseData.Message = "账号本地缓存信息错误"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	if uint64(time.Now().UnixMilli())-account.TokenCreateTime > uint64(time.Hour.Milliseconds()*24*7) {
 		responseData.Retcode = -111
 		responseData.Message = "登录已失效"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	responseData.Message = "OK"
 	responseData.Data.Account.Uid = requestData.Uid
 	responseData.Data.Account.Token = requestData.Token
 	responseData.Data.Account.Email = account.Username
-	context.JSON(http.StatusOK, responseData)
+	ctx.JSON(http.StatusOK, responseData)
 }
 
-func (c *Controller) v2Login(context *gin.Context) {
+func (c *Controller) v2Login(ctx *gin.Context) {
 	requestData := new(api.ComboTokenReq)
-	err := context.ShouldBindJSON(requestData)
+	err := ctx.ShouldBindJSON(requestData)
 	if err != nil {
 		logger.Error("parse ComboTokenReq error: %v", err)
 		return
@@ -231,7 +231,7 @@ func (c *Controller) v2Login(context *gin.Context) {
 	if account == nil || account.Token != loginData.Token {
 		responseData.Retcode = -201
 		responseData.Message = "token错误"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	// 生成新的comboToken
@@ -241,7 +241,7 @@ func (c *Controller) v2Login(context *gin.Context) {
 		logger.Error("update combo token error: %v", err)
 		responseData.Retcode = -201
 		responseData.Message = "服务器内部错误:-1"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "ComboTokenCreateTime", time.Now().UnixMilli())
@@ -249,12 +249,12 @@ func (c *Controller) v2Login(context *gin.Context) {
 		logger.Error("update combo token time error: %v", err)
 		responseData.Retcode = -201
 		responseData.Message = "服务器内部错误:-2"
-		context.JSON(http.StatusOK, responseData)
+		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
 	responseData.Message = "OK"
 	responseData.Data.OpenID = loginData.Uid
 	responseData.Data.ComboID = "0"
 	responseData.Data.ComboToken = account.ComboToken
-	context.JSON(http.StatusOK, responseData)
+	ctx.JSON(http.StatusOK, responseData)
 }

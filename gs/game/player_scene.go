@@ -133,6 +133,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 				Uid:                 worldPlayer.PlayerID,
 				Nickname:            worldPlayer.NickName,
 				PlayerLevel:         worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+				AvatarId:            worldPlayer.HeadImage,
 				MpSettingType:       proto.MpSettingType(worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
 				NameCardId:          worldPlayer.NameCard,
 				Signature:           worldPlayer.Signature,

@@ -22,9 +22,9 @@ type TokenVerifyRsp struct {
 	PlayerID      uint32 `json:"playerID"`
 }
 
-func (c *Controller) gateTokenVerify(context *gin.Context) {
+func (c *Controller) gateTokenVerify(ctx *gin.Context) {
 	verifyFail := func(playerID uint32) {
-		context.JSON(http.StatusOK, &TokenVerifyRsp{
+		ctx.JSON(http.StatusOK, &TokenVerifyRsp{
 			Valid:         false,
 			Forbid:        false,
 			ForbidEndTime: 0,
@@ -32,7 +32,7 @@ func (c *Controller) gateTokenVerify(context *gin.Context) {
 		})
 	}
 	tokenVerifyReq := new(TokenVerifyReq)
-	err := context.ShouldBindJSON(tokenVerifyReq)
+	err := ctx.ShouldBindJSON(tokenVerifyReq)
 	if err != nil {
 		verifyFail(0)
 		return
@@ -56,7 +56,7 @@ func (c *Controller) gateTokenVerify(context *gin.Context) {
 		verifyFail(account.PlayerID)
 		return
 	}
-	context.JSON(http.StatusOK, &TokenVerifyRsp{
+	ctx.JSON(http.StatusOK, &TokenVerifyRsp{
 		Valid:         true,
 		Forbid:        account.Forbid,
 		ForbidEndTime: account.ForbidEndTime,

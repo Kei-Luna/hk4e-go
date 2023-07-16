@@ -23,48 +23,36 @@ const (
 
 var _ api.DiscoveryNATSRPCServer = (*DiscoveryService)(nil)
 
-type ServerInstanceSortList []*ServerInstance
-
-func (s ServerInstanceSortList) Len() int {
-	return len(s)
-}
-
-func (s ServerInstanceSortList) Less(i, j int) bool {
-	return s[i].appId < s[j].appId
-}
-
-func (s ServerInstanceSortList) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
+// ServerInstance 服务器实例
 type ServerInstance struct {
-	serverType        string
-	appId             string
-	gateServerKcpAddr string
-	gateServerKcpPort uint32
-	gateServerMqAddr  string
-	gateServerMqPort  uint32
-	version           []string
-	lastAliveTime     int64
-	gsId              uint32
-	loadCount         uint32
+	serverType        string   // 服务器类型
+	appId             string   // appid
+	gateServerKcpAddr string   // 网关kcp地址
+	gateServerKcpPort uint32   // 网关kcp端口
+	gateServerMqAddr  string   // 网关tcp直连消息队列地址
+	gateServerMqPort  uint32   // 网关tcp直连消息队列端口
+	version           []string // 网关支持的客户端协议版本
+	lastAliveTime     int64    // 最后保活时间
+	gsId              uint32   // 游戏服务器编号
+	loadCount         uint32   // 负载数
 }
 
+// StopServerInfo 停服信息
 type StopServerInfo struct {
-	stopServer      bool
-	startTime       uint32
-	endTime         uint32
-	ipAddrWhiteList map[string]struct{}
+	stopServer      bool                // 是否停服
+	startTime       uint32              // 停服开始时间
+	endTime         uint32              // 停服结束时间
+	ipAddrWhiteList map[string]struct{} // ip地址白名单
 }
 
 type DiscoveryService struct {
 	regionEc2b            *random.Ec2b         // 全局区服密钥信息
 	serverInstanceMap     map[string]*sync.Map // 全部服务器实例集合 key:服务器类型 value:服务器实例集合 -> key:appid value:服务器实例
 	serverAppIdMap        *sync.Map            // 服务器appid集合 key:appid value:是否存在
-	globalGsOnlineMap     map[uint32]string
-	globalGsOnlineMapLock sync.RWMutex
-	stopServerInfo        *StopServerInfo
-	messageQueue          *mq.MessageQueue
+	globalGsOnlineMap     map[uint32]string    // 全服玩家在线集合 key:uid value:gsAppid
+	globalGsOnlineMapLock sync.RWMutex         // 全服玩家在线集合读写锁
+	stopServerInfo        *StopServerInfo      // 停服信息
+	messageQueue          *mq.MessageQueue     // 消息队列实例
 }
 
 func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
@@ -81,7 +69,7 @@ func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
 	r.serverAppIdMap = new(sync.Map)
 	r.globalGsOnlineMap = make(map[uint32]string)
 	r.stopServerInfo = &StopServerInfo{
-		stopServer:      true,
+		stopServer:      false,
 		startTime:       0,
 		endTime:         0,
 		ipAddrWhiteList: make(map[string]struct{}),
@@ -388,24 +376,28 @@ func (s *DiscoveryService) SetWhiteList(ctx context.Context, req *api.SetWhiteLi
 }
 
 func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerInstance {
-	instList := make(ServerInstanceSortList, 0)
+	instList := make([]*ServerInstance, 0)
 	instMap.Range(func(key, value any) bool {
 		instList = append(instList, value.(*ServerInstance))
 		return true
 	})
-	sort.Stable(instList)
+	sort.SliceStable(instList, func(i, j int) bool {
+		return instList[i].appId < instList[j].appId
+	})
 	index := random.GetRandomInt32(0, int32(len(instList)-1))
 	inst := instList[index]
 	return inst
 }
 
 func (s *DiscoveryService) getMinLoadServerInstance(instMap *sync.Map) *ServerInstance {
-	instList := make(ServerInstanceSortList, 0)
+	instList := make([]*ServerInstance, 0)
 	instMap.Range(func(key, value any) bool {
 		instList = append(instList, value.(*ServerInstance))
 		return true
 	})
-	sort.Stable(instList)
+	sort.SliceStable(instList, func(i, j int) bool {
+		return instList[i].appId < instList[j].appId
+	})
 	minLoadInstIndex := 0
 	minLoadInstCount := math.MaxUint32
 	for index, inst := range instList {
