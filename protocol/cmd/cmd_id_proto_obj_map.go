@@ -162,6 +162,9 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(EvtDestroyGadgetNotify, func() any { return new(proto.EvtDestroyGadgetNotify) })                       // 销毁实体通知
 	c.regMsg(EvtAnimatorParameterNotify, func() any { return new(proto.EvtAnimatorParameterNotify) })               // 动画参数通知
 	c.regMsg(EvtAnimatorStateChangedNotify, func() any { return new(proto.EvtAnimatorStateChangedNotify) })         // 动画状态通知
+	c.regMsg(EvtBulletDeactiveNotify, func() any { return new(proto.EvtBulletDeactiveNotify) })                     // 子弹消失通知
+	c.regMsg(EvtBulletHitNotify, func() any { return new(proto.EvtBulletHitNotify) })                               // 子弹命中通知
+	c.regMsg(EvtBulletMoveNotify, func() any { return new(proto.EvtBulletMoveNotify) })                             // 子弹移动通知
 	c.regMsg(EvtAiSyncSkillCdNotify, func() any { return new(proto.EvtAiSyncSkillCdNotify) })                       // 通知
 	c.regMsg(EvtAiSyncCombatThreatInfoNotify, func() any { return new(proto.EvtAiSyncCombatThreatInfoNotify) })     // 通知
 	c.regMsg(EntityConfigHashNotify, func() any { return new(proto.EntityConfigHashNotify) })                       // 通知

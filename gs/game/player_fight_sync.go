@@ -616,6 +616,48 @@ func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg 
 	g.SendToSceneA(scene, cmd.EvtEntityRenderersChangedNotify, player.ClientSeq, req)
 }
 
+func (g *Game) EvtBulletDeactiveNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.EvtBulletDeactiveNotify)
+	if player.SceneLoadState != model.SceneEnterDone {
+		return
+	}
+	// logger.Debug("EvtBulletDeactiveNotify: %v", req)
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtBulletDeactiveNotify, player.ClientSeq, req)
+}
+
+func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.EvtBulletHitNotify)
+	if player.SceneLoadState != model.SceneEnterDone {
+		return
+	}
+	// logger.Debug("EvtBulletHitNotify: %v", req)
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, req)
+}
+
+func (g *Game) EvtBulletMoveNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.EvtBulletMoveNotify)
+	if player.SceneLoadState != model.SceneEnterDone {
+		return
+	}
+	// logger.Debug("EvtBulletMoveNotify: %v", req)
+	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.EvtBulletMoveNotify, player.ClientSeq, req)
+}
+
 func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EvtCreateGadgetNotify)
 	if player.SceneLoadState != model.SceneEnterDone {

@@ -54,7 +54,7 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 		}
 		// 返回数据到客户端
 		msg := &ProtoMsg{
-			ConvId:         protoMsg.ConvId,
+			SessionId:      protoMsg.SessionId,
 			CmdId:          cmd.GetPlayerTokenRsp,
 			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
 			PayloadMessage: rsp,
@@ -66,7 +66,7 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 			return
 		}
 		k.kcpEventInput <- &KcpEvent{
-			ConvId:       protoMsg.ConvId,
+			SessionId:    protoMsg.SessionId,
 			EventId:      KcpConnForceClose,
 			EventMessage: uint32(kcp.EnetClientClose),
 		}
@@ -78,14 +78,14 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 		pingRsp := new(proto.PingRsp)
 		pingRsp.ClientTime = pingReq.ClientTime
 		msg := &ProtoMsg{
-			ConvId:         protoMsg.ConvId,
+			SessionId:      protoMsg.SessionId,
 			CmdId:          cmd.PingRsp,
 			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
 			PayloadMessage: pingRsp,
 		}
 		session.kcpRawSendChan <- msg
-		logger.Debug("convId: %v, RTO: %v, SRTT: %v, RTTVar: %v",
-			protoMsg.ConvId, session.conn.GetRTO(), session.conn.GetSRTT(), session.conn.GetSRTTVar())
+		logger.Debug("sessionId: %v, RTO: %v, SRTT: %v, RTTVar: %v",
+			protoMsg.SessionId, session.conn.GetRTO(), session.conn.GetSRTT(), session.conn.GetSRTTVar())
 		if session.connState != ConnActive {
 			return
 		}
@@ -133,7 +133,8 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 		})
 	default:
 		if session.connState != ConnActive {
-			logger.Error("conn not active so drop packet, cmdId: %v, userId: %v, convId: %v", protoMsg.CmdId, session.userId, protoMsg.ConvId)
+			logger.Error("conn not active so drop packet, cmdId: %v, userId: %v, sessionId: %v",
+				protoMsg.CmdId, session.userId, protoMsg.SessionId)
 			return
 		}
 		gameMsg := &mq.GameMsg{
@@ -186,18 +187,18 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 	logger.Debug("server msg forward handle start")
 	// 函数栈内缓存 添加删除事件走chan 避免频繁加锁
-	convSessionMap := make(map[uint64]*Session)
-	userIdConvMap := make(map[uint32]uint64)
+	sessionMap := make(map[uint32]*Session)
+	userIdSessionIdMap := make(map[uint32]uint32)
 	// 远程全局顶号注册列表
 	reLoginRemoteKickRegMap := make(map[uint32]chan bool)
 	for {
 		select {
 		case session := <-k.createSessionChan:
-			convSessionMap[session.conn.GetConv()] = session
-			userIdConvMap[session.userId] = session.conn.GetConv()
+			sessionMap[session.sessionId] = session
+			userIdSessionIdMap[session.userId] = session.sessionId
 		case session := <-k.destroySessionChan:
-			delete(convSessionMap, session.conn.GetConv())
-			delete(userIdConvMap, session.userId)
+			delete(sessionMap, session.sessionId)
+			delete(userIdSessionIdMap, session.userId)
 			close(session.kcpRawSendChan)
 		case remoteKick := <-k.reLoginRemoteKickRegChan:
 			reLoginRemoteKickRegMap[remoteKick.userId] = remoteKick.kickFinishNotifyChan
@@ -209,33 +210,33 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 				switch netMsg.EventId {
 				case mq.NormalMsg:
 					// 分发到每个连接具体的发送协程
-					convId, exist := userIdConvMap[gameMsg.UserId]
+					sessionId, exist := userIdSessionIdMap[gameMsg.UserId]
 					if !exist {
-						logger.Error("can not find convId by userId")
+						logger.Error("can not find sessionId by userId")
 						continue
 					}
 					protoMsg := &ProtoMsg{
-						ConvId:         convId,
+						SessionId:      sessionId,
 						CmdId:          gameMsg.CmdId,
 						HeadMessage:    k.getHeadMsg(gameMsg.ClientSeq),
 						PayloadMessage: gameMsg.PayloadMessage,
 					}
-					session := convSessionMap[protoMsg.ConvId]
+					session := sessionMap[protoMsg.SessionId]
 					if session == nil {
-						logger.Error("session is nil, convId: %v", protoMsg.ConvId)
+						logger.Error("session is nil, sessionId: %v", protoMsg.SessionId)
 						continue
 					}
 					kcpRawSendChan := session.kcpRawSendChan
 					if kcpRawSendChan == nil {
-						logger.Error("kcpRawSendChan is nil, convId: %v", protoMsg.ConvId)
+						logger.Error("kcpRawSendChan is nil, sessionId: %v", protoMsg.SessionId)
 						continue
 					}
 					if len(kcpRawSendChan) == 1000 {
-						logger.Error("kcpRawSendChan is full, convId: %v", protoMsg.ConvId)
+						logger.Error("kcpRawSendChan is full, sessionId: %v", protoMsg.SessionId)
 						continue
 					}
 					if protoMsg.CmdId == cmd.PlayerLoginRsp {
-						logger.Debug("session active, convId: %v", protoMsg.ConvId)
+						logger.Debug("session active, sessionId: %v", protoMsg.SessionId)
 						session.connState = ConnActive
 						// 通知GS玩家各个服务器的appid
 						serverMsg := &mq.ServerMsg{
@@ -254,13 +255,13 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 				connCtrlMsg := netMsg.ConnCtrlMsg
 				switch netMsg.EventId {
 				case mq.KickPlayerNotify:
-					convId, exist := userIdConvMap[connCtrlMsg.KickUserId]
+					sessionId, exist := userIdSessionIdMap[connCtrlMsg.KickUserId]
 					if !exist {
-						logger.Error("can not find convId by userId")
+						logger.Error("can not find sessionId by userId")
 						continue
 					}
 					k.kcpEventInput <- &KcpEvent{
-						ConvId:       convId,
+						SessionId:    sessionId,
 						EventId:      KcpConnForceClose,
 						EventMessage: connCtrlMsg.KickReason,
 					}
@@ -269,14 +270,14 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 				serverMsg := netMsg.ServerMsg
 				switch netMsg.EventId {
 				case mq.ServerUserGsChangeNotify:
-					convId, exist := userIdConvMap[serverMsg.UserId]
+					sessionId, exist := userIdSessionIdMap[serverMsg.UserId]
 					if !exist {
-						logger.Error("can not find convId by userId")
+						logger.Error("can not find sessionId by userId")
 						continue
 					}
-					session := convSessionMap[convId]
+					session := sessionMap[sessionId]
 					if session == nil {
-						logger.Error("session is nil, convId: %v", convId)
+						logger.Error("session is nil, sessionId: %v", sessionId)
 						continue
 					}
 					session.gsServerAppId = serverMsg.GameServerAppId
@@ -403,25 +404,25 @@ func (k *KcpConnectManager) forwardRobotMsgToClientHandle(session *Session) {
 						}
 						// 关联玩家uid和连接信息
 						session.userId = rsp.Uid
-						k.SetSession(session, session.conn.GetConv(), session.userId)
+						k.SetSession(session, session.sessionId, session.userId)
 						gameMsg.PayloadMessage = rsp
 					case cmd.PlayerLoginRsp:
 						logger.Debug("session active, uid: %v", gameMsg.UserId)
 						session.connState = ConnActive
 					}
 					protoMsg := &ProtoMsg{
-						ConvId:         session.conn.GetConv(),
+						SessionId:      session.sessionId,
 						CmdId:          gameMsg.CmdId,
 						HeadMessage:    k.getHeadMsg(gameMsg.ClientSeq),
 						PayloadMessage: gameMsg.PayloadMessage,
 					}
 					kcpRawSendChan := session.kcpRawSendChan
 					if kcpRawSendChan == nil {
-						logger.Error("kcpRawSendChan is nil, convId: %v", protoMsg.ConvId)
+						logger.Error("kcpRawSendChan is nil, sessionId: %v", protoMsg.SessionId)
 						continue
 					}
 					if len(kcpRawSendChan) == 1000 {
-						logger.Error("kcpRawSendChan is full, convId: %v", protoMsg.ConvId)
+						logger.Error("kcpRawSendChan is full, sessionId: %v", protoMsg.SessionId)
 						continue
 					}
 					kcpRawSendChan <- protoMsg
@@ -453,7 +454,7 @@ type RemoteKick struct {
 
 func (k *KcpConnectManager) loginFailClose(session *Session) {
 	k.kcpEventInput <- &KcpEvent{
-		ConvId:       session.conn.GetConv(),
+		SessionId:    session.sessionId,
 		EventId:      KcpConnForceClose,
 		EventMessage: uint32(kcp.EnetLoginUnfinished),
 	}
@@ -540,7 +541,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 		if oldSession != nil {
 			// 本地顶号
 			k.kcpEventInput <- &KcpEvent{
-				ConvId:       oldSession.conn.GetConv(),
+				SessionId:    oldSession.sessionId,
 				EventId:      KcpConnForceClose,
 				EventMessage: uint32(kcp.EnetServerRelogin),
 			}
@@ -570,7 +571,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 	}
 	// 关联玩家uid和连接信息
 	session.userId = uid
-	k.SetSession(session, session.conn.GetConv(), session.userId)
+	k.SetSession(session, session.sessionId, session.userId)
 	k.createSessionChan <- session
 	// 绑定各个服务器appid
 	gsServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
@@ -683,7 +684,7 @@ func (k *KcpConnectManager) keyExchange(session *Session, uid uint32, rsp *proto
 		seedBuf := new(bytes.Buffer)
 		err = binary.Write(seedBuf, binary.BigEndian, seedUint64)
 		if err != nil {
-			logger.Error("conv seed uint64 to bytes error: %v, uid: %v", err, uid)
+			logger.Error("write seed uint64 to bytes error: %v, uid: %v", err, uid)
 			k.loginFailClose(session)
 			return false
 		}

@@ -54,6 +54,7 @@ require github.com/pierrec/lz4/v4 v4.1.17
 require github.com/FlourishingWorld/dpdk-go v0.0.0-20230213165129-6c5bc55b1f63
 
 require (
+	github.com/gorilla/websocket v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
@@ -71,7 +72,6 @@ require (
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/klauspost/compress v1.15.11 // indirect

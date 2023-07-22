@@ -126,6 +126,7 @@ func Logic(account string, session *net.Session) {
 					}
 					var combatInvocationsNotifyPb pb.Message = combatInvocationsNotify
 					if config.GetConfig().Hk4e.ClientProtoProxyEnable {
+						hk4egatenet.ConvServerPbDataToClient(combatInvocationsNotify, session.ClientCmdProtoMap)
 						clientProtoObj := hk4egatenet.GetClientProtoObjByName("CombatInvocationsNotify", session.ClientCmdProtoMap)
 						if clientProtoObj == nil {
 							continue
@@ -134,7 +135,6 @@ func Logic(account string, session *net.Session) {
 						if err != nil {
 							continue
 						}
-						hk4egatenet.ConvServerPbDataToClient(clientProtoObj, session.ClientCmdProtoMap)
 						combatInvocationsNotifyPb = clientProtoObj
 					}
 					body, err := pb.Marshal(combatInvocationsNotifyPb)

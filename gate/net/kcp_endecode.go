@@ -26,20 +26,20 @@ import (
 */
 
 type KcpMsg struct {
-	ConvId    uint64
+	SessionId uint32
 	CmdId     uint16
 	HeadData  []byte
 	ProtoData []byte
 }
 
-func DecodeBinToPayload(data []byte, convId uint64, kcpMsgList *[]*KcpMsg, xorKey []byte) {
+func DecodeBinToPayload(data []byte, sessionId uint32, kcpMsgList *[]*KcpMsg, xorKey []byte) {
 	// xor解密
 	endec.Xor(data, xorKey)
-	DecodeLoop(data, convId, kcpMsgList)
+	DecodeLoop(data, sessionId, kcpMsgList)
 	return
 }
 
-func DecodeLoop(data []byte, convId uint64, kcpMsgList *[]*KcpMsg) {
+func DecodeLoop(data []byte, sessionId uint32, kcpMsgList *[]*KcpMsg) {
 	// 长度太短
 	if len(data) < 12 {
 		logger.Error("packet len less than 12 byte")
@@ -77,14 +77,14 @@ func DecodeLoop(data []byte, convId uint64, kcpMsgList *[]*KcpMsg) {
 	protoData := data[10+int(headLen) : 10+int(headLen)+int(protoLen)]
 	// 返回数据
 	kcpMsg := new(KcpMsg)
-	kcpMsg.ConvId = convId
+	kcpMsg.SessionId = sessionId
 	kcpMsg.CmdId = cmdId
 	kcpMsg.HeadData = headData
 	kcpMsg.ProtoData = protoData
 	*kcpMsgList = append(*kcpMsgList, kcpMsg)
 	// 有不止一个包 递归解析
 	if len(data) > packetLen {
-		DecodeLoop(data[packetLen:], convId, kcpMsgList)
+		DecodeLoop(data[packetLen:], sessionId, kcpMsgList)
 	}
 }
 

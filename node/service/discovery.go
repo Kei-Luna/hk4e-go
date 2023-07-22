@@ -46,13 +46,12 @@ type StopServerInfo struct {
 }
 
 type DiscoveryService struct {
-	regionEc2b            *random.Ec2b         // 全局区服密钥信息
-	serverInstanceMap     map[string]*sync.Map // 全部服务器实例集合 key:服务器类型 value:服务器实例集合 -> key:appid value:服务器实例
-	serverAppIdMap        *sync.Map            // 服务器appid集合 key:appid value:是否存在
-	globalGsOnlineMap     map[uint32]string    // 全服玩家在线集合 key:uid value:gsAppid
-	globalGsOnlineMapLock sync.RWMutex         // 全服玩家在线集合读写锁
-	stopServerInfo        *StopServerInfo      // 停服信息
-	messageQueue          *mq.MessageQueue     // 消息队列实例
+	regionEc2b        *random.Ec2b         // 区服密钥信息
+	serverInstanceMap map[string]*sync.Map // 全部服务器实例集合 key:服务器类型 value:服务器实例集合 -> key:appid value:服务器实例
+	serverAppIdMap    *sync.Map            // 服务器appid集合 key:appid value:是否存在
+	globalGsOnlineMap *sync.Map            // 全服玩家在线集合 key:uid value:gsAppid
+	stopServerInfo    *StopServerInfo      // 停服信息
+	messageQueue      *mq.MessageQueue     // 消息队列实例
 }
 
 func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
@@ -67,7 +66,7 @@ func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
 	r.serverInstanceMap[api.ROBOT] = new(sync.Map)
 	r.serverInstanceMap[api.DISPATCH] = new(sync.Map)
 	r.serverAppIdMap = new(sync.Map)
-	r.globalGsOnlineMap = make(map[uint32]string)
+	r.globalGsOnlineMap = new(sync.Map)
 	r.stopServerInfo = &StopServerInfo{
 		stopServer:      false,
 		startTime:       0,
@@ -93,13 +92,11 @@ func (s *DiscoveryService) broadcastReceiver() {
 			continue
 		}
 		serverMsg := netMsg.ServerMsg
-		s.globalGsOnlineMapLock.Lock()
 		if serverMsg.IsOnline {
-			s.globalGsOnlineMap[serverMsg.UserId] = netMsg.OriginServerAppId
+			s.globalGsOnlineMap.Store(serverMsg.UserId, netMsg.OriginServerAppId)
 		} else {
-			delete(s.globalGsOnlineMap, serverMsg.UserId)
+			s.globalGsOnlineMap.Delete(serverMsg.UserId)
 		}
-		s.globalGsOnlineMapLock.Unlock()
 	}
 }
 
@@ -318,11 +315,10 @@ func (s *DiscoveryService) GetMainGameServerAppId(ctx context.Context, req *api.
 // GetGlobalGsOnlineMap 获取全服玩家GS在线列表
 func (s *DiscoveryService) GetGlobalGsOnlineMap(ctx context.Context, req *api.NullMsg) (*api.GlobalGsOnlineMap, error) {
 	copyMap := make(map[uint32]string)
-	s.globalGsOnlineMapLock.RLock()
-	for k, v := range s.globalGsOnlineMap {
-		copyMap[k] = v
-	}
-	s.globalGsOnlineMapLock.RUnlock()
+	s.globalGsOnlineMap.Range(func(key, value any) bool {
+		copyMap[key.(uint32)] = value.(string)
+		return true
+	})
 	return &api.GlobalGsOnlineMap{
 		OnlineMap: copyMap,
 	}, nil
@@ -421,20 +417,32 @@ func (s *DiscoveryService) getServerInstanceMapLen(instMap *sync.Map) int {
 
 // 定时移除掉线服务器
 func (s *DiscoveryService) removeDeadServer() {
-	ticker := time.NewTicker(time.Second * 1)
+	ticker := time.NewTicker(time.Second * 10)
 	for {
 		<-ticker.C
 		nowTime := time.Now().Unix()
 		for _, instMap := range s.serverInstanceMap {
-			instMap.Range(func(key, value any) bool {
-				serverInstance := value.(*ServerInstance)
+			instMap.Range(func(appid, inst any) bool {
+				serverInstance := inst.(*ServerInstance)
 				if nowTime-serverInstance.lastAliveTime > 30 {
-					logger.Warn("remove dead server, server type: %v, appid: %v, last alive time: %v",
-						serverInstance.serverType, serverInstance.appId, serverInstance.lastAliveTime)
-					instMap.Delete(key)
+					instMap.Delete(appid)
+					s.handleServerDead(serverInstance)
 				}
 				return true
 			})
 		}
+	}
+}
+
+func (s *DiscoveryService) handleServerDead(serverInstance *ServerInstance) {
+	logger.Warn("remove dead server, server type: %v, appid: %v, last alive time: %v",
+		serverInstance.serverType, serverInstance.appId, serverInstance.lastAliveTime)
+	if serverInstance.serverType == api.GS {
+		s.globalGsOnlineMap.Range(func(uid, gsAppid any) bool {
+			if serverInstance.appId == gsAppid.(string) {
+				s.globalGsOnlineMap.Delete(uid)
+			}
+			return true
+		})
 	}
 }

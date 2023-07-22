@@ -7,15 +7,15 @@ import (
 // AoiManager aoi管理模块
 type AoiManager struct {
 	// 区域边界坐标
-	minX    int16
-	maxX    int16
-	minY    int16
-	maxY    int16
-	minZ    int16
-	maxZ    int16
-	numX    int16            // x方向格子的数量
-	numY    int16            // y方向的格子数量
-	numZ    int16            // z方向的格子数量
+	minX    int32
+	maxX    int32
+	minY    int32
+	maxY    int32
+	minZ    int32
+	maxZ    int32
+	numX    uint32           // x方向格子的数量
+	numY    uint32           // y方向的格子数量
+	numZ    uint32           // z方向的格子数量
 	gridMap map[uint32]*Grid // 当前区域中都有哪些格子 key:gid value:格子对象
 }
 
@@ -26,7 +26,7 @@ func NewAoiManager() (r *AoiManager) {
 }
 
 // SetAoiRange 设置aoi区域边界坐标
-func (a *AoiManager) SetAoiRange(minX, maxX, minY, maxY, minZ, maxZ int16) bool {
+func (a *AoiManager) SetAoiRange(minX, maxX, minY, maxY, minZ, maxZ int32) bool {
 	if minX >= maxX || minY >= maxY || minZ >= maxZ {
 		return false
 	}
@@ -40,7 +40,7 @@ func (a *AoiManager) SetAoiRange(minX, maxX, minY, maxY, minZ, maxZ int16) bool 
 }
 
 // Init3DRectAoiManager 初始化3D矩形aoi区域
-func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ int16) bool {
+func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ uint32, delay bool) bool {
 	if numX <= 0 || numY <= 0 || numZ <= 0 {
 		return false
 	}
@@ -50,34 +50,48 @@ func (a *AoiManager) Init3DRectAoiManager(numX, numY, numZ int16) bool {
 	a.numX = numX
 	a.numY = numY
 	a.numZ = numZ
-	// 初始化aoi区域中所有的格子
-	for x := int16(0); x < a.numX; x++ {
-		for y := int16(0); y < a.numY; y++ {
-			for z := int16(0); z < a.numZ; z++ {
-				// 利用格子坐标得到格子id gid从0开始按xzy的顺序增长
-				gid := uint32(y)*(uint32(a.numX)*uint32(a.numZ)) + uint32(z)*uint32(a.numX) + uint32(x)
-				// 初始化一个格子放在aoi中的map里 key是当前格子的id
-				grid := NewGrid(gid)
-				a.gridMap[gid] = grid
+	if !delay {
+		// 初始化aoi区域中所有的格子
+		for x := uint32(0); x < a.numX; x++ {
+			for y := uint32(0); y < a.numY; y++ {
+				for z := uint32(0); z < a.numZ; z++ {
+					// 利用格子坐标得到格子id gid从0开始按xzy的顺序增长
+					gid := y*(a.numX*a.numZ) + z*a.numX + x
+					// 初始化一个格子放在aoi中的map里 key是当前格子的id
+					grid := NewGrid(gid)
+					a.gridMap[gid] = grid
+				}
 			}
 		}
 	}
 	return true
 }
 
+func (a *AoiManager) GetGrid(gid uint32) *Grid {
+	grid, exist := a.gridMap[gid]
+	if !exist {
+		if gid >= a.numX*a.numY*a.numZ {
+			return nil
+		}
+		grid = NewGrid(gid)
+		a.gridMap[gid] = grid
+	}
+	return grid
+}
+
 // GridXLen 每个格子在x轴方向的长度
-func (a *AoiManager) GridXLen() int16 {
-	return (a.maxX - a.minX) / a.numX
+func (a *AoiManager) GridXLen() uint32 {
+	return uint32(a.maxX-a.minX) / a.numX
 }
 
 // GridYLen 每个格子在y轴方向的长度
-func (a *AoiManager) GridYLen() int16 {
-	return (a.maxY - a.minY) / a.numY
+func (a *AoiManager) GridYLen() uint32 {
+	return uint32(a.maxY-a.minY) / a.numY
 }
 
 // GridZLen 每个格子在z轴方向的长度
-func (a *AoiManager) GridZLen() int16 {
-	return (a.maxZ - a.minZ) / a.numZ
+func (a *AoiManager) GridZLen() uint32 {
+	return uint32(a.maxZ-a.minZ) / a.numZ
 }
 
 // GetGidByPos 通过坐标获取对应的格子id
@@ -85,17 +99,17 @@ func (a *AoiManager) GetGidByPos(x, y, z float32) uint32 {
 	if !a.IsValidAoiPos(x, y, z) {
 		return math.MaxUint32
 	}
-	gx := (int16(x) - a.minX) / a.GridXLen()
-	gy := (int16(y) - a.minY) / a.GridYLen()
-	gz := (int16(z) - a.minZ) / a.GridZLen()
-	return uint32(gy)*(uint32(a.numX)*uint32(a.numZ)) + uint32(gz)*uint32(a.numX) + uint32(gx)
+	gx := uint32(int32(x)-a.minX) / a.GridXLen()
+	gy := uint32(int32(y)-a.minY) / a.GridYLen()
+	gz := uint32(int32(z)-a.minZ) / a.GridZLen()
+	return gy*(a.numX*a.numZ) + gz*a.numX + gx
 }
 
 // IsValidAoiPos 判断坐标是否存在于aoi区域内
 func (a *AoiManager) IsValidAoiPos(x, y, z float32) bool {
-	if (int16(x) > a.minX && int16(x) < a.maxX) &&
-		(int16(y) > a.minY && int16(y) < a.maxY) &&
-		(int16(z) > a.minZ && int16(z) < a.maxZ) {
+	if (int32(x) > a.minX && int32(x) < a.maxX) &&
+		(int32(y) > a.minY && int32(y) < a.maxY) &&
+		(int32(z) > a.minZ && int32(z) < a.maxZ) {
 		return true
 	} else {
 		return false
@@ -106,8 +120,8 @@ func (a *AoiManager) IsValidAoiPos(x, y, z float32) bool {
 func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 	gridList := make([]*Grid, 0, 27)
 	// 判断grid是否存在
-	grid, exist := a.gridMap[gid]
-	if !exist {
+	grid := a.GetGrid(gid)
+	if grid == nil {
 		return nil
 	}
 	// 添加自己
@@ -115,17 +129,17 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 		gridList = append(gridList, grid)
 	}
 	// 根据gid得到当前格子所在的x轴编号
-	idx := int16(gid % (uint32(a.numX) * uint32(a.numZ)) % uint32(a.numX))
+	idx := gid % (a.numX * a.numZ) % a.numX
 	// 判断当前格子左边是否还有格子
 	if idx > 0 {
-		grid = a.gridMap[gid-1]
+		grid = a.GetGrid(gid - 1)
 		if grid != nil {
 			gridList = append(gridList, grid)
 		}
 	}
 	// 判断当前格子右边是否还有格子
 	if idx < a.numX-1 {
-		grid = a.gridMap[gid+1]
+		grid = a.GetGrid(gid + 1)
 		if grid != nil {
 			gridList = append(gridList, grid)
 		}
@@ -139,17 +153,17 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 	// 遍历x轴格子
 	for _, v := range gidListX {
 		// 计算该格子的idz
-		idz := int16(v % (uint32(a.numX) * uint32(a.numZ)) / uint32(a.numX))
+		idz := v % (a.numX * a.numZ) / a.numX
 		// 判断当前格子平面上方是否还有格子
 		if idz > 0 {
-			grid = a.gridMap[v-uint32(a.numX)]
+			grid = a.GetGrid(v - a.numX)
 			if grid != nil {
 				gridList = append(gridList, grid)
 			}
 		}
 		// 判断当前格子平面下方是否还有格子
 		if idz < a.numZ-1 {
-			grid = a.gridMap[v+uint32(a.numX)]
+			grid = a.GetGrid(v + a.numX)
 			if grid != nil {
 				gridList = append(gridList, grid)
 			}
@@ -164,17 +178,17 @@ func (a *AoiManager) GetSurrGridListByGid(gid uint32) []*Grid {
 	// 遍历xoz平面格子
 	for _, v := range gidListXOZ {
 		// 计算该格子的idy
-		idy := int16(v / (uint32(a.numX) * uint32(a.numZ)))
+		idy := v / (a.numX * a.numZ)
 		// 判断当前格子空间上方是否还有格子
 		if idy > 0 {
-			grid = a.gridMap[v-uint32(a.numX)*uint32(a.numZ)]
+			grid = a.GetGrid(v - a.numX*a.numZ)
 			if grid != nil {
 				gridList = append(gridList, grid)
 			}
 		}
 		// 判断当前格子空间下方是否还有格子
 		if idy < a.numY-1 {
-			grid = a.gridMap[v+uint32(a.numX)*uint32(a.numZ)]
+			grid = a.GetGrid(v + a.numX*a.numZ)
 			if grid != nil {
 				gridList = append(gridList, grid)
 			}
@@ -209,7 +223,7 @@ func (a *AoiManager) GetObjectListByPos(x, y, z float32) map[int64]any {
 
 // GetObjectListByGid 通过gid获取当前格子的全部object
 func (a *AoiManager) GetObjectListByGid(gid uint32) map[int64]any {
-	grid := a.gridMap[gid]
+	grid := a.GetGrid(gid)
 	if grid == nil {
 		return nil
 	}
@@ -219,7 +233,7 @@ func (a *AoiManager) GetObjectListByGid(gid uint32) map[int64]any {
 
 // AddObjectToGrid 添加一个object到一个格子中
 func (a *AoiManager) AddObjectToGrid(objectId int64, object any, gid uint32) bool {
-	grid := a.gridMap[gid]
+	grid := a.GetGrid(gid)
 	if grid == nil {
 		return false
 	}
@@ -229,7 +243,7 @@ func (a *AoiManager) AddObjectToGrid(objectId int64, object any, gid uint32) boo
 
 // RemoveObjectFromGrid 移除一个格子中的object
 func (a *AoiManager) RemoveObjectFromGrid(objectId int64, gid uint32) bool {
-	grid := a.gridMap[gid]
+	grid := a.GetGrid(gid)
 	if grid == nil {
 		return false
 	}

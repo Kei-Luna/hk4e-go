@@ -1,6 +1,7 @@
 package kcp
 
 import (
+	"encoding/binary"
 	"net"
 	"sync/atomic"
 
@@ -24,11 +25,11 @@ func (s *UDPSession) defaultReadLoop() {
 			}
 
 			if n == 20 {
-				connType, _, conv, err := ParseEnet(udpPayload)
+				connType, _, sessionId, conv, _, err := ParseEnet(udpPayload)
 				if err != nil {
 					continue
 				}
-				if conv != s.GetConv() {
+				if sessionId != s.GetSessionId() || conv != s.GetConv() {
 					continue
 				}
 				if connType == ConnEnetFin {
@@ -50,67 +51,70 @@ func (l *Listener) defaultMonitor() {
 	for {
 		if n, from, err := l.conn.ReadFrom(buf); err == nil {
 			udpPayload := buf[:n]
-			var convId uint64 = 0
+			var sessionId uint32 = 0
+			var conv uint32 = 0
+			var rawConv uint64 = 0
 			if n == 20 {
-				connType, enetType, conv, err := ParseEnet(udpPayload)
+				// 连接控制协议
+				var connType uint8 = 0
+				var enetType uint32 = 0
+				connType, enetType, sessionId, conv, rawConv, err = ParseEnet(udpPayload)
 				if err != nil {
 					continue
 				}
-				convId = conv
 				switch connType {
 				case ConnEnetSyn:
 					// 客户端前置握手获取conv
 					l.EnetNotify <- &Enet{
-						Addr:     from.String(),
-						ConvId:   convId,
-						ConnType: ConnEnetSyn,
-						EnetType: enetType,
+						Addr:      from.String(),
+						Conv:      conv,
+						SessionId: sessionId,
+						ConnType:  ConnEnetSyn,
+						EnetType:  enetType,
 					}
 				case ConnEnetEst:
 					// 连接建立
 					l.EnetNotify <- &Enet{
-						Addr:     from.String(),
-						ConvId:   convId,
-						ConnType: ConnEnetEst,
-						EnetType: enetType,
+						Addr:      from.String(),
+						Conv:      conv,
+						SessionId: sessionId,
+						ConnType:  ConnEnetEst,
+						EnetType:  enetType,
 					}
 				case ConnEnetFin:
 					// 连接断开
 					l.EnetNotify <- &Enet{
-						Addr:     from.String(),
-						ConvId:   convId,
-						ConnType: ConnEnetFin,
-						EnetType: enetType,
+						Addr:      from.String(),
+						Conv:      conv,
+						SessionId: sessionId,
+						ConnType:  ConnEnetFin,
+						EnetType:  enetType,
 					}
 				default:
 					continue
 				}
 			} else {
 				// 正常KCP包
-				convId += uint64(udpPayload[0]) << 0
-				convId += uint64(udpPayload[1]) << 8
-				convId += uint64(udpPayload[2]) << 16
-				convId += uint64(udpPayload[3]) << 24
-				convId += uint64(udpPayload[4]) << 32
-				convId += uint64(udpPayload[5]) << 40
-				convId += uint64(udpPayload[6]) << 48
-				convId += uint64(udpPayload[7]) << 56
+				conv = binary.BigEndian.Uint32(udpPayload[0:4])
+				sessionId = binary.BigEndian.Uint32(udpPayload[4:8])
+				rawConv = binary.BigEndian.Uint64(udpPayload[0:8])
 			}
 			l.sessionLock.RLock()
-			conn, exist := l.sessions[convId]
+			conn, exist := l.sessions[rawConv]
 			l.sessionLock.RUnlock()
 			if exist {
 				if conn.remote.String() != from.String() {
 					conn.remote = from
 					// 连接地址改变
 					l.EnetNotify <- &Enet{
-						Addr:     conn.remote.String(),
-						ConvId:   convId,
-						ConnType: ConnEnetAddrChange,
+						Addr:      conn.remote.String(),
+						Conv:      conv,
+						SessionId: sessionId,
+						ConnType:  ConnEnetAddrChange,
 					}
 				}
 			}
-			l.packetInput(udpPayload, from, convId)
+			l.packetInput(udpPayload, from, rawConv)
 		} else {
 			l.notifyReadError(errors.WithStack(err))
 			return
@@ -139,7 +143,7 @@ func (l *Listener) defaultSendEnetNotifyToPeer(enet *Enet) {
 	if err != nil {
 		return
 	}
-	data := BuildEnet(enet.ConnType, enet.EnetType, enet.ConvId)
+	data := BuildEnet(enet.ConnType, enet.EnetType, enet.SessionId, enet.Conv)
 	if data == nil {
 		return
 	}
@@ -147,7 +151,7 @@ func (l *Listener) defaultSendEnetNotifyToPeer(enet *Enet) {
 }
 
 func (s *UDPSession) defaultSendEnetNotifyToPeer(enet *Enet) {
-	data := BuildEnet(enet.ConnType, enet.EnetType, s.GetConv())
+	data := BuildEnet(enet.ConnType, enet.EnetType, s.GetSessionId(), s.GetConv())
 	if data == nil {
 		return
 	}

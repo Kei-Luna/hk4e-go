@@ -1,8 +1,6 @@
 package net
 
 import (
-	"reflect"
-
 	"hk4e/pkg/logger"
 )
 
@@ -15,7 +13,8 @@ const (
 )
 
 type KcpEvent struct {
-	ConvId       uint64
+	Conv         uint32
+	SessionId    uint32
 	EventId      int
 	EventMessage any
 }
@@ -33,7 +32,8 @@ func (k *KcpConnectManager) eventHandle() {
 	// 事件处理
 	for {
 		event := <-k.kcpEventInput
-		logger.Info("kcp manager recv event, ConvId: %v, EventId: %v, EventMessage Type: %v", event.ConvId, event.EventId, reflect.TypeOf(event.EventMessage))
+		logger.Info("kcp manager recv event, Conv: %v, SessionId: %v, EventId: %v, EventMessage: %v",
+			event.Conv, event.SessionId, event.EventId, event.EventMessage)
 		switch event.EventId {
 		case KcpConnForceClose:
 			reason, ok := event.EventMessage.(uint32)
@@ -41,7 +41,7 @@ func (k *KcpConnectManager) eventHandle() {
 				logger.Error("event KcpConnForceClose msg type error")
 				return
 			}
-			k.forceCloseKcpConn(event.ConvId, reason)
+			k.forceCloseKcpConn(event.SessionId, reason)
 		case KcpAllConnForceClose:
 			// 强制关闭所有连接
 			k.closeAllKcpConn()

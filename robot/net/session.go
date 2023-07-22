@@ -84,8 +84,8 @@ func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, e
 
 func (s *Session) SendMsg(cmdId uint16, msg pb.Message) {
 	s.SendChan <- &hk4egatenet.ProtoMsg{
-		ConvId: 0,
-		CmdId:  cmdId,
+		SessionId: 0,
+		CmdId:     cmdId,
 		HeadMessage: &proto.PacketHead{
 			ClientSequenceId: atomic.AddUint32(&s.ClientSeq, 1),
 			SentMs:           uint64(time.Now().UnixMilli()),
@@ -97,8 +97,8 @@ func (s *Session) SendMsg(cmdId uint16, msg pb.Message) {
 
 func (s *Session) SendMsgFwd(cmdId uint16, clientSeq uint32, msg pb.Message) {
 	s.SendChan <- &hk4egatenet.ProtoMsg{
-		ConvId: 0,
-		CmdId:  cmdId,
+		SessionId: 0,
+		CmdId:     cmdId,
 		HeadMessage: &proto.PacketHead{
 			ClientSequenceId: clientSeq,
 			SentMs:           uint64(time.Now().UnixMilli()),

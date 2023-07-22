@@ -261,7 +261,7 @@ func (s *UDPSession) WriteBuffers(v [][]byte) (n int, err error) {
 		if waitsnd < int(s.kcp.snd_wnd) && waitsnd < int(s.kcp.rmt_wnd) {
 			for _, b := range v {
 				n += len(b)
-				// 原神KCP是消息模式 上层不要对消息进行分割 并且保证消息长度小于256*mss
+				// KCP消息模式 上层不要对消息进行分割 并且保证消息长度小于256*mss
 				// for {
 				//	if len(b) <= int(s.kcp.mss) {
 				//		s.kcp.Send(b)
@@ -555,8 +555,21 @@ func (s *UDPSession) update() {
 	}
 }
 
-// GetConv gets conversation id of a session
-func (s *UDPSession) GetConv() uint64 { return s.kcp.conv }
+// GetRawConv gets conversation id of a session
+// 获取KCP组合会话id
+func (s *UDPSession) GetRawConv() uint64 {
+	return s.kcp.conv
+}
+
+// GetConv 获取KCP会话id
+func (s *UDPSession) GetConv() uint32 {
+	return uint32(s.kcp.conv >> 32)
+}
+
+// GetSessionId 获取会话id
+func (s *UDPSession) GetSessionId() uint32 {
+	return uint32(s.kcp.conv >> 0)
+}
 
 // GetRTO gets current rto of the session
 func (s *UDPSession) GetRTO() uint32 {
@@ -659,15 +672,15 @@ type (
 
 		rd atomic.Value // read deadline for Accept()
 
-		EnetNotify chan *Enet // 原神Enet协议上报管道
+		EnetNotify chan *Enet // Enet事件上报管道
 	}
 )
 
 // packet input stage
-func (l *Listener) packetInput(data []byte, addr net.Addr, convId uint64) {
+func (l *Listener) packetInput(data []byte, addr net.Addr, rawConv uint64) {
 	if len(data) >= IKCP_OVERHEAD {
 		l.sessionLock.RLock()
-		s, ok := l.sessions[convId]
+		s, ok := l.sessions[rawConv]
 		l.sessionLock.RUnlock()
 
 		var conv uint64
@@ -694,7 +707,7 @@ func (l *Listener) packetInput(data []byte, addr net.Addr, convId uint64) {
 				s := newUDPSession(conv, l, l.conn, false, addr)
 				s.kcpInput(data)
 				l.sessionLock.Lock()
-				l.sessions[convId] = s
+				l.sessions[rawConv] = s
 				l.sessionLock.Unlock()
 				l.chAccepts <- s
 			}
@@ -818,11 +831,11 @@ func (l *Listener) Close() error {
 }
 
 // closeSession notify the listener that a session has closed
-func (l *Listener) closeSession(convId uint64) (ret bool) {
+func (l *Listener) closeSession(conv uint64) (ret bool) {
 	l.sessionLock.Lock()
 	defer l.sessionLock.Unlock()
-	if _, ok := l.sessions[convId]; ok {
-		delete(l.sessions, convId)
+	if _, ok := l.sessions[conv]; ok {
+		delete(l.sessions, conv)
 		return true
 	}
 	return false
@@ -899,12 +912,13 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 		return nil, errors.WithStack(err)
 	}
 	enet := &Enet{
-		Addr:     udpaddr.String(),
-		ConvId:   0,
-		ConnType: ConnEnetSyn,
-		EnetType: EnetClientConnectKey,
+		Addr:      udpaddr.String(),
+		Conv:      0,
+		SessionId: 0,
+		ConnType:  ConnEnetSyn,
+		EnetType:  EnetClientConnectKey,
 	}
-	data := BuildEnet(enet.ConnType, enet.EnetType, enet.ConvId)
+	data := BuildEnet(enet.ConnType, enet.EnetType, enet.SessionId, enet.Conv)
 	_, err = conn.Write(data)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -918,12 +932,12 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 		return nil, errors.WithStack(errors.New("recv packet remote addr not match"))
 	}
 	udpPayload := buf[:n]
-	connType, enetType, conv, err := ParseEnet(udpPayload)
+	connType, enetType, _, _, rawConv, err := ParseEnet(udpPayload)
 	if err != nil || connType != ConnEnetEst || enetType != EnetClientConnectKey {
 		return nil, errors.WithStack(errors.New("recv packet format error"))
 	}
 
-	return newUDPSession(conv, nil, conn, true, udpaddr), nil
+	return newUDPSession(rawConv, nil, conn, true, udpaddr), nil
 }
 
 // NewConn3 establishes a session and talks KCP protocol over a packet connection.

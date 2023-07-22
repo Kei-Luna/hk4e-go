@@ -71,7 +71,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 	if w.IsBigWorld(world) {
 		aoiManager := alg.NewAoiManager()
 		aoiManager.SetAoiRange(-8000, 4000, -200, 1000, -5500, 6500)
-		aoiManager.Init3DRectAoiManager(1200, 12, 1200)
+		aoiManager.Init3DRectAoiManager(1200, 12, 1200, true)
 		world.bigWorldAoi = aoiManager
 	}
 	logger.Info("big world aoi init finish")
@@ -117,28 +117,28 @@ func (w *WorldManager) LoadSceneBlockAoiMap() {
 	w.sceneBlockAoiMap = make(map[uint32]*alg.AoiManager)
 	for _, sceneLuaConfig := range gdconf.GetSceneLuaConfigMap() {
 		// 检查各block大小是否相同 并提取出block大小
-		minX := int16(math.MaxInt16)
-		maxX := int16(math.MinInt16)
-		minZ := int16(math.MaxInt16)
-		maxZ := int16(math.MinInt16)
-		blockXLen := int16(0)
-		blockZLen := int16(0)
+		minX := int32(math.MaxInt32)
+		maxX := int32(math.MinInt32)
+		minZ := int32(math.MaxInt32)
+		maxZ := int32(math.MinInt32)
+		blockXLen := uint32(0)
+		blockZLen := uint32(0)
 		ok := true
 		for _, blockConfig := range sceneLuaConfig.BlockMap {
-			if int16(blockConfig.BlockRange.Min.X) < minX {
-				minX = int16(blockConfig.BlockRange.Min.X)
+			if int32(blockConfig.BlockRange.Min.X) < minX {
+				minX = int32(blockConfig.BlockRange.Min.X)
 			}
-			if int16(blockConfig.BlockRange.Max.X) > maxX {
-				maxX = int16(blockConfig.BlockRange.Max.X)
+			if int32(blockConfig.BlockRange.Max.X) > maxX {
+				maxX = int32(blockConfig.BlockRange.Max.X)
 			}
-			if int16(blockConfig.BlockRange.Min.Z) < minZ {
-				minZ = int16(blockConfig.BlockRange.Min.Z)
+			if int32(blockConfig.BlockRange.Min.Z) < minZ {
+				minZ = int32(blockConfig.BlockRange.Min.Z)
 			}
-			if int16(blockConfig.BlockRange.Max.Z) > maxZ {
-				maxZ = int16(blockConfig.BlockRange.Max.Z)
+			if int32(blockConfig.BlockRange.Max.Z) > maxZ {
+				maxZ = int32(blockConfig.BlockRange.Max.Z)
 			}
-			xLen := int16(blockConfig.BlockRange.Max.X) - int16(blockConfig.BlockRange.Min.X)
-			zLen := int16(blockConfig.BlockRange.Max.Z) - int16(blockConfig.BlockRange.Min.Z)
+			xLen := uint32(int32(blockConfig.BlockRange.Max.X) - int32(blockConfig.BlockRange.Min.X))
+			zLen := uint32(int32(blockConfig.BlockRange.Max.Z) - int32(blockConfig.BlockRange.Min.Z))
 			if blockXLen == 0 {
 				blockXLen = xLen
 			} else {
@@ -161,24 +161,24 @@ func (w *WorldManager) LoadSceneBlockAoiMap() {
 		if !ok {
 			continue
 		}
-		numX := int16(0)
+		numX := uint32(0)
 		if blockXLen == 0 {
 			logger.Debug("scene block x len is zero, scene id: %v", sceneLuaConfig.Id)
 			numX = 1
 		} else {
-			numX = (maxX - minX) / blockXLen
+			numX = uint32(maxX-minX) / blockXLen
 		}
-		numZ := int16(0)
+		numZ := uint32(0)
 		if blockZLen == 0 {
 			logger.Debug("scene block z len is zero, scene id: %v", sceneLuaConfig.Id)
 			numZ = 1
 		} else {
-			numZ = (maxZ - minZ) / blockZLen
+			numZ = uint32(maxZ-minZ) / blockZLen
 		}
 		// 将每个block作为aoi格子 并在格子中放入block拥有的所有group
 		aoiManager := alg.NewAoiManager()
 		aoiManager.SetAoiRange(minX, maxX, -1.0, 1.0, minZ, maxZ)
-		aoiManager.Init3DRectAoiManager(numX, 1, numZ)
+		aoiManager.Init3DRectAoiManager(numX, 1, numZ, true)
 		for _, block := range sceneLuaConfig.BlockMap {
 			for _, group := range block.GroupMap {
 				aoiManager.AddObjectToGridByPos(int64(group.Id), group,
