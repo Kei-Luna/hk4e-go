@@ -8,17 +8,17 @@ import (
 )
 
 // Enet连接控制协议
-// MM MM MM MM | CC CC CC CC | SS SS SS SS | EE EE EE EE | MM MM MM MM
+// MM MM MM MM | SS SS SS SS | CC CC CC CC | EE EE EE EE | MM MM MM MM
 // MM为表示连接状态的幻数 在开头的4字节和结尾的4字节
-// CC为conv 4字节
 // SS为sessionId 4字节
+// CC为conv 4字节
 // EE为Enet事件类型 4字节
 
 // Enet Enet协议上报结构体
 type Enet struct {
 	Addr      string
-	Conv      uint32
 	SessionId uint32
+	Conv      uint32
 	ConnType  uint8
 	EnetType  uint32
 }
@@ -89,7 +89,7 @@ func BuildEnet(connType uint8, enetType uint32, sessionId uint32, conv uint32) [
 func ParseEnet(data []byte) (connType uint8, enetType uint32, sessionId uint32, conv uint32, rawConv uint64, err error) {
 	sessionId = binary.BigEndian.Uint32(data[4:8])
 	conv = binary.BigEndian.Uint32(data[8:12])
-	rawConv = binary.BigEndian.Uint64(data[4:12])
+	rawConv = binary.LittleEndian.Uint64(data[4:12])
 	// 提取Enet协议头部和尾部幻数
 	udpPayloadEnetHead := data[:4]
 	udpPayloadEnetTail := data[len(data)-4:]

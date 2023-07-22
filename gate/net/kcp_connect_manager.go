@@ -213,7 +213,6 @@ func (k *KcpConnectManager) acceptHandle(listener *kcp.Listener) {
 		}
 		// 连接建立成功通知
 		k.kcpEventOutput <- &KcpEvent{
-			Conv:         conn.GetConv(),
 			SessionId:    conn.GetSessionId(),
 			EventId:      KcpConnEstNotify,
 			EventMessage: conn.RemoteAddr().String(),
@@ -239,8 +238,8 @@ func (k *KcpConnectManager) enetHandle(listener *kcp.Listener) {
 			sessionIdCounter++
 			listener.SendEnetNotifyToPeer(&kcp.Enet{
 				Addr:      enetNotify.Addr,
-				Conv:      binary.BigEndian.Uint32(random.GetRandomByte(4)),
 				SessionId: sessionIdCounter,
+				Conv:      binary.BigEndian.Uint32(random.GetRandomByte(4)),
 				ConnType:  kcp.ConnEnetEst,
 				EnetType:  enetNotify.EnetType,
 			})
@@ -263,7 +262,6 @@ func (k *KcpConnectManager) enetHandle(listener *kcp.Listener) {
 		case kcp.ConnEnetAddrChange:
 			// 连接地址改变通知
 			k.kcpEventOutput <- &KcpEvent{
-				Conv:         enetNotify.Conv,
 				SessionId:    enetNotify.SessionId,
 				EventId:      KcpConnAddrChangeNotify,
 				EventMessage: enetNotify.Addr,
@@ -422,7 +420,6 @@ func (k *KcpConnectManager) closeKcpConn(session *Session, enetType uint32) {
 	}
 	// 连接关闭通知
 	k.kcpEventOutput <- &KcpEvent{
-		Conv:      conn.GetConv(),
 		SessionId: conn.GetSessionId(),
 		EventId:   KcpConnCloseNotify,
 	}

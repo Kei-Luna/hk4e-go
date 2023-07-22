@@ -67,8 +67,8 @@ func (l *Listener) defaultMonitor() {
 					// 客户端前置握手获取conv
 					l.EnetNotify <- &Enet{
 						Addr:      from.String(),
-						Conv:      conv,
 						SessionId: sessionId,
+						Conv:      conv,
 						ConnType:  ConnEnetSyn,
 						EnetType:  enetType,
 					}
@@ -76,8 +76,8 @@ func (l *Listener) defaultMonitor() {
 					// 连接建立
 					l.EnetNotify <- &Enet{
 						Addr:      from.String(),
-						Conv:      conv,
 						SessionId: sessionId,
+						Conv:      conv,
 						ConnType:  ConnEnetEst,
 						EnetType:  enetType,
 					}
@@ -85,8 +85,8 @@ func (l *Listener) defaultMonitor() {
 					// 连接断开
 					l.EnetNotify <- &Enet{
 						Addr:      from.String(),
-						Conv:      conv,
 						SessionId: sessionId,
+						Conv:      conv,
 						ConnType:  ConnEnetFin,
 						EnetType:  enetType,
 					}
@@ -95,9 +95,9 @@ func (l *Listener) defaultMonitor() {
 				}
 			} else {
 				// 正常KCP包
-				conv = binary.BigEndian.Uint32(udpPayload[0:4])
-				sessionId = binary.BigEndian.Uint32(udpPayload[4:8])
-				rawConv = binary.BigEndian.Uint64(udpPayload[0:8])
+				sessionId = binary.LittleEndian.Uint32(udpPayload[0:4])
+				conv = binary.LittleEndian.Uint32(udpPayload[4:8])
+				rawConv = binary.LittleEndian.Uint64(udpPayload[0:8])
 			}
 			l.sessionLock.RLock()
 			conn, exist := l.sessions[rawConv]
@@ -108,8 +108,8 @@ func (l *Listener) defaultMonitor() {
 					// 连接地址改变
 					l.EnetNotify <- &Enet{
 						Addr:      conn.remote.String(),
-						Conv:      conv,
 						SessionId: sessionId,
+						Conv:      conv,
 						ConnType:  ConnEnetAddrChange,
 					}
 				}

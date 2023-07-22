@@ -561,14 +561,18 @@ func (s *UDPSession) GetRawConv() uint64 {
 	return s.kcp.conv
 }
 
-// GetConv 获取KCP会话id
-func (s *UDPSession) GetConv() uint32 {
-	return uint32(s.kcp.conv >> 32)
-}
-
 // GetSessionId 获取会话id
 func (s *UDPSession) GetSessionId() uint32 {
-	return uint32(s.kcp.conv >> 0)
+	rawConvData := make([]byte, 8)
+	binary.LittleEndian.PutUint64(rawConvData, s.kcp.conv)
+	return binary.LittleEndian.Uint32(rawConvData[0:4])
+}
+
+// GetConv 获取KCP会话id
+func (s *UDPSession) GetConv() uint32 {
+	rawConvData := make([]byte, 8)
+	binary.LittleEndian.PutUint64(rawConvData, s.kcp.conv)
+	return binary.LittleEndian.Uint32(rawConvData[4:8])
 }
 
 // GetRTO gets current rto of the session
@@ -913,8 +917,8 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 	}
 	enet := &Enet{
 		Addr:      udpaddr.String(),
-		Conv:      0,
 		SessionId: 0,
+		Conv:      0,
 		ConnType:  ConnEnetSyn,
 		EnetType:  EnetClientConnectKey,
 	}

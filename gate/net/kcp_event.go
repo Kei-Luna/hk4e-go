@@ -13,7 +13,6 @@ const (
 )
 
 type KcpEvent struct {
-	Conv         uint32
 	SessionId    uint32
 	EventId      int
 	EventMessage any
@@ -32,8 +31,8 @@ func (k *KcpConnectManager) eventHandle() {
 	// 事件处理
 	for {
 		event := <-k.kcpEventInput
-		logger.Info("kcp manager recv event, Conv: %v, SessionId: %v, EventId: %v, EventMessage: %v",
-			event.Conv, event.SessionId, event.EventId, event.EventMessage)
+		logger.Info("kcp manager recv event, SessionId: %v, EventId: %v, EventMessage: %v",
+			event.SessionId, event.EventId, event.EventMessage)
 		switch event.EventId {
 		case KcpConnForceClose:
 			reason, ok := event.EventMessage.(uint32)
