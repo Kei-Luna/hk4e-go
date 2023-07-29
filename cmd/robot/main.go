@@ -41,12 +41,30 @@ func main() {
 	}()
 
 	// // DPDK模式需开启
-	// err := engine.InitEngine("00:0C:29:3E:3E:DF", "192.168.199.199", "255.255.255.0", "192.168.199.1")
+	// ec := &engine.Config{
+	// 	DebugLog:      true,                // 调试日志
+	// 	MacAddr:       "00:0C:29:3E:3E:DF", // mac地址
+	// 	IpAddr:        "192.168.199.199",   // ip地址
+	// 	NetworkMask:   "255.255.255.0",     // 子网掩码
+	// 	GatewayIpAddr: "192.168.199.1",     // 网关ip地址
+	// }
+	// // 初始化协议栈
+	// e, err := engine.InitEngine(ec)
 	// if err != nil {
 	// 	panic(err)
 	// }
-	// engine.RunEngine([]int{0, 1, 2, 3}, 4, 1, "0.0.0.0")
-	// time.Sleep(time.Second * 30)
+	// dc := &dpdk.Config{
+	// 	GolangCpuCoreList: []int{4, 5},       // golang侧使用的核心编号列表 非单核模式下至少需要两个核心
+	// 	DpdkCpuCoreList:   []int{0, 1, 2, 3}, // dpdk侧使用的核心编号列表 非单核模式下至少需要四个核心
+	// 	DpdkMemChanNum:    1,                 // dpdk内存通道数
+	// 	DebugLog:          true,              // 收发包调试日志
+	// 	IdleSleep:         false,             // 空闲睡眠 降低cpu占用
+	// 	SingleCore:        false,             // 单核模式 物理单核机器需要开启
+	// 	KniBypassTargetIp: false,             // kni旁路目标ip dpdk-go只接收来自目标ip的包 其他的包全部送到kni网卡
+	// 	TargetIpAddr:      "",                // 目标ip地址
+	// }
+	// // 启动协议栈
+	// e.RunEngine(dc)
 
 	if config.GetConfig().Hk4e.ForwardModeEnable {
 		// natsrpc client
@@ -101,7 +119,8 @@ func main() {
 		switch s {
 		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
 			// // DPDK模式需开启
-			// engine.StopEngine()
+			// // 停止协议栈
+			// e.StopEngine()
 			return
 		case syscall.SIGHUP:
 		default:
@@ -116,12 +135,12 @@ func runPacketCaptureApi() {
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	engine := gin.Default()
-	engine.GET("/packet/capture/ws", packetCaptureWs)
-	engine.GET("/packet/capture/list", packetCaptureList)
+	e := gin.Default()
+	e.GET("/packet/capture/ws", packetCaptureWs)
+	e.GET("/packet/capture/list", packetCaptureList)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
-	err := engine.Run(addr)
+	err := e.Run(addr)
 	if err != nil {
 		logger.Error("gin run error: %v", err)
 		return

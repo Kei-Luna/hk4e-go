@@ -10,13 +10,13 @@ package kcp
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 )
@@ -206,7 +206,7 @@ func (s *UDPSession) Read(b []byte) (n int, err error) {
 		if !s.rd.IsZero() {
 			if time.Now().After(s.rd) {
 				s.mu.Unlock()
-				return 0, errors.WithStack(errTimeout)
+				return 0, errTimeout
 			}
 
 			delay := time.Until(s.rd)
@@ -222,11 +222,11 @@ func (s *UDPSession) Read(b []byte) (n int, err error) {
 				timeout.Stop()
 			}
 		case <-c:
-			return 0, errors.WithStack(errTimeout)
+			return 0, errTimeout
 		case <-s.chSocketReadError:
 			return 0, s.socketReadError.Load().(error)
 		case <-s.die:
-			return 0, errors.WithStack(io.ErrClosedPipe)
+			return 0, io.ErrClosedPipe
 		}
 	}
 }
@@ -250,7 +250,7 @@ func (s *UDPSession) WriteBuffers(v [][]byte) (n int, err error) {
 		case <-s.chSocketWriteError:
 			return 0, s.socketWriteError.Load().(error)
 		case <-s.die:
-			return 0, errors.WithStack(io.ErrClosedPipe)
+			return 0, io.ErrClosedPipe
 		default:
 		}
 
@@ -289,7 +289,7 @@ func (s *UDPSession) WriteBuffers(v [][]byte) (n int, err error) {
 		if !s.wd.IsZero() {
 			if time.Now().After(s.wd) {
 				s.mu.Unlock()
-				return 0, errors.WithStack(errTimeout)
+				return 0, errTimeout
 			}
 			delay := time.Until(s.wd)
 			timeout = time.NewTimer(delay)
@@ -303,11 +303,11 @@ func (s *UDPSession) WriteBuffers(v [][]byte) (n int, err error) {
 				timeout.Stop()
 			}
 		case <-c:
-			return 0, errors.WithStack(errTimeout)
+			return 0, errTimeout
 		case <-s.chSocketWriteError:
 			return 0, s.socketWriteError.Load().(error)
 		case <-s.die:
-			return 0, errors.WithStack(io.ErrClosedPipe)
+			return 0, io.ErrClosedPipe
 		}
 	}
 }
@@ -351,7 +351,7 @@ func (s *UDPSession) Close() error {
 			return nil
 		}
 	} else {
-		return errors.WithStack(io.ErrClosedPipe)
+		return io.ErrClosedPipe
 	}
 }
 
@@ -789,13 +789,13 @@ func (l *Listener) AcceptKCP() (*UDPSession, error) {
 
 	select {
 	case <-timeout:
-		return nil, errors.WithStack(errTimeout)
+		return nil, errTimeout
 	case c := <-l.chAccepts:
 		return c, nil
 	case <-l.chSocketReadError:
 		return nil, l.socketReadError.Load().(error)
 	case <-l.die:
-		return nil, errors.WithStack(io.ErrClosedPipe)
+		return nil, io.ErrClosedPipe
 	}
 }
 
@@ -829,7 +829,7 @@ func (l *Listener) Close() error {
 			err = l.conn.Close()
 		}
 	} else {
-		err = errors.WithStack(io.ErrClosedPipe)
+		err = io.ErrClosedPipe
 	}
 	return err
 }
@@ -861,11 +861,11 @@ func Listen(laddr string) (net.Listener, error) { return ListenWithOptions(laddr
 func ListenWithOptions(laddr string) (*Listener, error) {
 	udpaddr, err := net.ResolveUDPAddr("udp", laddr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	conn, err := net.ListenUDP("udp", udpaddr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	return serveConn(conn, true)
@@ -904,7 +904,7 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 	// network type detection
 	udpaddr, err := net.ResolveUDPAddr("udp", raddr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	network := "udp4"
 	if udpaddr.IP.To4() == nil {
@@ -913,7 +913,7 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 
 	conn, err := net.DialUDP(network, nil, udpaddr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	enet := &Enet{
 		Addr:      udpaddr.String(),
@@ -925,20 +925,20 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 	data := BuildEnet(enet.ConnType, enet.EnetType, enet.SessionId, enet.Conv)
 	_, err = conn.Write(data)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	buf := make([]byte, mtuLimit)
 	n, addr, err := conn.ReadFrom(buf)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	if addr.String() != udpaddr.String() {
-		return nil, errors.WithStack(errors.New("recv packet remote addr not match"))
+		return nil, errors.New("recv packet remote addr not match")
 	}
 	udpPayload := buf[:n]
 	connType, enetType, _, _, rawConv, err := ParseEnet(udpPayload)
 	if err != nil || connType != ConnEnetEst || enetType != EnetClientConnectKey {
-		return nil, errors.WithStack(errors.New("recv packet format error"))
+		return nil, errors.New("recv packet format error")
 	}
 
 	return newUDPSession(rawConv, nil, conn, true, udpaddr), nil
@@ -960,7 +960,7 @@ func NewConn2(raddr net.Addr, conn net.PacketConn) (*UDPSession, error) {
 func NewConn(raddr string, conn net.PacketConn) (*UDPSession, error) {
 	udpaddr, err := net.ResolveUDPAddr("udp", raddr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	return NewConn2(udpaddr, conn)
 }

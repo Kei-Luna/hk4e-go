@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sort"
 	"strings"
@@ -13,8 +14,6 @@ import (
 	"hk4e/node/api"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
-
-	"github.com/pkg/errors"
 )
 
 const (

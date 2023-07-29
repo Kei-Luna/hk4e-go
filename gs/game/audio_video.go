@@ -1,6 +1,7 @@
 package game
 
 import (
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -10,12 +11,10 @@ import (
 	"time"
 
 	"hk4e/common/constant"
-	"hk4e/pkg/logger"
-
 	"hk4e/gs/model"
+	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
 
-	"github.com/pkg/errors"
 	"gitlab.com/gomidi/midi/v2"
 	"gitlab.com/gomidi/midi/v2/smf"
 )

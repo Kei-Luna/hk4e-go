@@ -5,7 +5,6 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/ipv4"
 )
 
@@ -40,7 +39,7 @@ func (s *UDPSession) defaultReadLoop() {
 
 			s.packetInput(udpPayload)
 		} else {
-			s.notifyReadError(errors.WithStack(err))
+			s.notifyReadError(err)
 			return
 		}
 	}
@@ -116,7 +115,7 @@ func (l *Listener) defaultMonitor() {
 			}
 			l.packetInput(udpPayload, from, rawConv)
 		} else {
-			l.notifyReadError(errors.WithStack(err))
+			l.notifyReadError(err)
 			return
 		}
 	}
@@ -130,7 +129,7 @@ func (s *UDPSession) defaultTx(txqueue []ipv4.Message) {
 			nbytes += n
 			npkts++
 		} else {
-			s.notifyWriteError(errors.WithStack(err))
+			s.notifyWriteError(err)
 			break
 		}
 	}

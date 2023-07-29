@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -24,7 +25,6 @@ import (
 	"hk4e/protocol/proto"
 
 	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
 	pb "google.golang.org/protobuf/proto"
 )
 

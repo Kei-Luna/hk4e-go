@@ -3,6 +3,7 @@ package login
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math"
 	"strconv"
 
@@ -15,7 +16,6 @@ import (
 	"hk4e/pkg/random"
 	"hk4e/protocol/proto"
 
-	"github.com/pkg/errors"
 	pb "google.golang.org/protobuf/proto"
 )
 
