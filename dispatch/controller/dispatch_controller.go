@@ -139,8 +139,8 @@ func GetRegionCurr(ec2b *random.Ec2b, gateServerAddr *api.GateServerAddr, stopSe
 	return regionCurr
 }
 
-// dispatch错误返回
-func (c *Controller) dispatchError(ctx *gin.Context, dispatchLevel uint8) {
+// dispatch请求错误响应
+func (c *Controller) dispatchReqErrorRsp(ctx *gin.Context, dispatchLevel uint8) {
 	if dispatchLevel == 1 {
 		// query_region_list
 		_, _ = ctx.Writer.WriteString("CP///////////wE=")
@@ -158,7 +158,7 @@ func (c *Controller) queryRegionList(ctx *gin.Context) {
 		regionListData, err := pb.Marshal(regionList)
 		if err != nil {
 			logger.Error("pb marshal QueryRegionListHttpRsp error: %v", err)
-			c.dispatchError(ctx, 1)
+			c.dispatchReqErrorRsp(ctx, 1)
 			return
 		}
 		regionListBase64 := base64.StdEncoding.EncodeToString(regionListData)
@@ -167,7 +167,7 @@ func (c *Controller) queryRegionList(ctx *gin.Context) {
 		regionListBase64, err := c.queryRegionListForwardMode(ctx.Request.RequestURI)
 		if err != nil {
 			logger.Error("get forward dispatch region list info error: %v", err)
-			c.dispatchError(ctx, 1)
+			c.dispatchReqErrorRsp(ctx, 1)
 			return
 		}
 		_, _ = ctx.Writer.WriteString(regionListBase64)
@@ -178,12 +178,12 @@ func (c *Controller) queryRegionList(ctx *gin.Context) {
 func (c *Controller) queryCurRegion(ctx *gin.Context) {
 	versionName := ctx.Query("version")
 	if versionName == "" {
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	version, versionStr := c.getClientVersionByName(versionName)
 	if version == 0 {
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	gateServerAddr, err := c.discovery.GetGateServerAddr(ctx.Request.Context(), &api.GetGateServerAddrReq{
@@ -191,7 +191,7 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("get gate server addr error: %v", err)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	var regionCurr *proto.QueryCurrRegionHttpRsp = nil
@@ -200,7 +200,7 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 		stopServerInfo, err := c.discovery.GetStopServerInfo(ctx.Request.Context(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
 		if err != nil {
 			logger.Error("get stop server info error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, stopServerInfo)
@@ -208,14 +208,14 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 		regionCurr, err = c.queryCurRegionForwardMode(ctx.Request.RequestURI, version, ctx.Query("key_id"), gateServerAddr)
 		if err != nil {
 			logger.Error("get forward dispatch curr region info error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 	}
 	regionCurrData, err := pb.Marshal(regionCurr)
 	if err != nil {
 		logger.Error("pb marshal QueryCurrRegionHttpRsp error: %v", err)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	if version < 275 {
@@ -229,7 +229,7 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 	encPubPrivKey, exist := c.encRsaKeyMap[keyId]
 	if !exist {
 		logger.Error("can not found key id: %v", keyId)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	chunkSize := 256 - 11
@@ -243,30 +243,30 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 		pubKey, err := endec.RsaParsePubKeyByPrivKey(encPubPrivKey)
 		if err != nil {
 			logger.Error("parse rsa pub key error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		privKey, err := endec.RsaParsePrivKey(encPubPrivKey)
 		if err != nil {
 			logger.Error("parse rsa priv key error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		encrypt, err := endec.RsaEncrypt(chunk, pubKey)
 		if err != nil {
 			logger.Error("rsa enc error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		decrypt, err := endec.RsaDecrypt(encrypt, privKey)
 		if err != nil {
 			logger.Error("rsa dec error: %v", err)
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		if bytes.Compare(decrypt, chunk) != 0 {
 			logger.Error("rsa dec test fail")
-			c.dispatchError(ctx, 2)
+			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
 		encryptedRegionInfo = append(encryptedRegionInfo, encrypt...)
@@ -274,24 +274,24 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 	signPrivkey, err := endec.RsaParsePrivKey(c.signRsaKey)
 	if err != nil {
 		logger.Error("parse rsa priv key error: %v", err)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	signData, err := endec.RsaSign(regionCurrData, signPrivkey)
 	if err != nil {
 		logger.Error("rsa sign error: %v", err)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	ok, err := endec.RsaVerify(regionCurrData, signData, &signPrivkey.PublicKey)
 	if err != nil {
 		logger.Error("rsa verify error: %v", err)
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	if !ok {
 		logger.Error("rsa verify test fail")
-		c.dispatchError(ctx, 2)
+		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
 	rsp := &httpapi.QueryCurRegionRspJson{

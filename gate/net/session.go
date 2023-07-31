@@ -3,8 +3,11 @@ package net
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -475,26 +478,46 @@ func (k *KcpConnectManager) loginFailRsp(uid uint32, retCode proto.Retcode, isFo
 }
 
 func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Session) *proto.GetPlayerTokenRsp {
+	// 验证token
+	signStr := fmt.Sprintf("app_id=%d&channel_id=%d&combo_token=%s&open_id=%s", 1, 1, req.AccountToken, req.AccountUid)
+	signHash := hmac.New(sha256.New, []byte(config.GetConfig().Hk4e.LoginSdkAccountKey))
+	signHash.Write([]byte(signStr))
+	signData := signHash.Sum(nil)
+	sign := hex.EncodeToString(signData)
 	tokenVerifyRsp, err := httpclient.PostJson[controller.TokenVerifyRsp](
 		config.GetConfig().Hk4e.LoginSdkUrl+"/gate/token/verify",
 		&controller.TokenVerifyReq{
-			AccountId:    req.AccountUid,
-			AccountToken: req.AccountToken,
+			AppID:      1,
+			ChannelID:  1,
+			OpenID:     req.AccountUid,
+			ComboToken: req.AccountToken,
+			Sign:       sign,
+			Region:     "",
 		})
 	if err != nil {
 		logger.Error("verify token error: %v, account uid: %v", err, req.AccountUid)
 		k.loginFailClose(session)
 		return nil
 	}
-	uid := tokenVerifyRsp.PlayerID
-	if !tokenVerifyRsp.Valid {
-		logger.Error("token error, uid: %v", uid)
-		return k.loginFailRsp(uid, proto.Retcode_RET_TOKEN_ERROR, false, 0)
+	if tokenVerifyRsp.RetCode != 0 {
+		logger.Error("token error, account id: %v", req.AccountUid)
+		return k.loginFailRsp(0, proto.Retcode_RET_TOKEN_ERROR, false, 0)
 	}
-	// comboToken验证成功
-	if tokenVerifyRsp.Forbid {
+	// 查询玩家账号信息
+	playerInfoRsp, err := httpclient.PostJson[controller.PlayerInfoRsp](
+		config.GetConfig().Hk4e.LoginSdkUrl+"/gate/player/info",
+		&controller.PlayerInfoReq{
+			AccountId: req.AccountUid,
+		})
+	if err != nil {
+		logger.Error("query player info error: %v, account uid: %v", err, req.AccountUid)
+		k.loginFailClose(session)
+		return nil
+	}
+	uid := playerInfoRsp.PlayerID
+	if playerInfoRsp.Forbid {
 		// 封号通知
-		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, tokenVerifyRsp.ForbidEndTime)
+		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, playerInfoRsp.ForbidEndTime)
 	}
 	addr := session.conn.RemoteAddr().String()
 	addrSplit := strings.Split(addr, ":")
