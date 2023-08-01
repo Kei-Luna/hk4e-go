@@ -40,13 +40,13 @@ docker_clean:
 .PHONY: docker_config
 docker_config:
 	mkdir -p ./docker && cp -rf ./docker-compose.yaml ./docker/
-	mkdir -p ./docker/node/bin && cp -rf ./cmd/node/* ./docker/node/bin/
-	mkdir -p ./docker/dispatch/bin && cp -rf ./cmd/dispatch/* ./docker/dispatch/bin/
-	mkdir -p ./docker/gate/bin && cp -rf ./cmd/gate/* ./docker/gate/bin/
-	mkdir -p ./docker/anticheat/bin && cp -rf ./cmd/anticheat/* ./docker/anticheat/bin/
-	mkdir -p ./docker/pathfinding/bin && cp -rf ./cmd/pathfinding/* ./docker/pathfinding/bin/
-	mkdir -p ./docker/gs/bin && cp -rf ./cmd/gs/* ./docker/gs/bin/
-	mkdir -p ./docker/gm/bin && cp -rf ./cmd/gm/* ./docker/gm/bin/
+	mkdir -p ./docker/node/bin && cp -rf ./cmd/node/* ./docker/node/bin/ && rm -rf ./docker/node/bin/*.go
+	mkdir -p ./docker/dispatch/bin && cp -rf ./cmd/dispatch/* ./docker/dispatch/bin/ && rm -rf ./docker/dispatch/bin/*.go
+	mkdir -p ./docker/gate/bin && cp -rf ./cmd/gate/* ./docker/gate/bin/ && rm -rf ./docker/gate/bin/*.go
+	mkdir -p ./docker/anticheat/bin && cp -rf ./cmd/anticheat/* ./docker/anticheat/bin/ && rm -rf ./docker/anticheat/bin/*.go
+	mkdir -p ./docker/pathfinding/bin && cp -rf ./cmd/pathfinding/* ./docker/pathfinding/bin/ && rm -rf ./docker/pathfinding/bin/*.go
+	mkdir -p ./docker/gs/bin && cp -rf ./cmd/gs/* ./docker/gs/bin/ && rm -rf ./docker/gs/bin/*.go
+	mkdir -p ./docker/gm/bin && cp -rf ./cmd/gm/* ./docker/gm/bin/ && rm -rf ./docker/gm/bin/*.go
 
 # 构建镜像
 .PHONY: docker_build
