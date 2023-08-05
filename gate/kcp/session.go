@@ -928,6 +928,10 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 		return nil, err
 	}
 	buf := make([]byte, mtuLimit)
+	err = conn.SetReadDeadline(time.Now().Add(time.Second * 10))
+	if err != nil {
+		return nil, err
+	}
 	n, addr, err := conn.ReadFrom(buf)
 	if err != nil {
 		return nil, err
@@ -936,10 +940,15 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 		return nil, errors.New("recv packet remote addr not match")
 	}
 	udpPayload := buf[:n]
-	connType, enetType, _, _, rawConv, err := ParseEnet(udpPayload)
+	connType, enetType, sessionId, conv, _, err := ParseEnet(udpPayload)
 	if err != nil || connType != ConnEnetEst || enetType != EnetClientConnectKey {
 		return nil, errors.New("recv packet format error")
 	}
+
+	rawConvData := make([]byte, 8)
+	binary.LittleEndian.PutUint32(rawConvData[0:4], sessionId)
+	binary.LittleEndian.PutUint32(rawConvData[4:8], conv)
+	rawConv := binary.LittleEndian.Uint64(rawConvData)
 
 	return newUDPSession(rawConv, nil, conn, true, udpaddr), nil
 }

@@ -125,7 +125,14 @@ func (s *UDPSession) defaultTx(txqueue []ipv4.Message) {
 	nbytes := 0
 	npkts := 0
 	for k := range txqueue {
-		if n, err := s.conn.WriteTo(txqueue[k].Buffers[0], txqueue[k].Addr); err == nil {
+		var n = 0
+		var err error = nil
+		if s.l != nil {
+			n, err = s.conn.WriteTo(txqueue[k].Buffers[0], txqueue[k].Addr)
+		} else {
+			n, err = s.conn.(*net.UDPConn).Write(txqueue[k].Buffers[0])
+		}
+		if err == nil {
 			nbytes += n
 			npkts++
 		} else {
