@@ -936,6 +936,10 @@ func DialWithOptions(raddr string) (*UDPSession, error) {
 	if err != nil {
 		return nil, err
 	}
+	err = conn.SetReadDeadline(time.Time{})
+	if err != nil {
+		return nil, err
+	}
 	if addr.String() != udpaddr.String() {
 		return nil, errors.New("recv packet remote addr not match")
 	}
