@@ -3,7 +3,6 @@ package game
 import (
 	"time"
 
-	"hk4e/common/config"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -22,7 +21,7 @@ type UserInfo struct {
 
 // GetGachaInfoReq 获取卡池信息
 func (g *Game) GetGachaInfoReq(player *model.Player, payloadMsg pb.Message) {
-	serverAddr := config.GetConfig().Hk4e.GachaHistoryServer
+	serverAddr := "http://223.5.5.5"
 	userInfo := &UserInfo{
 		UserId: player.PlayerID,
 		RegisteredClaims: jwt.RegisteredClaims{

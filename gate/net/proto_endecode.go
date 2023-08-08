@@ -13,6 +13,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+// pb协议编解码
+
 type ProtoMsg struct {
 	SessionId      uint32
 	CmdId          uint16

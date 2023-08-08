@@ -55,7 +55,7 @@ func (l *Listener) defaultMonitor() {
 			var rawConv uint64 = 0
 			if n == 20 {
 				// 连接控制协议
-				var connType uint8 = 0
+				var connType = ""
 				var enetType uint32 = 0
 				connType, enetType, sessionId, conv, rawConv, err = ParseEnet(udpPayload)
 				if err != nil {

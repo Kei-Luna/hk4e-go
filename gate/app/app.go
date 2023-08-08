@@ -74,16 +74,8 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.GATE, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	connectManager := net.NewKcpConnectManager(messageQueue, discoveryClient)
-	defer connectManager.Close()
-
-	go func() {
-		outputChan := connectManager.GetKcpEventOutputChan()
-		for {
-			kcpEvent := <-outputChan
-			logger.Info("kcpEvent: %+v", *kcpEvent)
-		}
-	}()
+	kcpConnManager := net.NewKcpConnManager(messageQueue, discoveryClient)
+	defer kcpConnManager.Close()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)

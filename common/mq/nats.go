@@ -257,7 +257,7 @@ func (m *MessageQueue) sendHandler() {
 }
 
 type GateTcpMqInst struct {
-	conn       net.Conn
+	conn       *net.TCPConn
 	serverType string
 	appId      string
 }
@@ -284,17 +284,18 @@ func (m *MessageQueue) runGateTcpMqServer() {
 		return
 	}
 	for {
-		conn, err := listener.Accept()
+		conn, err := listener.AcceptTCP()
 		if err != nil {
 			logger.Error("gate tcp mq accept error: %v", err)
 			return
 		}
+		_ = conn.SetNoDelay(true)
 		logger.Info("accept gate tcp mq, server addr: %v", conn.RemoteAddr().String())
 		go m.gateTcpMqHandshake(conn)
 	}
 }
 
-func (m *MessageQueue) gateTcpMqHandshake(conn net.Conn) {
+func (m *MessageQueue) gateTcpMqHandshake(conn *net.TCPConn) {
 	recvBuf := make([]byte, 1500)
 	recvLen, err := conn.Read(recvBuf)
 	if err != nil {
@@ -382,6 +383,7 @@ func (m *MessageQueue) gateTcpMqConn(gateServerConnAddrMap map[string]bool) {
 			logger.Error("gate tcp mq conn error: %v", err)
 			return
 		}
+		_ = conn.SetNoDelay(true)
 		_, err = conn.Write([]byte(m.serverType + "@" + m.appId))
 		if err != nil {
 			logger.Error("gate tcp mq handshake send error: %v", err)

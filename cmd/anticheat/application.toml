@@ -1,5 +1,5 @@
 [hk4e]
-game_data_config_path = "./game_data_config"
+game_data_config_path = "./game_data_config" # 配置表路径
 
 [logger]
 level = "DEBUG"

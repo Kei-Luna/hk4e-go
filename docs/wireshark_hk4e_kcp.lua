@@ -28,17 +28,15 @@ function hk4e_kcp_protocol.dissector(buffer, pinfo, tree)
         local enet_sess = buffer(4, 4):uint()
         local enet_conv = buffer(8, 4):uint()
         local enet_type = buffer(12, 4):uint()
-        pinfo.cols.info = string.format(" [ENET] Sess=%d Conv=%d Type=%d", enet_sess, enet_conv, enet_type)
+        pinfo.cols.info:append(string.format(" [ENET] Sess=%u Conv=%u Type=%u", enet_sess, enet_conv, enet_type))
         return
     end
 
+    local first_cmd_name = get_cmd_name(buffer(8, 1):le_uint())
     local first_sn = buffer(16, 4):le_uint()
     local first_una = buffer(20, 4):le_uint()
     local first_len = buffer(24, 4):le_uint()
-    local first_cmd_name = get_cmd_name(buffer(8, 1):le_uint())
-    local info = string.format(" [%s] Sn=%d Una=%d Len=%d", first_cmd_name, first_sn, first_una, first_len)
-
-    pinfo.cols.info = info
+    pinfo.cols.info:append(string.format(" [%s] Sn=%u Una=%u Len=%u", first_cmd_name, first_sn, first_una, first_len))
 
     -- 解析多个KCP包
     local offset = 0

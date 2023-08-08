@@ -49,6 +49,7 @@ services:
     container_name: gate_320
     ports:
       - "22222:22222/udp"
+      - "22222:22222/tcp"
       - "33333:33333/tcp"
       - "3456:3456/tcp"
     environment:

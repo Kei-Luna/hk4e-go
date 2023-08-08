@@ -7,6 +7,8 @@ import (
 	"hk4e/pkg/logger"
 )
 
+// hk4e游戏协议编解码
+
 /*
 										原神KCP协议(带*为xor加密数据)
 0			1			2					4											8(字节)

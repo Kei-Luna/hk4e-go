@@ -29,6 +29,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+// 会话管理
+
 const (
 	ConnEst = iota
 	ConnWaitLogin
@@ -37,7 +39,7 @@ const (
 )
 
 // 转发客户端消息到其他服务器 每个连接独立协程
-func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, session *Session) {
+func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, session *Session) {
 	if protoMsg.HeadMessage == nil {
 		logger.Error("recv null head msg: %v", protoMsg)
 		return
@@ -68,11 +70,7 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 		if session.connState != ConnActive {
 			return
 		}
-		k.kcpEventInput <- &KcpEvent{
-			SessionId:    protoMsg.SessionId,
-			EventId:      KcpConnForceClose,
-			EventMessage: uint32(kcp.EnetClientClose),
-		}
+		k.forceCloseKcpConn(protoMsg.SessionId, kcp.EnetClientClose)
 	case cmd.PingReq:
 		// ping
 		pingReq := protoMsg.PayloadMessage.(*proto.PingReq)
@@ -87,16 +85,21 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 			PayloadMessage: pingRsp,
 		}
 		session.kcpRawSendChan <- msg
-		logger.Debug("sessionId: %v, RTO: %v, SRTT: %v, RTTVar: %v",
-			protoMsg.SessionId, session.conn.GetRTO(), session.conn.GetSRTT(), session.conn.GetSRTTVar())
 		if session.connState != ConnActive {
 			return
 		}
 		// 通知GS玩家客户端往返时延
-		rtt := session.conn.GetSRTT()
+		rtt := uint32(0)
+		if !session.conn.IsTcpMode() {
+			logger.Debug("sessionId: %v, KcpRTO: %v, KcpSRTT: %v, KcpRTTVar: %v",
+				protoMsg.SessionId, session.conn.GetKcpRTO(), session.conn.GetKcpSRTT(), session.conn.GetKcpSRTTVar())
+			rtt = uint32(session.conn.GetKcpSRTT())
+		} else {
+			rtt = session.tcpRtt
+		}
 		connCtrlMsg := &mq.ConnCtrlMsg{
 			UserId:     session.userId,
-			ClientRtt:  uint32(rtt),
+			ClientRtt:  rtt,
 			ClientTime: 0,
 		}
 		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
@@ -187,7 +190,7 @@ func (k *KcpConnectManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, s
 }
 
 // 转发其他服务器的消息到客户端 所有连接共享一个协程
-func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
+func (k *KcpConnManager) forwardServerMsgToClientHandle() {
 	logger.Debug("server msg forward handle start")
 	// 函数栈内缓存 添加删除事件走chan 避免频繁加锁
 	sessionMap := make(map[uint32]*Session)
@@ -215,7 +218,7 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 					// 分发到每个连接具体的发送协程
 					sessionId, exist := userIdSessionIdMap[gameMsg.UserId]
 					if !exist {
-						logger.Error("can not find sessionId by userId")
+						logger.Error("can not find sessionId by userId: %v, cmdId: %v", gameMsg.UserId, gameMsg.CmdId)
 						continue
 					}
 					protoMsg := &ProtoMsg{
@@ -263,11 +266,7 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 						logger.Error("can not find sessionId by userId")
 						continue
 					}
-					k.kcpEventInput <- &KcpEvent{
-						SessionId:    sessionId,
-						EventId:      KcpConnForceClose,
-						EventMessage: connCtrlMsg.KickReason,
-					}
+					k.forceCloseKcpConn(sessionId, connCtrlMsg.KickReason)
 				}
 			case mq.MsgTypeServer:
 				serverMsg := netMsg.ServerMsg
@@ -328,7 +327,7 @@ func (k *KcpConnectManager) forwardServerMsgToClientHandle() {
 }
 
 // 转发客户端消息到robot
-func (k *KcpConnectManager) forwardClientMsgToRobotHandle(protoMsg *ProtoMsg, session *Session) {
+func (k *KcpConnManager) forwardClientMsgToRobotHandle(protoMsg *ProtoMsg, session *Session) {
 	if protoMsg.HeadMessage == nil {
 		logger.Error("recv null head msg: %v", protoMsg)
 		return
@@ -378,7 +377,7 @@ func (k *KcpConnectManager) forwardClientMsgToRobotHandle(protoMsg *ProtoMsg, se
 }
 
 // 转发robot的消息到客户端
-func (k *KcpConnectManager) forwardRobotMsgToClientHandle(session *Session) {
+func (k *KcpConnManager) forwardRobotMsgToClientHandle(session *Session) {
 	logger.Debug("robot msg forward handle start")
 	ticker := time.NewTicker(time.Second)
 	for {
@@ -433,14 +432,14 @@ func (k *KcpConnectManager) forwardRobotMsgToClientHandle(session *Session) {
 			case mq.MsgTypeServer:
 				switch netMsg.EventId {
 				case mq.ServerForwardModeServerCloseNotify:
-					_ = session.conn.Close()
+					session.conn.Close()
 				}
 			}
 		}
 	}
 }
 
-func (k *KcpConnectManager) getHeadMsg(clientSeq uint32) *proto.PacketHead {
+func (k *KcpConnManager) getHeadMsg(clientSeq uint32) *proto.PacketHead {
 	headMsg := new(proto.PacketHead)
 	if clientSeq != 0 {
 		headMsg.ClientSequenceId = clientSeq
@@ -455,15 +454,11 @@ type RemoteKick struct {
 	kickFinishNotifyChan chan bool
 }
 
-func (k *KcpConnectManager) loginFailClose(session *Session) {
-	k.kcpEventInput <- &KcpEvent{
-		SessionId:    session.sessionId,
-		EventId:      KcpConnForceClose,
-		EventMessage: uint32(kcp.EnetLoginUnfinished),
-	}
+func (k *KcpConnManager) loginFailClose(session *Session) {
+	k.forceCloseKcpConn(session.sessionId, kcp.EnetLoginUnfinished)
 }
 
-func (k *KcpConnectManager) loginFailRsp(uid uint32, retCode proto.Retcode, isForbid bool, forbidEndTime uint32) *proto.GetPlayerTokenRsp {
+func (k *KcpConnManager) loginFailRsp(uid uint32, retCode proto.Retcode, isForbid bool, forbidEndTime uint32) *proto.GetPlayerTokenRsp {
 	rsp := new(proto.GetPlayerTokenRsp)
 	rsp.Uid = uid
 	rsp.Retcode = int32(retCode)
@@ -477,7 +472,7 @@ func (k *KcpConnectManager) loginFailRsp(uid uint32, retCode proto.Retcode, isFo
 	return rsp
 }
 
-func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Session) *proto.GetPlayerTokenRsp {
+func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Session) *proto.GetPlayerTokenRsp {
 	// 验证token
 	signStr := fmt.Sprintf("app_id=%d&channel_id=%d&combo_token=%s&open_id=%s", 1, 1, req.AccountToken, req.AccountUid)
 	signHash := hmac.New(sha256.New, []byte(config.GetConfig().Hk4e.LoginSdkAccountKey))
@@ -519,7 +514,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 		// 封号通知
 		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, playerInfoRsp.ForbidEndTime)
 	}
-	addr := session.conn.RemoteAddr().String()
+	addr := session.conn.RemoteAddr()
 	addrSplit := strings.Split(addr, ":")
 	clientIp := addrSplit[0]
 	stopServerInfo, err := k.discovery.GetStopServerInfo(context.TODO(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
@@ -563,11 +558,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 		oldSession := k.GetSessionByUserId(uid)
 		if oldSession != nil {
 			// 本地顶号
-			k.kcpEventInput <- &KcpEvent{
-				SessionId:    oldSession.sessionId,
-				EventId:      KcpConnForceClose,
-				EventMessage: uint32(kcp.EnetServerRelogin),
-			}
+			k.forceCloseKcpConn(oldSession.sessionId, kcp.EnetServerRelogin)
 		} else {
 			// 远程顶号
 			connCtrlMsg := new(mq.ConnCtrlMsg)
@@ -636,7 +627,7 @@ func (k *KcpConnectManager) doGateLogin(req *proto.GetPlayerTokenReq, session *S
 	return rsp
 }
 
-func (k *KcpConnectManager) buildGateLoginRsp(uid uint32, accountUid string, token string, clientIp string) *proto.GetPlayerTokenRsp {
+func (k *KcpConnManager) buildGateLoginRsp(uid uint32, accountUid string, token string, clientIp string) *proto.GetPlayerTokenRsp {
 	rsp := &proto.GetPlayerTokenRsp{
 		Uid:                    uid,
 		AccountUid:             accountUid,
@@ -656,7 +647,7 @@ func (k *KcpConnectManager) buildGateLoginRsp(uid uint32, accountUid string, tok
 	return rsp
 }
 
-func (k *KcpConnectManager) keyExchange(session *Session, uid uint32, rsp *proto.GetPlayerTokenRsp) bool {
+func (k *KcpConnManager) keyExchange(session *Session, uid uint32, rsp *proto.GetPlayerTokenRsp) bool {
 	timeRand := random.GetTimeRand()
 	serverSeedUint64 := timeRand.Uint64()
 	session.seed = serverSeedUint64
