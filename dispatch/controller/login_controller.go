@@ -92,14 +92,14 @@ func (c *Controller) apiLogin(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
-	account, err := c.dao.QueryAccountByField("Username", username)
+	account, err := c.db.QueryAccountByField("username", username)
 	if err != nil {
 		logger.Error("query account from db error: %v", err)
 		return
 	}
 	if account == nil {
 		// 自动注册
-		accountId, err := c.dao.GetNextAccountId()
+		accountId, err := c.db.GetNextAccountId()
 		if err != nil {
 			logger.Error("get next account id error: %v", err)
 			responseData.Retcode = -201
@@ -107,29 +107,18 @@ func (c *Controller) apiLogin(ctx *gin.Context) {
 			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
-		playerID, err := c.dao.GetNextYuanShenUid()
-		if err != nil {
-			logger.Error("get next player id error: %v", err)
-			responseData.Retcode = -201
-			responseData.Message = "服务器内部错误:-2"
-			ctx.JSON(http.StatusOK, responseData)
-			return
-		}
 		regAccount := &model.Account{
-			AccountID:     accountId,
-			Username:      username,
-			Password:      endec.Md5Str(password),
-			PlayerID:      playerID,
-			Token:         "",
-			ComboToken:    "",
-			Forbid:        false,
-			ForbidEndTime: 0,
+			AccountId:  accountId,
+			Username:   username,
+			Password:   endec.Md5Str(password),
+			Token:      "",
+			ComboToken: "",
 		}
-		_, err = c.dao.InsertAccount(regAccount)
+		_, err = c.db.InsertAccount(regAccount)
 		if err != nil {
 			logger.Error("insert account error: %v", err)
 			responseData.Retcode = -201
-			responseData.Message = "服务器内部错误:-3"
+			responseData.Message = "服务器内部错误:-2"
 			ctx.JSON(http.StatusOK, responseData)
 			return
 		}
@@ -143,24 +132,24 @@ func (c *Controller) apiLogin(ctx *gin.Context) {
 	}
 	// 生成新的token
 	account.Token = base64.StdEncoding.EncodeToString(random.GetRandomByte(24))
-	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "Token", account.Token)
+	_, err = c.db.UpdateAccountFieldByFieldName("account_id", account.AccountId, "token", account.Token)
 	if err != nil {
 		logger.Error("update account token error: %v", err)
+		responseData.Retcode = -201
+		responseData.Message = "服务器内部错误:-3"
+		ctx.JSON(http.StatusOK, responseData)
+		return
+	}
+	_, err = c.db.UpdateAccountFieldByFieldName("account_id", account.AccountId, "token_create_time", time.Now().UnixMilli())
+	if err != nil {
+		logger.Error("update account token time error: %v", err)
 		responseData.Retcode = -201
 		responseData.Message = "服务器内部错误:-4"
 		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
-	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "TokenCreateTime", time.Now().UnixMilli())
-	if err != nil {
-		logger.Error("update account token time error: %v", err)
-		responseData.Retcode = -201
-		responseData.Message = "服务器内部错误:-5"
-		ctx.JSON(http.StatusOK, responseData)
-		return
-	}
 	responseData.Message = "OK"
-	responseData.Data.Account.Uid = strconv.FormatInt(int64(account.AccountID), 10)
+	responseData.Data.Account.Uid = strconv.FormatInt(int64(account.AccountId), 10)
 	responseData.Data.Account.Token = account.Token
 	responseData.Data.Account.Email = account.Username
 	ctx.JSON(http.StatusOK, responseData)
@@ -178,7 +167,7 @@ func (c *Controller) apiVerify(ctx *gin.Context) {
 		logger.Error("parse uid error: %v", err)
 		return
 	}
-	account, err := c.dao.QueryAccountByField("AccountID", uid)
+	account, err := c.db.QueryAccountByField("account_id", uid)
 	if err != nil {
 		logger.Error("query account from db error: %v", err)
 		return
@@ -227,7 +216,7 @@ func (c *Controller) v2Login(ctx *gin.Context) {
 		return
 	}
 	responseData := api.NewComboTokenRsp()
-	account, err := c.dao.QueryAccountByField("AccountID", uid)
+	account, err := c.db.QueryAccountByField("account_id", uid)
 	if account == nil || account.Token != loginData.Token {
 		responseData.Retcode = -201
 		responseData.Message = "token错误"
@@ -236,7 +225,7 @@ func (c *Controller) v2Login(ctx *gin.Context) {
 	}
 	// 生成新的comboToken
 	account.ComboToken = random.GetRandomByteHexStr(20)
-	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "ComboToken", account.ComboToken)
+	_, err = c.db.UpdateAccountFieldByFieldName("account_id", account.AccountId, "combo_token", account.ComboToken)
 	if err != nil {
 		logger.Error("update combo token error: %v", err)
 		responseData.Retcode = -201
@@ -244,7 +233,7 @@ func (c *Controller) v2Login(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, responseData)
 		return
 	}
-	_, err = c.dao.UpdateAccountFieldByFieldName("AccountID", account.AccountID, "ComboTokenCreateTime", time.Now().UnixMilli())
+	_, err = c.db.UpdateAccountFieldByFieldName("account_id", account.AccountId, "combo_token_create_time", time.Now().UnixMilli())
 	if err != nil {
 		logger.Error("update combo token time error: %v", err)
 		responseData.Retcode = -201

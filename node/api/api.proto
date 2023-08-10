@@ -32,6 +32,8 @@ service Discovery {
     rpc GetWhiteList (NullMsg) returns (GetWhiteListRsp) {}
     // 修改停服维护白名单
     rpc SetWhiteList (SetWhiteListReq) returns (NullMsg) {}
+    // 获取下一个自增uid
+    rpc GetNextUid (NullMsg) returns (GetNextUidRsp) {}
 }
 
 message NullMsg {
@@ -117,4 +119,8 @@ message GetWhiteListRsp {
 message SetWhiteListReq {
     bool is_add = 1;
     string ip_addr = 2;
+}
+
+message GetNextUidRsp {
+    uint32 uid = 1;
 }

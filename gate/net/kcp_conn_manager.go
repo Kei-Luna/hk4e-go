@@ -14,6 +14,7 @@ import (
 	"hk4e/common/region"
 	"hk4e/common/rpc"
 	"hk4e/gate/client_proto"
+	"hk4e/gate/dao"
 	"hk4e/gate/kcp"
 	"hk4e/node/api"
 	"hk4e/pkg/logger"
@@ -49,6 +50,7 @@ type KcpEvent struct {
 }
 
 type KcpConnManager struct {
+	db                    *dao.Dao
 	discovery             *rpc.DiscoveryClient // 节点服务器rpc客户端
 	messageQueue          *mq.MessageQueue     // 消息队列
 	globalGsOnlineMap     map[uint32]string    // 全服玩家在线表
@@ -72,8 +74,9 @@ type KcpConnManager struct {
 	dispatchKey  []byte
 }
 
-func NewKcpConnManager(messageQueue *mq.MessageQueue, discovery *rpc.DiscoveryClient) (r *KcpConnManager) {
+func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rpc.DiscoveryClient) (r *KcpConnManager) {
 	r = new(KcpConnManager)
+	r.db = db
 	r.discovery = discovery
 	r.messageQueue = messageQueue
 	r.globalGsOnlineMap = make(map[uint32]string)

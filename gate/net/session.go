@@ -17,6 +17,7 @@ import (
 	"hk4e/common/config"
 	"hk4e/common/mq"
 	"hk4e/dispatch/controller"
+	"hk4e/gate/dao"
 	"hk4e/gate/kcp"
 	"hk4e/node/api"
 	"hk4e/pkg/endec"
@@ -454,10 +455,6 @@ type RemoteKick struct {
 	kickFinishNotifyChan chan bool
 }
 
-func (k *KcpConnManager) loginFailClose(session *Session) {
-	k.forceCloseKcpConn(session.sessionId, kcp.EnetLoginUnfinished)
-}
-
 func (k *KcpConnManager) loginFailRsp(uid uint32, retCode proto.Retcode, isForbid bool, forbidEndTime uint32) *proto.GetPlayerTokenRsp {
 	rsp := new(proto.GetPlayerTokenRsp)
 	rsp.Uid = uid
@@ -490,38 +487,49 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 			Region:     "",
 		})
 	if err != nil {
-		logger.Error("verify token error: %v, account uid: %v", err, req.AccountUid)
-		k.loginFailClose(session)
-		return nil
+		logger.Error("verify token http error: %v, openId: %v", err, req.AccountUid)
+		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	if tokenVerifyRsp.RetCode != 0 {
-		logger.Error("token error, account id: %v", req.AccountUid)
+		logger.Error("verify token error, openId: %v", req.AccountUid)
 		return k.loginFailRsp(0, proto.Retcode_RET_TOKEN_ERROR, false, 0)
 	}
-	// 查询玩家账号信息
-	playerInfoRsp, err := httpclient.PostJson[controller.PlayerInfoRsp](
-		config.GetConfig().Hk4e.LoginSdkUrl+"/gate/player/info",
-		&controller.PlayerInfoReq{
-			AccountId: req.AccountUid,
-		})
+	account, err := k.db.QueryAccountByOpenId(req.AccountUid)
 	if err != nil {
-		logger.Error("query player info error: %v, account uid: %v", err, req.AccountUid)
-		k.loginFailClose(session)
-		return nil
+		logger.Error("query account error: %v, openId: %v", err, req.AccountUid)
+		return k.loginFailRsp(0, proto.Retcode_RET_LOGIN_DB_FAIL, false, 0)
 	}
-	uid := playerInfoRsp.PlayerID
-	if playerInfoRsp.Forbid {
-		// 封号通知
-		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, playerInfoRsp.ForbidEndTime)
+	if account == nil {
+		// 注册账号与uid关联
+		getNextUidRsp, err := k.discovery.GetNextUid(context.TODO(), &api.NullMsg{})
+		if err != nil {
+			logger.Error("get next uid error: %v, openId: %v", err, req.AccountUid)
+			return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
+		}
+		account = &dao.Account{
+			OpenId:        req.AccountUid,
+			Uid:           getNextUidRsp.Uid,
+			IsForbid:      false,
+			ForbidEndTime: 0,
+		}
+		_, err = k.db.InsertAccount(account)
+		if err != nil {
+			logger.Error("insert account error: %v, openId: %v", err, req.AccountUid)
+			return k.loginFailRsp(0, proto.Retcode_RET_LOGIN_DB_FAIL, false, 0)
+		}
+	}
+	uid := account.Uid
+	if account.IsForbid {
+		// 封号
+		return k.loginFailRsp(uid, proto.Retcode_RET_BLACK_UID, true, account.ForbidEndTime)
 	}
 	addr := session.conn.RemoteAddr()
 	addrSplit := strings.Split(addr, ":")
 	clientIp := addrSplit[0]
 	stopServerInfo, err := k.discovery.GetStopServerInfo(context.TODO(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
 	if err != nil {
-		logger.Error("get stop server info error: %v", err)
-		k.loginFailClose(session)
-		return nil
+		logger.Error("get stop server info error: %v, uid: %v", err, uid)
+		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	if stopServerInfo.StopServer {
 		return k.loginFailRsp(uid, proto.Retcode_RET_STOP_SERVER, false, 0)
@@ -550,8 +558,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 		case <-timer.C:
 			logger.Error("global interrupt login reg wait timeout, uid: %v", uid)
 			timer.Stop()
-			k.loginFailClose(session)
-			return nil
+			return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 		case <-regFinishNotifyChan:
 			timer.Stop()
 		}
@@ -577,8 +584,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 		case <-timer.C:
 			logger.Error("global interrupt login kick wait timeout, uid: %v", uid)
 			timer.Stop()
-			k.loginFailClose(session)
-			return nil
+			return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 		case <-kickFinishNotifyChan:
 			timer.Stop()
 		}
@@ -593,8 +599,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	})
 	if err != nil {
 		logger.Error("get gs server appid error: %v, uid: %v", err, uid)
-		k.loginFailClose(session)
-		return nil
+		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	session.gsServerAppId = gsServerAppId.AppId
 	anticheatServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
@@ -622,7 +627,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	ok := k.keyExchange(session, uid, rsp)
 	if !ok {
 		logger.Error("key exchange error, uid: %v", uid)
-		return nil
+		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	return rsp
 }
@@ -657,39 +662,33 @@ func (k *KcpConnManager) keyExchange(session *Session, uid uint32, rsp *proto.Ge
 		encPubPrivKey, exist := k.encRsaKeyMap[keyId]
 		if !exist {
 			logger.Error("can not found key id: %v, uid: %v", keyId, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		pubKey, err := endec.RsaParsePubKeyByPrivKey(encPubPrivKey)
 		if err != nil {
 			logger.Error("parse rsa pub key error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		signPrivkey, err := endec.RsaParsePrivKey(k.signRsaKey)
 		if err != nil {
 			logger.Error("parse rsa priv key error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		clientSeedBase64 := session.clientRandKey
 		clientSeedEnc, err := base64.StdEncoding.DecodeString(clientSeedBase64)
 		if err != nil {
 			logger.Error("parse client seed base64 error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		clientSeed, err := endec.RsaDecrypt(clientSeedEnc, signPrivkey)
 		if err != nil {
 			logger.Error("rsa dec error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		clientSeedUint64 := uint64(0)
 		err = binary.Read(bytes.NewReader(clientSeed), binary.BigEndian, &clientSeedUint64)
 		if err != nil {
 			logger.Error("parse client seed to uint64 error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		logger.Debug("clientSeed: %v, clientSeedUint64: %v", clientSeed, clientSeedUint64)
@@ -699,7 +698,6 @@ func (k *KcpConnManager) keyExchange(session *Session, uid uint32, rsp *proto.Ge
 		err = binary.Write(seedBuf, binary.BigEndian, seedUint64)
 		if err != nil {
 			logger.Error("write seed uint64 to bytes error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		seed := seedBuf.Bytes()
@@ -707,13 +705,11 @@ func (k *KcpConnManager) keyExchange(session *Session, uid uint32, rsp *proto.Ge
 		seedEnc, err := endec.RsaEncrypt(seed, pubKey)
 		if err != nil {
 			logger.Error("rsa enc error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		seedSign, err := endec.RsaSign(seed, signPrivkey)
 		if err != nil {
 			logger.Error("rsa sign error: %v, uid: %v", err, uid)
-			k.loginFailClose(session)
 			return false
 		}
 		rsp.KeyId = session.keyId

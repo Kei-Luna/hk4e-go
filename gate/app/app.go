@@ -13,6 +13,7 @@ import (
 	"hk4e/common/config"
 	"hk4e/common/mq"
 	"hk4e/common/rpc"
+	"hk4e/gate/dao"
 	"hk4e/gate/net"
 	"hk4e/node/api"
 	"hk4e/pkg/logger"
@@ -74,7 +75,13 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.GATE, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	kcpConnManager := net.NewKcpConnManager(messageQueue, discoveryClient)
+	db, err := dao.NewDao()
+	if err != nil {
+		return err
+	}
+	defer db.CloseDao()
+
+	kcpConnManager := net.NewKcpConnManager(db, messageQueue, discoveryClient)
 	defer kcpConnManager.Close()
 
 	c := make(chan os.Signal, 1)

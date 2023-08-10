@@ -19,7 +19,7 @@ import (
 )
 
 type Controller struct {
-	dao          *dao.Dao
+	db           *dao.Dao
 	discovery    *rpc.DiscoveryClient
 	signRsaKey   []byte
 	encRsaKeyMap map[string][]byte
@@ -28,9 +28,9 @@ type Controller struct {
 	messageQueue *mq.MessageQueue
 }
 
-func NewController(dao *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq.MessageQueue) (r *Controller) {
+func NewController(db *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq.MessageQueue) (r *Controller) {
 	r = new(Controller)
-	r.dao = dao
+	r.db = db
 	r.discovery = discovery
 	r.signRsaKey, r.encRsaKeyMap, r.pwdRsaKey = region.LoadRegionRsaKey()
 	rsp, err := r.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
@@ -168,7 +168,6 @@ func (c *Controller) registerRouter() {
 	}
 	engine.Use(c.authorize())
 	engine.POST("/gate/token/verify", c.gateTokenVerify)
-	engine.POST("/gate/player/info", c.gatePlayerInfo)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
 	err := engine.Run(addr)

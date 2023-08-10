@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"hk4e/common/config"
-	"hk4e/dispatch/model"
 	"hk4e/pkg/logger"
 
 	"github.com/gin-gonic/gin"
@@ -65,7 +64,7 @@ func (c *Controller) gateTokenVerify(ctx *gin.Context) {
 		c.gateReqErrorRsp(ctx)
 		return
 	}
-	account, err := c.dao.QueryAccountByField("AccountID", uint64(accountId))
+	account, err := c.db.QueryAccountByField("account_id", uint64(accountId))
 	if err != nil || account == nil {
 		c.gateReqErrorRsp(ctx)
 		return
@@ -98,88 +97,5 @@ func (c *Controller) gateTokenVerify(ctx *gin.Context) {
 				CountryCode: "US",
 			},
 		},
-	})
-}
-
-type PlayerInfoReq struct {
-	AccountId string `json:"accountId"`
-}
-
-type PlayerInfoRsp struct {
-	RetCode       int32    `json:"retcode"`
-	Message       string   `json:"message"`
-	Data          struct{} `json:"data"`
-	Forbid        bool     `json:"forbid"`
-	ForbidEndTime uint32   `json:"forbidEndTime"`
-	PlayerID      uint32   `json:"playerID"`
-}
-
-func (c *Controller) gatePlayerInfo(ctx *gin.Context) {
-	playerInfoReq := new(PlayerInfoReq)
-	err := ctx.ShouldBindJSON(playerInfoReq)
-	if err != nil {
-		c.gateReqErrorRsp(ctx)
-		return
-	}
-	logger.Info("gate player info, req: %v", playerInfoReq)
-	accountId, err := strconv.Atoi(playerInfoReq.AccountId)
-	if err != nil {
-		c.gateReqErrorRsp(ctx)
-		return
-	}
-	account, err := c.dao.QueryAccountByField("AccountID", uint64(accountId))
-	if err != nil {
-		c.gateReqErrorRsp(ctx)
-		return
-	}
-	if account == nil {
-		// 外部sdk登录
-		redisAccountId, err := c.dao.GetAccountId()
-		if err != nil {
-			logger.Error("get account id error: %v", err)
-			c.gateReqErrorRsp(ctx)
-			return
-		}
-		if uint32(accountId) > redisAccountId {
-			// 临时修正自增id
-			err := c.dao.SetAccountId(uint32(accountId))
-			if err != nil {
-				logger.Error("set account id error: %v", err)
-				c.gateReqErrorRsp(ctx)
-				return
-			}
-		}
-		// 补账号记录
-		playerID, err := c.dao.GetNextYuanShenUid()
-		if err != nil {
-			logger.Error("get next player id error: %v", err)
-			c.gateReqErrorRsp(ctx)
-			return
-		}
-		regAccount := &model.Account{
-			AccountID:     uint32(accountId),
-			Username:      "",
-			Password:      "",
-			PlayerID:      playerID,
-			Token:         "",
-			ComboToken:    "",
-			Forbid:        false,
-			ForbidEndTime: 0,
-		}
-		_, err = c.dao.InsertAccount(regAccount)
-		if err != nil {
-			logger.Error("insert account error: %v", err)
-			c.gateReqErrorRsp(ctx)
-			return
-		}
-		account = regAccount
-	}
-	ctx.JSON(http.StatusOK, &PlayerInfoRsp{
-		RetCode:       0,
-		Message:       "OK",
-		Data:          struct{}{},
-		Forbid:        account.Forbid,
-		ForbidEndTime: account.ForbidEndTime,
-		PlayerID:      account.PlayerID,
 	})
 }

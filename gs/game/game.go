@@ -46,7 +46,7 @@ var SELF *model.Player
 
 type Game struct {
 	discovery   *rpc.DiscoveryClient // node节点服务器的natsrpc客户端
-	dao         *dao.Dao
+	db          *dao.Dao
 	snowflake   *alg.SnowflakeWorker
 	gsId        uint32
 	gsAppid     string
@@ -55,10 +55,10 @@ type Game struct {
 	isStop      bool
 }
 
-func NewGameCore(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
+func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
 	r = new(Game)
 	r.discovery = discovery
-	r.dao = dao
+	r.db = db
 	MESSAGE_QUEUE = messageQueue
 	r.snowflake = alg.NewSnowflakeWorker(int64(gsId))
 	r.gsId = gsId
@@ -67,7 +67,7 @@ func NewGameCore(dao *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsApp
 	GAME = r
 	LOCAL_EVENT_MANAGER = NewLocalEventManager()
 	ROUTE_MANAGER = NewRouteManager()
-	USER_MANAGER = NewUserManager(dao)
+	USER_MANAGER = NewUserManager(db)
 	WORLD_MANAGER = NewWorldManager(r.snowflake)
 	TICK_MANAGER = NewTickManager()
 	COMMAND_MANAGER = NewCommandManager()

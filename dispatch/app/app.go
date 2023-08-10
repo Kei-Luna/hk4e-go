@@ -65,7 +65,10 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.DISPATCH, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	db := dao.NewDao()
+	db, err := dao.NewDao()
+	if err != nil {
+		return err
+	}
 	defer db.CloseDao()
 
 	_ = controller.NewController(db, discoveryClient, messageQueue)

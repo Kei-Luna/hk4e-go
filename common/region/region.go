@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"hk4e/pkg/logger"
-	"hk4e/pkg/random"
 )
 
 func LoadRegionRsaKey() (signRsaKey []byte, encRsaKeyMap map[string][]byte, pwdRsaKey []byte) {
@@ -29,8 +28,4 @@ func LoadRegionRsaKey() (signRsaKey []byte, encRsaKeyMap map[string][]byte, pwdR
 		return nil, nil, nil
 	}
 	return signRsaKey, encRsaKeyMap, pwdRsaKey
-}
-
-func LoadRegionEc2b() *random.Ec2b {
-	return random.NewEc2b()
 }

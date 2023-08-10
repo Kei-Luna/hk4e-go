@@ -67,9 +67,9 @@ func (d *Dao) InsertChatMsgList(chatMsgList []*model.ChatMsg) error {
 	return nil
 }
 
-func (d *Dao) DeletePlayer(playerID uint32) error {
+func (d *Dao) DeletePlayer(playerId uint32) error {
 	db := d.db.Collection("player")
-	_, err := db.DeleteOne(context.TODO(), bson.D{{"PlayerID", playerID}})
+	_, err := db.DeleteOne(context.TODO(), bson.D{{"player_id", playerId}})
 	if err != nil {
 		return err
 	}
@@ -85,14 +85,14 @@ func (d *Dao) DeleteChatMsg(id primitive.ObjectID) error {
 	return nil
 }
 
-func (d *Dao) DeletePlayerList(playerIDList []uint32) error {
-	if len(playerIDList) == 0 {
+func (d *Dao) DeletePlayerList(playerIdList []uint32) error {
+	if len(playerIdList) == 0 {
 		return nil
 	}
 	db := d.db.Collection("player")
 	modelOperateList := make([]mongo.WriteModel, 0)
-	for _, playerID := range playerIDList {
-		modelOperate := mongo.NewDeleteOneModel().SetFilter(bson.D{{"PlayerID", playerID}})
+	for _, playerId := range playerIdList {
+		modelOperate := mongo.NewDeleteOneModel().SetFilter(bson.D{{"player_id", playerId}})
 		modelOperateList = append(modelOperateList, modelOperate)
 	}
 	_, err := db.BulkWrite(context.TODO(), modelOperateList)
@@ -123,7 +123,7 @@ func (d *Dao) UpdatePlayer(player *model.Player) error {
 	db := d.db.Collection("player")
 	_, err := db.UpdateMany(
 		context.TODO(),
-		bson.D{{"PlayerID", player.PlayerID}},
+		bson.D{{"player_id", player.PlayerID}},
 		bson.D{{"$set", player}},
 	)
 	if err != nil {
@@ -152,7 +152,7 @@ func (d *Dao) UpdatePlayerList(playerList []*model.Player) error {
 	db := d.db.Collection("player")
 	modelOperateList := make([]mongo.WriteModel, 0)
 	for _, player := range playerList {
-		modelOperate := mongo.NewUpdateManyModel().SetFilter(bson.D{{"PlayerID", player.PlayerID}}).SetUpdate(bson.D{{"$set", player}})
+		modelOperate := mongo.NewUpdateManyModel().SetFilter(bson.D{{"player_id", player.PlayerID}}).SetUpdate(bson.D{{"$set", player}})
 		modelOperateList = append(modelOperateList, modelOperate)
 	}
 	_, err := db.BulkWrite(context.TODO(), modelOperateList)
@@ -179,21 +179,25 @@ func (d *Dao) UpdateChatMsgList(chatMsgList []*model.ChatMsg) error {
 	return nil
 }
 
-func (d *Dao) QueryPlayerByID(playerID uint32) (*model.Player, error) {
+func (d *Dao) QueryPlayerById(playerId uint32) (*model.Player, error) {
 	db := d.db.Collection("player")
 	result := db.FindOne(
 		context.TODO(),
-		bson.D{{"PlayerID", playerID}},
+		bson.D{{"player_id", playerId}},
 	)
 	player := new(model.Player)
 	err := result.Decode(player)
 	if err != nil {
-		return nil, err
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		} else {
+			return nil, err
+		}
 	}
 	return player, nil
 }
 
-func (d *Dao) QueryChatMsgByID(id primitive.ObjectID) (*model.ChatMsg, error) {
+func (d *Dao) QueryChatMsgById(id primitive.ObjectID) (*model.ChatMsg, error) {
 	db := d.db.Collection("chat_msg")
 	result := db.FindOne(
 		context.TODO(),
@@ -202,7 +206,11 @@ func (d *Dao) QueryChatMsgByID(id primitive.ObjectID) (*model.ChatMsg, error) {
 	chatMsg := new(model.ChatMsg)
 	err := result.Decode(chatMsg)
 	if err != nil {
-		return nil, err
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		} else {
+			return nil, err
+		}
 	}
 	return chatMsg, nil
 }
@@ -254,9 +262,9 @@ func (d *Dao) QueryChatMsgListByUid(uid uint32) ([]*model.ChatMsg, error) {
 	result := make([]*model.ChatMsg, 0)
 	find, err := db.Find(
 		context.TODO(),
-		bson.D{{"$or", []bson.D{{{"ToUid", uid}}, {{"Uid", uid}}}}},
+		bson.D{{"$or", []bson.D{{{"to_uid", uid}}, {{"uid", uid}}}}},
 		options.Find().SetLimit(MaxQueryChatMsgLen),
-		options.Find().SetSort(bson.M{"Time": 1}),
+		options.Find().SetSort(bson.M{"time": 1}),
 	)
 	if err != nil {
 		return nil, err
@@ -276,16 +284,16 @@ func (d *Dao) ReadAndUpdateChatMsgByUid(uid uint32, targetUid uint32) error {
 	db := d.db.Collection("chat_msg")
 	_, err := db.UpdateMany(
 		context.TODO(),
-		bson.D{{"ToUid", uid}, {"Uid", targetUid}},
-		bson.D{{"$set", bson.D{{"IsRead", true}}}},
+		bson.D{{"to_uid", uid}, {"uid", targetUid}},
+		bson.D{{"$set", bson.D{{"is_read", true}}}},
 	)
 	if err != nil {
 		return err
 	}
 	_, err = db.UpdateMany(
 		context.TODO(),
-		bson.D{{"Uid", uid}, {"ToUid", targetUid}},
-		bson.D{{"$set", bson.D{{"IsRead", true}}}},
+		bson.D{{"uid", uid}, {"to_uid", targetUid}},
+		bson.D{{"$set", bson.D{{"is_read", true}}}},
 	)
 	if err != nil {
 		return err

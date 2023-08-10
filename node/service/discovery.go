@@ -7,17 +7,19 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"hk4e/common/mq"
-	"hk4e/common/region"
 	"hk4e/node/api"
+	"hk4e/node/dao"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
 )
 
 const (
-	MaxGsId = 1000
+	MaxGsId  = 1000
+	UidBegin = 100000000
 )
 
 var _ api.DiscoveryNATSRPCServer = (*DiscoveryService)(nil)
@@ -45,7 +47,9 @@ type StopServerInfo struct {
 }
 
 type DiscoveryService struct {
+	db                *dao.Dao             // 数据库访问对象
 	regionEc2b        *random.Ec2b         // 区服密钥信息
+	nextUid           uint32               // 自增uid
 	serverInstanceMap map[string]*sync.Map // 全部服务器实例集合 key:服务器类型 value:服务器实例集合 -> key:appid value:服务器实例
 	serverAppIdMap    *sync.Map            // 服务器appid集合 key:appid value:是否存在
 	globalGsOnlineMap *sync.Map            // 全服玩家在线集合 key:uid value:gsAppid
@@ -53,10 +57,33 @@ type DiscoveryService struct {
 	messageQueue      *mq.MessageQueue     // 消息队列实例
 }
 
-func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
+func NewDiscoveryService(db *dao.Dao, messageQueue *mq.MessageQueue) (*DiscoveryService, error) {
 	r := new(DiscoveryService)
-	r.regionEc2b = region.LoadRegionEc2b()
-	logger.Info("region ec2b create ok, seed: %v", r.regionEc2b.Seed())
+	r.db = db
+	region, err := r.db.QueryRegion()
+	if err != nil {
+		logger.Error("load region from db error: %v", err)
+		return nil, err
+	}
+	if region == nil {
+		logger.Info("init region")
+		region = &dao.Region{
+			Ec2bData: random.NewEc2b().Bytes(),
+			NextUid:  UidBegin,
+		}
+		err := r.db.InsertRegion(region)
+		if err != nil {
+			logger.Error("save region to db error: %v", err)
+			return nil, err
+		}
+	}
+	r.regionEc2b, err = random.LoadEc2bKey(region.Ec2bData)
+	if err != nil {
+		logger.Error("parse ec2b data error: %v", err)
+		return nil, err
+	}
+	logger.Info("region ec2b load ok, seed: %v", r.regionEc2b.Seed())
+	r.nextUid = region.NextUid
 	r.serverInstanceMap = make(map[string]*sync.Map)
 	r.serverInstanceMap[api.GATE] = new(sync.Map)
 	r.serverInstanceMap[api.GS] = new(sync.Map)
@@ -75,7 +102,19 @@ func NewDiscoveryService(messageQueue *mq.MessageQueue) *DiscoveryService {
 	r.messageQueue = messageQueue
 	go r.removeDeadServer()
 	go r.broadcastReceiver()
-	return r
+	return r, nil
+}
+
+func (s *DiscoveryService) close() {
+	region := &dao.Region{
+		Ec2bData: s.regionEc2b.Bytes(),
+		NextUid:  s.nextUid,
+	}
+	err := s.db.UpdateRegion(region)
+	if err != nil {
+		logger.Error("save region to db error: %v", err)
+		return
+	}
 }
 
 func (s *DiscoveryService) broadcastReceiver() {
@@ -368,6 +407,13 @@ func (s *DiscoveryService) SetWhiteList(ctx context.Context, req *api.SetWhiteLi
 		delete(s.stopServerInfo.ipAddrWhiteList, req.IpAddr)
 	}
 	return &api.NullMsg{}, nil
+}
+
+// GetNextUid 获取下一个自增uid
+func (s *DiscoveryService) GetNextUid(ctx context.Context, req *api.NullMsg) (*api.GetNextUidRsp, error) {
+	return &api.GetNextUidRsp{
+		Uid: atomic.AddUint32(&s.nextUid, 1),
+	}, nil
 }
 
 func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerInstance {

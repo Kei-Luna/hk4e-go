@@ -77,7 +77,7 @@ func GetRegionList(ec2b *random.Ec2b) *proto.QueryRegionListHttpRsp {
 		RegionConfig:   "pm|fk|add",
 		DownloadMode:   0,
 		DebugMenu:      true,
-		DebugLogSwitch: []int32{0, 1, 2},
+		DebugLogSwitch: []int32{0},
 		DebugLog:       true,
 	})
 	endec.Xor(clientCustomConfig, dispatchXorKey)

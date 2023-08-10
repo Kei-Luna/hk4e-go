@@ -19,16 +19,16 @@ import (
 // 玩家定时保存 写入db和redis
 
 type UserManager struct {
-	dao                 *dao.Dao                 // db对象
+	db                  *dao.Dao                 // db对象
 	playerMap           map[uint32]*model.Player // 内存玩家数据
 	saveUserChan        chan *SaveUserData       // 用于主协程发送玩家数据给定时保存协程
 	remotePlayerMap     map[uint32]string        // 远程玩家 key:userId value:玩家所在gs的appid
 	remotePlayerMapLock sync.RWMutex
 }
 
-func NewUserManager(dao *dao.Dao) (r *UserManager) {
+func NewUserManager(db *dao.Dao) (r *UserManager) {
 	r = new(UserManager)
-	r.dao = dao
+	r.db = db
 	r.playerMap = make(map[uint32]*model.Player)
 	r.saveUserChan = make(chan *SaveUserData) // 无缓冲区chan 避免主协程在写入时被迫加锁
 	r.remotePlayerMap = make(map[uint32]string)
@@ -107,7 +107,7 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 	}
 	go func() {
 		// 加离线玩家数据分布式锁
-		ok := u.dao.DistLockSync(userId)
+		ok := u.db.DistLockSync(userId)
 		if !ok {
 			logger.Error("lock redis offline player data error, uid: %v", userId)
 			return
@@ -117,7 +117,7 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 			u.SaveUserToRedisSync(player)
 		}
 		// 解离线玩家数据分布式锁
-		u.dao.DistUnlock(userId)
+		u.db.DistUnlock(userId)
 		if player != nil {
 			u.ChangeUserDbState(player, model.DbNormal)
 			player.ChatMsgMap = u.LoadUserChatMsgFromDbSync(userId)
@@ -342,7 +342,7 @@ func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Playe
 	}
 	if lock {
 		// 加离线玩家数据分布式锁
-		ok := u.dao.DistLockSync(userId)
+		ok := u.db.DistLockSync(userId)
 		if !ok {
 			logger.Error("lock redis offline player data error, uid: %v", userId)
 			return nil
@@ -384,13 +384,13 @@ func (u *UserManager) SaveTempOfflineUser(player *model.Player) {
 	if err != nil {
 		logger.Error("marshal player data error: %v", err)
 		// 解离线玩家数据分布式锁
-		u.dao.DistUnlock(player.PlayerID)
+		u.db.DistUnlock(player.PlayerID)
 		return
 	}
 	go func() {
 		defer func() {
 			// 解离线玩家数据分布式锁
-			u.dao.DistUnlock(player.PlayerID)
+			u.db.DistUnlock(player.PlayerID)
 		}()
 		playerCopy := new(model.Player)
 		err := msgpack.Unmarshal(playerData, playerCopy)
@@ -463,7 +463,7 @@ func (u *UserManager) saveUserHandle() {
 }
 
 func (u *UserManager) LoadUserFromDbSync(userId uint32) *model.Player {
-	player, err := u.dao.QueryPlayerByID(userId)
+	player, err := u.db.QueryPlayerById(userId)
 	if err != nil {
 		logger.Error("query player error: %v", err)
 		return nil
@@ -473,13 +473,13 @@ func (u *UserManager) LoadUserFromDbSync(userId uint32) *model.Player {
 
 func (u *UserManager) SaveUserToDbSync(player *model.Player) {
 	if player.DbState == model.DbInsert {
-		err := u.dao.InsertPlayer(player)
+		err := u.db.InsertPlayer(player)
 		if err != nil {
 			logger.Error("insert player error: %v", err)
 			return
 		}
 	} else if player.DbState == model.DbNormal || player.DbState == model.DbDelete {
-		err := u.dao.UpdatePlayer(player)
+		err := u.db.UpdatePlayer(player)
 		if err != nil {
 			logger.Error("update player error: %v", err)
 			return
@@ -490,12 +490,12 @@ func (u *UserManager) SaveUserToDbSync(player *model.Player) {
 }
 
 func (u *UserManager) SaveUserListToDbSync(insertPlayerList []*model.Player, updatePlayerList []*model.Player) {
-	err := u.dao.InsertPlayerList(insertPlayerList)
+	err := u.db.InsertPlayerList(insertPlayerList)
 	if err != nil {
 		logger.Error("insert player list error: %v", err)
 		return
 	}
-	err = u.dao.UpdatePlayerList(updatePlayerList)
+	err = u.db.UpdatePlayerList(updatePlayerList)
 	if err != nil {
 		logger.Error("update player list error: %v", err)
 		return
@@ -505,7 +505,7 @@ func (u *UserManager) SaveUserListToDbSync(insertPlayerList []*model.Player, upd
 
 func (u *UserManager) LoadUserChatMsgFromDbSync(userId uint32) map[uint32][]*model.ChatMsg {
 	chatMsgMap := make(map[uint32][]*model.ChatMsg)
-	chatMsgList, err := u.dao.QueryChatMsgListByUid(userId)
+	chatMsgList, err := u.db.QueryChatMsgListByUid(userId)
 	if err != nil {
 		logger.Error("query chat msg list error: %v", err)
 		return chatMsgMap
@@ -539,7 +539,7 @@ func (u *UserManager) LoadUserChatMsgFromDbSync(userId uint32) map[uint32][]*mod
 }
 
 func (u *UserManager) SaveUserChatMsgToDbSync(chatMsg *model.ChatMsg) {
-	err := u.dao.InsertChatMsg(chatMsg)
+	err := u.db.InsertChatMsg(chatMsg)
 	if err != nil {
 		logger.Error("insert chat msg error: %v", err)
 		return
@@ -547,7 +547,7 @@ func (u *UserManager) SaveUserChatMsgToDbSync(chatMsg *model.ChatMsg) {
 }
 
 func (u *UserManager) ReadAndUpdateUserChatMsgToDbSync(uid uint32, targetUid uint32) {
-	err := u.dao.ReadAndUpdateChatMsgByUid(uid, targetUid)
+	err := u.db.ReadAndUpdateChatMsgByUid(uid, targetUid)
 	if err != nil {
 		logger.Error("read chat msg error: %v", err)
 		return
@@ -555,14 +555,14 @@ func (u *UserManager) ReadAndUpdateUserChatMsgToDbSync(uid uint32, targetUid uin
 }
 
 func (u *UserManager) LoadUserFromRedisSync(userId uint32) *model.Player {
-	player := u.dao.GetRedisPlayer(userId)
+	player := u.db.GetRedisPlayer(userId)
 	return player
 }
 
 func (u *UserManager) SaveUserToRedisSync(player *model.Player) {
-	u.dao.SetRedisPlayer(player)
+	u.db.SetRedisPlayer(player)
 }
 
 func (u *UserManager) SaveUserListToRedisSync(setPlayerList []*model.Player) {
-	u.dao.SetRedisPlayerList(setPlayerList)
+	u.db.SetRedisPlayerList(setPlayerList)
 }
