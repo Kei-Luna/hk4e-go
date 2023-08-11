@@ -14,7 +14,7 @@ import (
 // 游戏服务器定时帧管理器
 
 const (
-	ServerTickTime = 20  // 服务器全局tick最小间隔毫秒
+	ServerTickTime = 50  // 服务器全局tick最小间隔毫秒
 	UserTickTime   = 100 // 玩家自身tick最小间隔毫秒
 )
 
@@ -98,7 +98,7 @@ func (t *TickManager) onUserTickMinute(userId uint32, now int64) {
 	}
 	if uint32(now/1000)-player.LastKeepaliveTime > 60 {
 		logger.Error("remove keepalive timeout user, uid: %v", userId)
-		GAME.OnUserOffline(userId, &ChangeGsInfo{
+		GAME.OnOffline(userId, &ChangeGsInfo{
 			IsChangeGs: false,
 		})
 	}
@@ -129,7 +129,7 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 		logger.Debug("UserTimerActionLuaGroupTimerEvent, groupId: %v, source: %v, uid: %v", data[0], data[1], userId)
 		groupId := data[0].(uint32)
 		source := data[1].(string)
-		world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+		world := WORLD_MANAGER.GetWorldById(player.WorldId)
 		if world == nil {
 			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
 			return
@@ -218,7 +218,7 @@ func (t *TickManager) onTick5Second(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
 		if WORLD_MANAGER.IsAiWorld(world) {
 			for applyUid := range world.owner.CoopApplyMap {
-				GAME.UserDealEnterWorld(world.owner, applyUid, true)
+				GAME.PlayerDealEnterWorld(world.owner, applyUid, true)
 			}
 		}
 		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
@@ -272,7 +272,7 @@ func (t *TickManager) onTick50MilliSecond(now int64) {
 		world := WORLD_MANAGER.GetAiWorld()
 		GAME.SendToWorldA(world, cmd.SceneAudioNotify, 0, &proto.SceneAudioNotify{
 			Type:      5,
-			SourceUid: world.owner.PlayerID,
+			SourceUid: world.owner.PlayerId,
 			Param1:    []uint32{1, <-AUDIO_CHAN},
 			Param2:    nil,
 			Param3:    nil,

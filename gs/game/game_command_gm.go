@@ -40,9 +40,9 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId uint32, posX, posY, posZ float6
 	)
 }
 
-// GMAddUserItem 给予玩家物品
-func (g *GMCmd) GMAddUserItem(userId, itemId, itemCount uint32) {
-	GAME.AddUserItem(userId, []*ChangeItem{
+// GMAddItem 给予玩家物品
+func (g *GMCmd) GMAddItem(userId, itemId, itemCount uint32) {
+	GAME.AddPlayerItem(userId, []*ChangeItem{
 		{
 			ItemId:      itemId,
 			ChangeCount: itemCount,
@@ -50,46 +50,46 @@ func (g *GMCmd) GMAddUserItem(userId, itemId, itemCount uint32) {
 	}, true, 0)
 }
 
-// GMAddUserWeapon 给予玩家武器
-func (g *GMCmd) GMAddUserWeapon(userId, itemId, itemCount uint32) {
+// GMAddWeapon 给予玩家武器
+func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32) {
 	// 武器数量
 	for i := uint32(0); i < itemCount; i++ {
 		// 给予武器
-		GAME.AddUserWeapon(userId, itemId)
+		GAME.AddPlayerWeapon(userId, itemId)
 	}
 }
 
-// GMAddUserReliquary 给予玩家圣遗物
-func (g *GMCmd) GMAddUserReliquary(userId, itemId, itemCount uint32) {
+// GMAddReliquary 给予玩家圣遗物
+func (g *GMCmd) GMAddReliquary(userId, itemId, itemCount uint32) {
 	// 圣遗物数量
 	for i := uint32(0); i < itemCount; i++ {
 		// 给予圣遗物
-		GAME.AddUserReliquary(userId, itemId)
+		GAME.AddPlayerReliquary(userId, itemId)
 	}
 }
 
-// GMAddUserAvatar 给予玩家角色
-func (g *GMCmd) GMAddUserAvatar(userId, avatarId uint32) {
+// GMAddAvatar 给予玩家角色
+func (g *GMCmd) GMAddAvatar(userId, avatarId uint32) {
 	// 添加角色
-	GAME.AddUserAvatar(userId, avatarId)
+	GAME.AddPlayerAvatar(userId, avatarId)
 	// TODO 设置角色 等以后做到角色升级之类的再说
 	// avatar := player.AvatarMap[avatarId]
 }
 
-// GMAddUserCostume 给予玩家时装
-func (g *GMCmd) GMAddUserCostume(userId, costumeId uint32) {
+// GMAddCostume 给予玩家时装
+func (g *GMCmd) GMAddCostume(userId, costumeId uint32) {
 	// 添加时装
-	GAME.AddUserCostume(userId, costumeId)
+	GAME.AddPlayerCostume(userId, costumeId)
 }
 
-// GMAddUserFlycloak 给予玩家风之翼
-func (g *GMCmd) GMAddUserFlycloak(userId, flycloakId uint32) {
+// GMAddFlycloak 给予玩家风之翼
+func (g *GMCmd) GMAddFlycloak(userId, flycloakId uint32) {
 	// 添加风之翼
-	GAME.AddUserFlycloak(userId, flycloakId)
+	GAME.AddPlayerFlycloak(userId, flycloakId)
 }
 
-// GMAddUserAllItem 给予玩家所有物品
-func (g *GMCmd) GMAddUserAllItem(userId, itemCount uint32) {
+// GMAddAllItem 给予玩家所有物品
+func (g *GMCmd) GMAddAllItem(userId, itemCount uint32) {
 	GAME.LogoutPlayer(userId)
 	itemList := make([]*ChangeItem, 0)
 	for itemId := range GAME.GetAllItemDataConfig() {
@@ -98,60 +98,60 @@ func (g *GMCmd) GMAddUserAllItem(userId, itemCount uint32) {
 			ChangeCount: itemCount,
 		})
 	}
-	GAME.AddUserItem(userId, itemList, false, 0)
+	GAME.AddPlayerItem(userId, itemList, false, 0)
 }
 
-// GMAddUserAllWeapon 给予玩家所有武器
-func (g *GMCmd) GMAddUserAllWeapon(userId, itemCount uint32) {
+// GMAddAllWeapon 给予玩家所有武器
+func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32) {
 	for itemId := range GAME.GetAllWeaponDataConfig() {
-		g.GMAddUserWeapon(userId, uint32(itemId), itemCount)
+		g.GMAddWeapon(userId, uint32(itemId), itemCount)
 	}
 }
 
-// GMAddUserAllReliquary 给予玩家所有圣遗物
-func (g *GMCmd) GMAddUserAllReliquary(userId, itemCount uint32) {
+// GMAddAllReliquary 给予玩家所有圣遗物
+func (g *GMCmd) GMAddAllReliquary(userId, itemCount uint32) {
 	GAME.LogoutPlayer(userId)
 	for itemId := range GAME.GetAllReliquaryDataConfig() {
-		g.GMAddUserReliquary(userId, uint32(itemId), itemCount)
+		g.GMAddReliquary(userId, uint32(itemId), itemCount)
 	}
 }
 
-// GMAddUserAllAvatar 给予玩家所有角色
-func (g *GMCmd) GMAddUserAllAvatar(userId uint32) {
+// GMAddAllAvatar 给予玩家所有角色
+func (g *GMCmd) GMAddAllAvatar(userId uint32) {
 	for avatarId := range GAME.GetAllAvatarDataConfig() {
-		g.GMAddUserAvatar(userId, uint32(avatarId))
+		g.GMAddAvatar(userId, uint32(avatarId))
 	}
 }
 
-// GMAddUserAllCostume 给予玩家所有时装
-func (g *GMCmd) GMAddUserAllCostume(userId uint32) {
+// GMAddAllCostume 给予玩家所有时装
+func (g *GMCmd) GMAddAllCostume(userId uint32) {
 	for costumeId := range gdconf.GetAvatarCostumeDataMap() {
-		g.GMAddUserCostume(userId, uint32(costumeId))
+		g.GMAddCostume(userId, uint32(costumeId))
 	}
 }
 
-// GMAddUserAllFlycloak 给予玩家所有风之翼
-func (g *GMCmd) GMAddUserAllFlycloak(userId uint32) {
+// GMAddAllFlycloak 给予玩家所有风之翼
+func (g *GMCmd) GMAddAllFlycloak(userId uint32) {
 	for flycloakId := range gdconf.GetAvatarFlycloakDataMap() {
-		g.GMAddUserFlycloak(userId, uint32(flycloakId))
+		g.GMAddFlycloak(userId, uint32(flycloakId))
 	}
 }
 
-// GMAddUserAllEvery 给予玩家所有内容
-func (g *GMCmd) GMAddUserAllEvery(userId, itemCount uint32) {
+// GMAddAll 给予玩家所有内容
+func (g *GMCmd) GMAddAll(userId, itemCount uint32) {
 	GAME.LogoutPlayer(userId)
 	// 给予玩家所有物品
-	g.GMAddUserAllItem(userId, itemCount)
+	g.GMAddAllItem(userId, itemCount)
 	// 给予玩家所有武器
-	g.GMAddUserAllWeapon(userId, itemCount)
+	g.GMAddAllWeapon(userId, itemCount)
 	// 给予玩家所有圣遗物
-	g.GMAddUserAllReliquary(userId, itemCount)
+	g.GMAddAllReliquary(userId, itemCount)
 	// 给予玩家所有角色
-	g.GMAddUserAllAvatar(userId)
+	g.GMAddAllAvatar(userId)
 	// 给予玩家所有时装
-	g.GMAddUserAllCostume(userId)
+	g.GMAddAllCostume(userId)
 	// 给予玩家所有风之翼
-	g.GMAddUserAllFlycloak(userId)
+	g.GMAddAllFlycloak(userId)
 }
 
 // GMAddQuest 添加任务
@@ -168,7 +168,7 @@ func (g *GMCmd) GMAddQuest(userId uint32, questId uint32) {
 		QuestList: make([]*proto.Quest, 0),
 	}
 	ntf.QuestList = append(ntf.QuestList, GAME.PacketQuest(player, questId))
-	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
 // GMFinishQuest 完成任务
@@ -184,7 +184,7 @@ func (g *GMCmd) GMFinishQuest(userId uint32, questId uint32) {
 		QuestList: make([]*proto.Quest, 0),
 	}
 	ntf.QuestList = append(ntf.QuestList, GAME.PacketQuest(player, questId))
-	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	GAME.AcceptQuest(player, true)
 }
 
@@ -207,7 +207,7 @@ func (g *GMCmd) GMForceFinishAllQuest(userId uint32) {
 		}
 		ntf.QuestList = append(ntf.QuestList, pbQuest)
 	}
-	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	GAME.AcceptQuest(player, true)
 }
 
@@ -228,7 +228,7 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 	for _, pointData := range scenePointMapConfig {
 		dbScene.UnlockPoint(uint32(pointData.Id))
 	}
-	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerID, player.ClientSeq, &proto.ScenePointUnlockNotify{
+	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
 		SceneId:         sceneId,
 		PointList:       dbScene.GetUnlockPointList(),
 		UnhidePointList: nil,
@@ -289,7 +289,7 @@ func (g *GMCmd) XLuaDebug(userId uint32, luacBase64 string) {
 		logger.Error("decode luac error: %v", err)
 		return
 	}
-	GAME.SendMsg(cmd.WindSeedClientNotify, player.PlayerID, 0, &proto.WindSeedClientNotify{
+	GAME.SendMsg(cmd.WindSeedClientNotify, player.PlayerId, 0, &proto.WindSeedClientNotify{
 		Notify: &proto.WindSeedClientNotify_AreaNotify_{
 			AreaNotify: &proto.WindSeedClientNotify_AreaNotify{
 				AreaCode: luac,
@@ -329,7 +329,7 @@ func (g *GMCmd) CreateRobotInBigWorld(uid uint32, name string, avatarId uint32) 
 	}
 	aiWorld := WORLD_MANAGER.GetAiWorld()
 	robot := GAME.CreateRobot(uid, name, name)
-	GAME.AddUserAvatar(uid, avatarId)
+	GAME.AddPlayerAvatar(uid, avatarId)
 	dbAvatar := robot.GetDbAvatar()
 	GAME.SetUpAvatarTeamReq(robot, &proto.SetUpAvatarTeamReq{
 		TeamId:             1,
@@ -340,7 +340,7 @@ func (g *GMCmd) CreateRobotInBigWorld(uid uint32, name string, avatarId uint32) 
 		AvatarId: avatarId,
 	})
 	GAME.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
-		TargetUid: aiWorld.owner.PlayerID,
+		TargetUid: aiWorld.owner.PlayerId,
 	})
 	GAME.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
 		EnterSceneToken: aiWorld.GetEnterSceneToken(),
@@ -358,7 +358,7 @@ func (g *GMCmd) CreateRobotInBigWorld(uid uint32, name string, avatarId uint32) 
 	pos := new(model.Vector)
 	rot := new(model.Vector)
 	for _, targetPlayer := range aiWorld.GetAllPlayer() {
-		if targetPlayer.PlayerID < PlayerBaseUid {
+		if targetPlayer.PlayerId < PlayerBaseUid {
 			continue
 		}
 		pos = &model.Vector{X: targetPlayer.Pos.X, Y: targetPlayer.Pos.Y, Z: targetPlayer.Pos.Z}

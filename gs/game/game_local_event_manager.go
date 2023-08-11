@@ -72,7 +72,7 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 		startTime := time.Now().UnixNano()
 		playerList := make(PlayerLastSaveTimeSortList, 0)
 		for _, player := range USER_MANAGER.GetAllOnlineUserList() {
-			if player.PlayerID < PlayerBaseUid {
+			if player.PlayerId < PlayerBaseUid {
 				continue
 			}
 			playerList = append(playerList, player)
@@ -116,13 +116,13 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 						return
 					}
 					playerDataMapLock.Lock()
-					playerDataMap[player.PlayerID] = playerData
+					playerDataMap[player.PlayerId] = playerData
 					playerDataMapLock.Unlock()
 				}(player)
 			}
 			wg.Wait()
 			for _, player := range oncePlayerList {
-				playerData, exist := playerDataMap[player.PlayerID]
+				playerData, exist := playerDataMap[player.PlayerId]
 				if !exist {
 					continue
 				}
@@ -135,7 +135,7 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 					player.LastSaveTime = uint32(time.Now().UnixMilli())
 					saveCount++
 				case model.DbDelete:
-					USER_MANAGER.DeleteUser(player.PlayerID)
+					USER_MANAGER.DeleteUser(player.PlayerId)
 				case model.DbNormal:
 					updatePlayerList = append(updatePlayerList, playerData)
 					player.LastSaveTime = uint32(time.Now().UnixMilli())
@@ -162,12 +162,12 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 		}
 	case UserOfflineSaveToDbFinish:
 		playerOfflineInfo := localEvent.Msg.(*PlayerOfflineInfo)
-		USER_MANAGER.DeleteUser(playerOfflineInfo.Player.PlayerID)
+		USER_MANAGER.DeleteUser(playerOfflineInfo.Player.PlayerId)
 		MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerUserOnlineStateChangeNotify,
 			ServerMsg: &mq.ServerMsg{
-				UserId:   playerOfflineInfo.Player.PlayerID,
+				UserId:   playerOfflineInfo.Player.PlayerId,
 				IsOnline: false,
 			},
 		})
@@ -177,13 +177,13 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 				MsgType: mq.MsgTypeServer,
 				EventId: mq.ServerUserGsChangeNotify,
 				ServerMsg: &mq.ServerMsg{
-					UserId:          playerOfflineInfo.Player.PlayerID,
+					UserId:          playerOfflineInfo.Player.PlayerId,
 					GameServerAppId: gsAppId,
 					JoinHostUserId:  playerOfflineInfo.ChangeGsInfo.JoinHostUserId,
 				},
 			})
 			logger.Info("user change gs notify to gate, uid: %v, gate appid: %v, gs appid: %v, host uid: %v",
-				playerOfflineInfo.Player.PlayerID, playerOfflineInfo.Player.GateAppId, gsAppId, playerOfflineInfo.ChangeGsInfo.JoinHostUserId)
+				playerOfflineInfo.Player.PlayerId, playerOfflineInfo.Player.GateAppId, gsAppId, playerOfflineInfo.ChangeGsInfo.JoinHostUserId)
 		}
 	case ReloadGameDataConfig:
 		go func() {

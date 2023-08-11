@@ -30,7 +30,7 @@ func NewUserManager(db *dao.Dao) (r *UserManager) {
 	r = new(UserManager)
 	r.db = db
 	r.playerMap = make(map[uint32]*model.Player)
-	r.saveUserChan = make(chan *SaveUserData) // 无缓冲区chan 避免主协程在写入时被迫加锁
+	r.saveUserChan = make(chan *SaveUserData, 1)
 	r.remotePlayerMap = make(map[uint32]string)
 	go r.saveUserHandle()
 	r.syncRemotePlayerMap()
@@ -81,7 +81,7 @@ func (u *UserManager) AddUser(player *model.Player) {
 	if player == nil {
 		return
 	}
-	u.playerMap[player.PlayerID] = player
+	u.playerMap[player.PlayerId] = player
 }
 
 // DeleteUser 从内存玩家数据里删除一个玩家
@@ -298,7 +298,7 @@ func (u *UserManager) GetRemoteOnlineUserList(total int) map[uint32]*model.Playe
 		if player == nil {
 			continue
 		}
-		onlinePlayerMap[player.PlayerID] = player
+		onlinePlayerMap[player.PlayerId] = player
 	}
 	return onlinePlayerMap
 }
@@ -370,7 +370,7 @@ func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Playe
 		u.SaveUserToRedisSync(player)
 	}
 	u.ChangeUserDbState(player, model.DbDelete)
-	u.playerMap[player.PlayerID] = player
+	u.playerMap[player.PlayerId] = player
 	return player
 }
 
@@ -384,13 +384,13 @@ func (u *UserManager) SaveTempOfflineUser(player *model.Player) {
 	if err != nil {
 		logger.Error("marshal player data error: %v", err)
 		// 解离线玩家数据分布式锁
-		u.db.DistUnlock(player.PlayerID)
+		u.db.DistUnlock(player.PlayerId)
 		return
 	}
 	go func() {
 		defer func() {
 			// 解离线玩家数据分布式锁
-			u.db.DistUnlock(player.PlayerID)
+			u.db.DistUnlock(player.PlayerId)
 		}()
 		playerCopy := new(model.Player)
 		err := msgpack.Unmarshal(playerData, playerCopy)

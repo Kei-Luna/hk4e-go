@@ -1,12 +1,19 @@
 package game
 
 import (
+	"time"
+
 	"hk4e/common/constant"
 	"hk4e/gdconf"
+	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 )
+
+/************************************************** 接口请求 **************************************************/
+
+/************************************************** 游戏功能 **************************************************/
 
 // HandlePlayerExpAdd 玩家冒险阅历增加处理
 func (g *Game) HandlePlayerExpAdd(userId uint32) {
@@ -52,4 +59,25 @@ func (g *Game) HandlePlayerExpAdd(userId uint32) {
 		}
 		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, playerPropNotify)
 	}
+}
+
+/************************************************** 打包封装 **************************************************/
+
+func (g *Game) PacketPlayerDataNotify(player *model.Player) *proto.PlayerDataNotify {
+	playerDataNotify := &proto.PlayerDataNotify{
+		NickName:          player.NickName,
+		ServerTime:        uint64(time.Now().UnixMilli()),
+		IsFirstLoginToday: true,
+		RegionId:          1,
+		PropMap:           make(map[uint32]*proto.PropValue),
+	}
+	for k, v := range player.PropertiesMap {
+		propValue := &proto.PropValue{
+			Type:  uint32(k),
+			Value: &proto.PropValue_Ival{Ival: int64(v)},
+			Val:   int64(v),
+		}
+		playerDataNotify.PropMap[uint32(k)] = propValue
+	}
+	return playerDataNotify
 }

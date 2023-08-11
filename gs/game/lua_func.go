@@ -100,7 +100,7 @@ func GetContextPlayer(ctx *lua.LTable, luaState *lua.LState) *model.Player {
 
 // GetContextGroup 获取上下文中的场景组对象
 func GetContextGroup(player *model.Player, ctx *lua.LTable, luaState *lua.LState) *Group {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return nil
 	}
@@ -118,7 +118,7 @@ func GetContextGroup(player *model.Player, ctx *lua.LTable, luaState *lua.LState
 
 // GetContextDbSceneGroup 获取上下文中的场景组离线数据对象
 func GetContextDbSceneGroup(player *model.Player, groupId uint32) *model.DbSceneGroup {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return nil
 	}
@@ -224,8 +224,8 @@ func BeginCameraSceneLook(luaState *lua.LState) int {
 	}
 	ntf := new(proto.BeginCameraSceneLookNotify)
 	gdconf.ParseLuaTableToObject(cameraLockInfo, ntf)
-	GAME.SendMsg(cmd.BeginCameraSceneLookNotify, player.PlayerID, player.ClientSeq, ntf)
-	logger.Debug("BeginCameraSceneLook, ntf: %v, uid: %v", ntf, player.PlayerID)
+	GAME.SendMsg(cmd.BeginCameraSceneLookNotify, player.PlayerId, player.ClientSeq, ntf)
+	logger.Debug("BeginCameraSceneLook, ntf: %v, uid: %v", ntf, player.PlayerId)
 	luaState.Push(lua.LNumber(0))
 	return 1
 }
@@ -298,7 +298,7 @@ func GetGadgetStateByConfigId(luaState *lua.LState) int {
 	}
 	groupId := luaState.ToInt(2)
 	configId := luaState.ToInt(3)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		luaState.Push(lua.LNumber(-1))
 		return 1
@@ -361,7 +361,7 @@ func MarkPlayerAction(luaState *lua.LState) int {
 	param1 := luaState.ToInt(2)
 	param2 := luaState.ToInt(3)
 	param3 := luaState.ToInt(4)
-	logger.Debug("[MarkPlayerAction] [%v %v %v] [UID: %v]", param1, param2, param3, player.PlayerID)
+	logger.Debug("[MarkPlayerAction] [%v %v %v] [UID: %v]", param1, param2, param3, player.PlayerId)
 	luaState.Push(lua.LNumber(0))
 	return 1
 }
@@ -413,7 +413,7 @@ func CreateMonster(luaState *lua.LState) int {
 	}
 	luaTableParam := new(LuaTableParam)
 	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
-	TICK_MANAGER.CreateUserTimer(player.PlayerID, UserTimerActionLuaCreateMonster, uint32(luaTableParam.DelayTime),
+	TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionLuaCreateMonster, uint32(luaTableParam.DelayTime),
 		uint32(groupId), uint32(luaTableParam.ConfigId))
 	luaState.Push(lua.LNumber(0))
 	return 1
@@ -470,7 +470,7 @@ func KillEntityByConfigId(luaState *lua.LState) int {
 	}
 	luaTableParam := new(LuaTableParam)
 	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		luaState.Push(lua.LNumber(-1))
 		return 1
@@ -709,7 +709,7 @@ func GetRegionEntityCount(luaState *lua.LState) int {
 		shape.NewPolygon(&alg.Vector3{X: regionConfig.Pos.X, Y: regionConfig.Pos.Y, Z: regionConfig.Pos.Z},
 			vector2PointArray, regionConfig.Height)
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		luaState.Push(lua.LNumber(-1))
 		return 1
@@ -744,7 +744,7 @@ func CreateGroupTimerEvent(luaState *lua.LState) int {
 	groupId := luaState.ToInt(2)
 	source := luaState.ToString(3)
 	delay := luaState.ToInt(4)
-	TICK_MANAGER.CreateUserTimer(player.PlayerID, UserTimerActionLuaGroupTimerEvent, uint32(delay),
+	TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionLuaGroupTimerEvent, uint32(delay),
 		uint32(groupId), source)
 	luaState.Push(lua.LNumber(0))
 	return 1

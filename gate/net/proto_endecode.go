@@ -108,7 +108,7 @@ func ProtoDecode(kcpMsg *KcpMsg,
 			if msg.PayloadMessage != nil {
 				cmdName = string(msg.PayloadMessage.ProtoReflect().Descriptor().FullName())
 			}
-			logger.Debug("[RECV UNION CMD], cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
+			logger.Debug("[RECV UNION CMD] cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
 				msg.CmdId, cmdName, msg.SessionId, msg.HeadMessage)
 		}
 	} else {
@@ -118,7 +118,7 @@ func ProtoDecode(kcpMsg *KcpMsg,
 		if protoMsg.PayloadMessage != nil {
 			cmdName = string(protoMsg.PayloadMessage.ProtoReflect().Descriptor().FullName())
 		}
-		logger.Debug("[RECV], cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
+		logger.Debug("[RECV] cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
 			protoMsg.CmdId, cmdName, protoMsg.SessionId, protoMsg.HeadMessage)
 	}
 	return protoMsgList
@@ -197,7 +197,7 @@ func ProtoEncode(protoMsg *ProtoMsg,
 	if protoMsg.PayloadMessage != nil {
 		cmdName = string(protoMsg.PayloadMessage.ProtoReflect().Descriptor().FullName())
 	}
-	logger.Debug("[SEND], cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
+	logger.Debug("[SEND] cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
 		protoMsg.CmdId, cmdName, protoMsg.SessionId, protoMsg.HeadMessage)
 	kcpMsg = new(KcpMsg)
 	kcpMsg.SessionId = protoMsg.SessionId

@@ -10,11 +10,13 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 func (g *Game) GetShopmallDataReq(player *model.Player, payloadMsg pb.Message) {
 	getShopmallDataRsp := &proto.GetShopmallDataRsp{
 		ShopTypeList: []uint32{900, 1052, 902, 1001, 903},
 	}
-	g.SendMsg(cmd.GetShopmallDataRsp, player.PlayerID, player.ClientSeq, getShopmallDataRsp)
+	g.SendMsg(cmd.GetShopmallDataRsp, player.PlayerId, player.ClientSeq, getShopmallDataRsp)
 }
 
 func (g *Game) GetShopReq(player *model.Player, payloadMsg pb.Message) {
@@ -61,7 +63,7 @@ func (g *Game) GetShopReq(player *model.Player, payloadMsg pb.Message) {
 			ShopType:        1001,
 		},
 	}
-	g.SendMsg(cmd.GetShopRsp, player.PlayerID, player.ClientSeq, getShopRsp)
+	g.SendMsg(cmd.GetShopRsp, player.PlayerId, player.ClientSeq, getShopRsp)
 }
 
 func (g *Game) BuyGoodsReq(player *model.Player, payloadMsg pb.Message) {
@@ -74,26 +76,26 @@ func (g *Game) BuyGoodsReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	if g.GetPlayerItemCount(player.PlayerID, 201) < costHcoinCount {
+	if g.GetPlayerItemCount(player.PlayerId, 201) < costHcoinCount {
 		return
 	}
-	ok := g.CostUserItem(player.PlayerID, []*ChangeItem{{ItemId: 201, ChangeCount: costHcoinCount}})
+	ok := g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: 201, ChangeCount: costHcoinCount}})
 	if !ok {
 		return
 	}
 
-	g.AddUserItem(player.PlayerID, []*ChangeItem{{
+	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
 		ItemId:      buyItemId,
 		ChangeCount: buyItemCount,
 	}}, true, uint16(proto.ActionReasonType_ACTION_REASON_SHOP))
-	req.Goods.BoughtNum = g.GetPlayerItemCount(player.PlayerID, buyItemId)
+	req.Goods.BoughtNum = g.GetPlayerItemCount(player.PlayerId, buyItemId)
 
 	buyGoodsRsp := &proto.BuyGoodsRsp{
 		ShopType:  req.ShopType,
 		BuyCount:  req.BuyCount,
 		GoodsList: []*proto.ShopGoods{req.Goods},
 	}
-	g.SendMsg(cmd.BuyGoodsRsp, player.PlayerID, player.ClientSeq, buyGoodsRsp)
+	g.SendMsg(cmd.BuyGoodsRsp, player.PlayerId, player.ClientSeq, buyGoodsRsp)
 }
 
 func (g *Game) McoinExchangeHcoinReq(player *model.Player, payloadMsg pb.Message) {
@@ -103,15 +105,15 @@ func (g *Game) McoinExchangeHcoinReq(player *model.Player, payloadMsg pb.Message
 	}
 	count := req.Hcoin
 
-	if g.GetPlayerItemCount(player.PlayerID, 203) < count {
+	if g.GetPlayerItemCount(player.PlayerId, 203) < count {
 		return
 	}
-	ok := g.CostUserItem(player.PlayerID, []*ChangeItem{{ItemId: 203, ChangeCount: count}})
+	ok := g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: 203, ChangeCount: count}})
 	if !ok {
 		return
 	}
 
-	g.AddUserItem(player.PlayerID, []*ChangeItem{{
+	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
 		ItemId:      201,
 		ChangeCount: count,
 	}}, false, 0)
@@ -120,5 +122,9 @@ func (g *Game) McoinExchangeHcoinReq(player *model.Player, payloadMsg pb.Message
 		Hcoin:     req.Hcoin,
 		McoinCost: req.McoinCost,
 	}
-	g.SendMsg(cmd.McoinExchangeHcoinRsp, player.PlayerID, player.ClientSeq, mcoinExchangeHcoinRsp)
+	g.SendMsg(cmd.McoinExchangeHcoinRsp, player.PlayerId, player.ClientSeq, mcoinExchangeHcoinRsp)
 }
+
+/************************************************** 游戏功能 **************************************************/
+
+/************************************************** 打包封装 **************************************************/

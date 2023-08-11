@@ -1,9 +1,9 @@
 package game
 
 import (
-	"hk4e/gdconf"
 	"time"
 
+	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
@@ -12,29 +12,15 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-// VehicleDestroyMotion 载具销毁动作
-func (g *Game) VehicleDestroyMotion(player *model.Player, entity *Entity, state proto.MotionState) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
-
-	// 状态等于 MOTION_STATE_DESTROY_VEHICLE 代表请求销毁
-	if state == proto.MotionState_MOTION_DESTROY_VEHICLE {
-		gadgetEntity := entity.GetGadgetEntity()
-		g.DestroyVehicleEntity(player, scene, gadgetEntity.GetGadgetVehicleEntity().GetVehicleId(), entity.GetId())
-	}
-}
+/************************************************** 接口请求 **************************************************/
 
 // CreateVehicleReq 创建载具
 func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.CreateVehicleReq)
 
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
 		return
 	}
@@ -60,9 +46,9 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	// 创建载具实体
 	pos := &model.Vector{X: float64(req.Pos.X), Y: float64(req.Pos.Y), Z: float64(req.Pos.Z)}
 	rot := &model.Vector{X: float64(req.Rot.X), Y: float64(req.Rot.Y), Z: float64(req.Rot.Z)}
-	entityId := scene.CreateEntityGadgetVehicle(player.PlayerID, pos, rot, req.VehicleId)
+	entityId := scene.CreateEntityGadgetVehicle(player.PlayerId, pos, rot, req.VehicleId)
 	if entityId == 0 {
-		logger.Error("vehicle entityId is 0, uid: %v", player.PlayerID)
+		logger.Error("vehicle entityId is 0, uid: %v", player.PlayerId)
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
 		return
 	}
@@ -75,7 +61,7 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	if owner == player {
 		dbWorld := owner.GetDbWorld()
 		dbScene := dbWorld.GetSceneById(scene.GetId())
-		dbScene.GetVehicleMap()[req.VehicleId] = model.NewDbVehicle(req.VehicleId, player.PlayerID, pos, rot)
+		dbScene.GetVehicleMap()[req.VehicleId] = model.NewDbVehicle(req.VehicleId, player.PlayerId, pos, rot)
 	}
 
 	// PacketCreateVehicleRsp
@@ -83,7 +69,66 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 		VehicleId: req.VehicleId,
 		EntityId:  entityId,
 	}
-	g.SendMsg(cmd.CreateVehicleRsp, player.PlayerID, player.ClientSeq, createVehicleRsp)
+	g.SendMsg(cmd.CreateVehicleRsp, player.PlayerId, player.ClientSeq, createVehicleRsp)
+}
+
+// VehicleInteractReq 载具交互
+func (g *Game) VehicleInteractReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.VehicleInteractReq)
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+
+	// 获取载具实体
+	entity := scene.GetEntity(req.EntityId)
+	if entity == nil {
+		logger.Error("vehicle entity is nil, entityId: %v", req.EntityId)
+		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_ENTITY_NOT_EXIST)
+		return
+	}
+	// 判断实体类型是否为载具
+	gadgetEntity := entity.GetGadgetEntity()
+	if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
+		logger.Error("vehicle entity error, entityType: %v", entity.GetEntityType())
+		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_GADGET_NOT_VEHICLE)
+		return
+	}
+
+	dbTeam := player.GetDbTeam()
+	dbAvatar := player.GetDbAvatar()
+	avatarGuid := dbAvatar.AvatarMap[dbTeam.GetActiveAvatarId()].Guid
+
+	switch req.InteractType {
+	case proto.VehicleInteractType_VEHICLE_INTERACT_IN:
+		// 进入载具
+		g.EnterVehicle(player, entity, avatarGuid)
+	case proto.VehicleInteractType_VEHICLE_INTERACT_OUT:
+		// 离开载具
+		g.ExitVehicle(player, entity, avatarGuid)
+	}
+}
+
+/************************************************** 游戏功能 **************************************************/
+
+// VehicleDestroyMotion 载具销毁动作
+func (g *Game) VehicleDestroyMotion(player *model.Player, entity *Entity, state proto.MotionState) {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+
+	// 状态等于 MOTION_STATE_DESTROY_VEHICLE 代表请求销毁
+	if state == proto.MotionState_MOTION_DESTROY_VEHICLE {
+		gadgetEntity := entity.GetGadgetEntity()
+		g.DestroyVehicleEntity(player, scene, gadgetEntity.GetGadgetVehicleEntity().GetVehicleId(), entity.GetId())
+	}
 }
 
 // IsPlayerInVehicle 判断玩家是否在载具中
@@ -116,7 +161,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 		return
 	}
 	// 该载具是否为此玩家的
-	if gadgetEntity.GetGadgetVehicleEntity().GetOwnerUid() != player.PlayerID {
+	if gadgetEntity.GetGadgetVehicleEntity().GetOwnerUid() != player.PlayerId {
 		return
 	}
 	// 如果玩家正在载具中
@@ -177,13 +222,13 @@ func (g *Game) EnterVehicle(player *model.Player, entity *Entity, avatarGuid uin
 	vehicleInteractRsp := &proto.VehicleInteractRsp{
 		InteractType: proto.VehicleInteractType_VEHICLE_INTERACT_IN,
 		Member: &proto.VehicleMember{
-			Uid:        player.PlayerID,
+			Uid:        player.PlayerId,
 			AvatarGuid: avatarGuid,
 			Pos:        freePos, // 应该是多人坐船时的位置?
 		},
 		EntityId: entity.GetId(),
 	}
-	g.SendMsg(cmd.VehicleInteractRsp, player.PlayerID, player.ClientSeq, vehicleInteractRsp)
+	g.SendMsg(cmd.VehicleInteractRsp, player.PlayerId, player.ClientSeq, vehicleInteractRsp)
 }
 
 // ExitVehicle 离开载具
@@ -191,7 +236,7 @@ func (g *Game) ExitVehicle(player *model.Player, entity *Entity, avatarGuid uint
 	// 玩家是否进入载具
 	gadgetEntity := entity.GetGadgetEntity()
 	if !g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
-		logger.Error("vehicle not has player, uid: %v", player.PlayerID)
+		logger.Error("vehicle not has player, uid: %v", player.PlayerId)
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_NOT_IN_VEHICLE)
 		return
 	}
@@ -211,52 +256,13 @@ func (g *Game) ExitVehicle(player *model.Player, entity *Entity, avatarGuid uint
 	vehicleInteractRsp := &proto.VehicleInteractRsp{
 		InteractType: proto.VehicleInteractType_VEHICLE_INTERACT_OUT,
 		Member: &proto.VehicleMember{
-			Uid:        player.PlayerID,
+			Uid:        player.PlayerId,
 			AvatarGuid: avatarGuid,
 			Pos:        memberPos, // 应该是多人坐船时的位置?
 		},
 		EntityId: entity.GetId(),
 	}
-	g.SendMsg(cmd.VehicleInteractRsp, player.PlayerID, player.ClientSeq, vehicleInteractRsp)
+	g.SendMsg(cmd.VehicleInteractRsp, player.PlayerId, player.ClientSeq, vehicleInteractRsp)
 }
 
-// VehicleInteractReq 载具交互
-func (g *Game) VehicleInteractReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.VehicleInteractReq)
-
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
-		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
-
-	// 获取载具实体
-	entity := scene.GetEntity(req.EntityId)
-	if entity == nil {
-		logger.Error("vehicle entity is nil, entityId: %v", req.EntityId)
-		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_ENTITY_NOT_EXIST)
-		return
-	}
-	// 判断实体类型是否为载具
-	gadgetEntity := entity.GetGadgetEntity()
-	if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
-		logger.Error("vehicle entity error, entityType: %v", entity.GetEntityType())
-		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_GADGET_NOT_VEHICLE)
-		return
-	}
-
-	dbTeam := player.GetDbTeam()
-	dbAvatar := player.GetDbAvatar()
-	avatarGuid := dbAvatar.AvatarMap[dbTeam.GetActiveAvatarId()].Guid
-
-	switch req.InteractType {
-	case proto.VehicleInteractType_VEHICLE_INTERACT_IN:
-		// 进入载具
-		g.EnterVehicle(player, entity, avatarGuid)
-	case proto.VehicleInteractType_VEHICLE_INTERACT_OUT:
-		// 离开载具
-		g.ExitVehicle(player, entity, avatarGuid)
-	}
-}
+/************************************************** 打包封装 **************************************************/

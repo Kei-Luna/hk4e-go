@@ -16,6 +16,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 func (g *Game) GetPlayerSocialDetailReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetPlayerSocialDetailReq)
 	targetUid := req.Uid
@@ -25,9 +27,9 @@ func (g *Game) GetPlayerSocialDetailReq(player *model.Player, payloadMsg pb.Mess
 		g.SendError(cmd.GetPlayerSocialDetailRsp, player, &proto.GetPlayerSocialDetailRsp{}, proto.Retcode_RET_PLAYER_NOT_EXIST)
 		return
 	}
-	_, exist := player.FriendList[targetPlayer.PlayerID]
+	_, exist := player.FriendList[targetPlayer.PlayerId]
 	socialDetail := &proto.SocialDetail{
-		Uid:                  targetPlayer.PlayerID,
+		Uid:                  targetPlayer.PlayerId,
 		ProfilePicture:       &proto.ProfilePicture{AvatarId: targetPlayer.HeadImage},
 		Nickname:             targetPlayer.NickName,
 		Signature:            targetPlayer.Signature,
@@ -42,7 +44,7 @@ func (g *Game) GetPlayerSocialDetailReq(player *model.Player, payloadMsg pb.Mess
 	getPlayerSocialDetailRsp := &proto.GetPlayerSocialDetailRsp{
 		DetailData: socialDetail,
 	}
-	g.SendMsg(cmd.GetPlayerSocialDetailRsp, player.PlayerID, player.ClientSeq, getPlayerSocialDetailRsp)
+	g.SendMsg(cmd.GetPlayerSocialDetailRsp, player.PlayerId, player.ClientSeq, getPlayerSocialDetailRsp)
 }
 
 func (g *Game) SetPlayerBirthdayReq(player *model.Player, payloadMsg pb.Message) {
@@ -58,7 +60,7 @@ func (g *Game) SetPlayerBirthdayReq(player *model.Player, payloadMsg pb.Message)
 	setPlayerBirthdayRsp := &proto.SetPlayerBirthdayRsp{
 		Birthday: req.Birthday,
 	}
-	g.SendMsg(cmd.SetPlayerBirthdayRsp, player.PlayerID, player.ClientSeq, setPlayerBirthdayRsp)
+	g.SendMsg(cmd.SetPlayerBirthdayRsp, player.PlayerId, player.ClientSeq, setPlayerBirthdayRsp)
 }
 
 func (g *Game) SetNameCardReq(player *model.Player, payloadMsg pb.Message) {
@@ -71,7 +73,7 @@ func (g *Game) SetNameCardReq(player *model.Player, payloadMsg pb.Message) {
 		}
 	}
 	if !exist {
-		logger.Error("name card not exist, uid: %v", player.PlayerID)
+		logger.Error("name card not exist, uid: %v", player.PlayerId)
 		return
 	}
 	player.NameCard = nameCardId
@@ -79,7 +81,7 @@ func (g *Game) SetNameCardReq(player *model.Player, payloadMsg pb.Message) {
 	setNameCardRsp := &proto.SetNameCardRsp{
 		NameCardId: nameCardId,
 	}
-	g.SendMsg(cmd.SetNameCardRsp, player.PlayerID, player.ClientSeq, setNameCardRsp)
+	g.SendMsg(cmd.SetNameCardRsp, player.PlayerId, player.ClientSeq, setNameCardRsp)
 }
 
 func (g *Game) SetPlayerSignatureReq(player *model.Player, payloadMsg pb.Message) {
@@ -95,7 +97,7 @@ func (g *Game) SetPlayerSignatureReq(player *model.Player, payloadMsg pb.Message
 		player.Signature = signature
 		setPlayerSignatureRsp.Signature = player.Signature
 	}
-	g.SendMsg(cmd.SetPlayerSignatureRsp, player.PlayerID, player.ClientSeq, setPlayerSignatureRsp)
+	g.SendMsg(cmd.SetPlayerSignatureRsp, player.PlayerId, player.ClientSeq, setPlayerSignatureRsp)
 }
 
 func (g *Game) SetPlayerNameReq(player *model.Player, payloadMsg pb.Message) {
@@ -115,7 +117,7 @@ func (g *Game) SetPlayerNameReq(player *model.Player, payloadMsg pb.Message) {
 		player.NickName = nickName
 		setPlayerNameRsp.NickName = player.NickName
 	}
-	g.SendMsg(cmd.SetPlayerNameRsp, player.PlayerID, player.ClientSeq, setPlayerNameRsp)
+	g.SendMsg(cmd.SetPlayerNameRsp, player.PlayerId, player.ClientSeq, setPlayerNameRsp)
 }
 
 func (g *Game) SetPlayerHeadImageReq(player *model.Player, payloadMsg pb.Message) {
@@ -124,7 +126,7 @@ func (g *Game) SetPlayerHeadImageReq(player *model.Player, payloadMsg pb.Message
 	dbAvatar := player.GetDbAvatar()
 	_, exist := dbAvatar.AvatarMap[avatarId]
 	if !exist {
-		logger.Error("the head img of the avatar not exist, uid: %v", player.PlayerID)
+		logger.Error("the head img of the avatar not exist, uid: %v", player.PlayerId)
 		return
 	}
 	player.HeadImage = avatarId
@@ -132,14 +134,14 @@ func (g *Game) SetPlayerHeadImageReq(player *model.Player, payloadMsg pb.Message
 	setPlayerHeadImageRsp := &proto.SetPlayerHeadImageRsp{
 		ProfilePicture: &proto.ProfilePicture{AvatarId: player.HeadImage},
 	}
-	g.SendMsg(cmd.SetPlayerHeadImageRsp, player.PlayerID, player.ClientSeq, setPlayerHeadImageRsp)
+	g.SendMsg(cmd.SetPlayerHeadImageRsp, player.PlayerId, player.ClientSeq, setPlayerHeadImageRsp)
 }
 
 func (g *Game) GetAllUnlockNameCardReq(player *model.Player, payloadMsg pb.Message) {
 	getAllUnlockNameCardRsp := &proto.GetAllUnlockNameCardRsp{
 		NameCardList: player.NameCardList,
 	}
-	g.SendMsg(cmd.GetAllUnlockNameCardRsp, player.PlayerID, player.ClientSeq, getAllUnlockNameCardRsp)
+	g.SendMsg(cmd.GetAllUnlockNameCardRsp, player.PlayerId, player.ClientSeq, getAllUnlockNameCardRsp)
 }
 
 func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Message) {
@@ -154,7 +156,7 @@ func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Messag
 
 		friendPlayer, online, _ := USER_MANAGER.LoadGlobalPlayer(uid)
 		if friendPlayer == nil {
-			logger.Error("target player is nil, uid: %v", player.PlayerID)
+			logger.Error("target player is nil, uid: %v", player.PlayerId)
 			continue
 		}
 		var onlineState proto.FriendOnlineState = 0
@@ -164,7 +166,7 @@ func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Messag
 			onlineState = proto.FriendOnlineState_FREIEND_DISCONNECT
 		}
 		friendBrief := &proto.FriendBrief{
-			Uid:               friendPlayer.PlayerID,
+			Uid:               friendPlayer.PlayerId,
 			Nickname:          friendPlayer.NickName,
 			Level:             friendPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 			ProfilePicture:    &proto.ProfilePicture{AvatarId: friendPlayer.HeadImage},
@@ -180,7 +182,7 @@ func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Messag
 		}
 		getPlayerFriendListRsp.FriendList = append(getPlayerFriendListRsp.FriendList, friendBrief)
 	}
-	g.SendMsg(cmd.GetPlayerFriendListRsp, player.PlayerID, player.ClientSeq, getPlayerFriendListRsp)
+	g.SendMsg(cmd.GetPlayerFriendListRsp, player.PlayerId, player.ClientSeq, getPlayerFriendListRsp)
 }
 
 func (g *Game) GetPlayerAskFriendListReq(player *model.Player, payloadMsg pb.Message) {
@@ -190,7 +192,7 @@ func (g *Game) GetPlayerAskFriendListReq(player *model.Player, payloadMsg pb.Mes
 	for uid := range player.FriendApplyList {
 		friendPlayer, online, _ := USER_MANAGER.LoadGlobalPlayer(uid)
 		if friendPlayer == nil {
-			logger.Error("target player is nil, uid: %v", player.PlayerID)
+			logger.Error("target player is nil, uid: %v", player.PlayerId)
 			continue
 		}
 		var onlineState proto.FriendOnlineState
@@ -200,7 +202,7 @@ func (g *Game) GetPlayerAskFriendListReq(player *model.Player, payloadMsg pb.Mes
 			onlineState = proto.FriendOnlineState_FREIEND_DISCONNECT
 		}
 		friendBrief := &proto.FriendBrief{
-			Uid:               friendPlayer.PlayerID,
+			Uid:               friendPlayer.PlayerId,
 			Nickname:          friendPlayer.NickName,
 			Level:             friendPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 			ProfilePicture:    &proto.ProfilePicture{AvatarId: friendPlayer.HeadImage},
@@ -216,7 +218,7 @@ func (g *Game) GetPlayerAskFriendListReq(player *model.Player, payloadMsg pb.Mes
 		}
 		getPlayerAskFriendListRsp.AskFriendList = append(getPlayerAskFriendListRsp.AskFriendList, friendBrief)
 	}
-	g.SendMsg(cmd.GetPlayerAskFriendListRsp, player.PlayerID, player.ClientSeq, getPlayerAskFriendListRsp)
+	g.SendMsg(cmd.GetPlayerAskFriendListRsp, player.PlayerId, player.ClientSeq, getPlayerAskFriendListRsp)
 }
 
 func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
@@ -226,7 +228,7 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 	askAddFriendRsp := &proto.AskAddFriendRsp{
 		TargetUid: targetUid,
 	}
-	g.SendMsg(cmd.AskAddFriendRsp, player.PlayerID, player.ClientSeq, askAddFriendRsp)
+	g.SendMsg(cmd.AskAddFriendRsp, player.PlayerId, player.ClientSeq, askAddFriendRsp)
 
 	targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
 	if targetPlayer == nil {
@@ -241,11 +243,11 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 					AddFriendInfo: &mq.AddFriendInfo{
 						OriginInfo: &mq.OriginInfo{
 							CmdName: "AskAddFriendReq",
-							UserId:  player.PlayerID,
+							UserId:  player.PlayerId,
 						},
 						TargetUserId: targetUid,
-						ApplyPlayerOnlineInfo: &mq.UserBaseInfo{
-							UserId:      player.PlayerID,
+						ApplyPlayerOnlineInfo: &mq.PlayerBaseInfo{
+							UserId:      player.PlayerId,
 							Nickname:    player.NickName,
 							PlayerLevel: player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 							NameCardId:  player.NameCard,
@@ -263,32 +265,32 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 				logger.Error("apply add friend target player is nil, uid: %v", targetUid)
 				return
 			}
-			_, applyExist := targetPlayer.FriendApplyList[player.PlayerID]
-			_, friendExist := targetPlayer.FriendList[player.PlayerID]
+			_, applyExist := targetPlayer.FriendApplyList[player.PlayerId]
+			_, friendExist := targetPlayer.FriendList[player.PlayerId]
 			if applyExist || friendExist {
-				logger.Error("friend or apply already exist, uid: %v", player.PlayerID)
+				logger.Error("friend or apply already exist, uid: %v", player.PlayerId)
 				return
 			}
-			targetPlayer.FriendApplyList[player.PlayerID] = true
+			targetPlayer.FriendApplyList[player.PlayerId] = true
 			USER_MANAGER.SaveTempOfflineUser(targetPlayer)
 		}
 		return
 	}
 
-	_, applyExist := targetPlayer.FriendApplyList[player.PlayerID]
-	_, friendExist := targetPlayer.FriendList[player.PlayerID]
+	_, applyExist := targetPlayer.FriendApplyList[player.PlayerId]
+	_, friendExist := targetPlayer.FriendList[player.PlayerId]
 	if applyExist || friendExist {
-		logger.Error("friend or apply already exist, uid: %v", player.PlayerID)
+		logger.Error("friend or apply already exist, uid: %v", player.PlayerId)
 		return
 	}
-	targetPlayer.FriendApplyList[player.PlayerID] = true
+	targetPlayer.FriendApplyList[player.PlayerId] = true
 
 	// 目标玩家在线则通知
 	askAddFriendNotify := &proto.AskAddFriendNotify{
-		TargetUid: player.PlayerID,
+		TargetUid: player.PlayerId,
 	}
 	askAddFriendNotify.TargetFriendBrief = &proto.FriendBrief{
-		Uid:               player.PlayerID,
+		Uid:               player.PlayerId,
 		Nickname:          player.NickName,
 		Level:             player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 		ProfilePicture:    &proto.ProfilePicture{AvatarId: player.HeadImage},
@@ -302,7 +304,7 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 		IsGameSource:      true,
 		PlatformType:      proto.PlatformType_PC,
 	}
-	g.SendMsg(cmd.AskAddFriendNotify, targetPlayer.PlayerID, targetPlayer.ClientSeq, askAddFriendNotify)
+	g.SendMsg(cmd.AskAddFriendNotify, targetPlayer.PlayerId, targetPlayer.ClientSeq, askAddFriendNotify)
 }
 
 func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
@@ -323,7 +325,7 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 		TargetUid:           targetUid,
 		DealAddFriendResult: result,
 	}
-	g.SendMsg(cmd.DealAddFriendRsp, player.PlayerID, player.ClientSeq, dealAddFriendRsp)
+	g.SendMsg(cmd.DealAddFriendRsp, player.PlayerId, player.ClientSeq, dealAddFriendRsp)
 
 	if agree {
 		targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
@@ -339,11 +341,11 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 						AddFriendInfo: &mq.AddFriendInfo{
 							OriginInfo: &mq.OriginInfo{
 								CmdName: "DealAddFriendReq",
-								UserId:  player.PlayerID,
+								UserId:  player.PlayerId,
 							},
 							TargetUserId: targetUid,
-							ApplyPlayerOnlineInfo: &mq.UserBaseInfo{
-								UserId: player.PlayerID,
+							ApplyPlayerOnlineInfo: &mq.PlayerBaseInfo{
+								UserId: player.PlayerId,
 							},
 						},
 					},
@@ -355,12 +357,12 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 					logger.Error("apply add friend target player is nil, uid: %v", targetUid)
 					return
 				}
-				targetPlayer.FriendList[player.PlayerID] = true
+				targetPlayer.FriendList[player.PlayerId] = true
 				USER_MANAGER.SaveTempOfflineUser(targetPlayer)
 			}
 			return
 		}
-		targetPlayer.FriendList[player.PlayerID] = true
+		targetPlayer.FriendList[player.PlayerId] = true
 	}
 }
 
@@ -384,10 +386,10 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 	onlinePlayerList := make([]*model.Player, 0)
 	// 优先获取本地的在线玩家
 	for _, onlinePlayer := range USER_MANAGER.GetAllOnlineUserList() {
-		if onlinePlayer.PlayerID == player.PlayerID {
+		if onlinePlayer.PlayerId == player.PlayerId {
 			continue
 		}
-		if g.IsMainGs() && onlinePlayer.PlayerID == g.GetAi().PlayerID {
+		if g.IsMainGs() && onlinePlayer.PlayerId == g.GetAi().PlayerId {
 			continue
 		}
 		onlinePlayerList = append(onlinePlayerList, onlinePlayer)
@@ -399,7 +401,7 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 	if count < 50 {
 		// 本地不够时获取远程的在线玩家
 		for _, onlinePlayer := range USER_MANAGER.GetRemoteOnlineUserList(50 - count) {
-			if onlinePlayer.PlayerID == player.PlayerID {
+			if onlinePlayer.PlayerId == player.PlayerId {
 				continue
 			}
 			onlinePlayerList = append(onlinePlayerList, onlinePlayer)
@@ -414,7 +416,7 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 		onlinePlayerInfo := g.PacketOnlinePlayerInfo(onlinePlayer)
 		getOnlinePlayerListRsp.PlayerInfoList = append(getOnlinePlayerListRsp.PlayerInfoList, onlinePlayerInfo)
 	}
-	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerID, player.ClientSeq, getOnlinePlayerListRsp)
+	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, getOnlinePlayerListRsp)
 }
 
 func (g *Game) GetOnlinePlayerInfoReq(player *model.Player, payloadMsg pb.Message) {
@@ -430,34 +432,13 @@ func (g *Game) GetOnlinePlayerInfoReq(player *model.Player, payloadMsg pb.Messag
 		return
 	}
 
-	g.SendMsg(cmd.GetOnlinePlayerInfoRsp, player.PlayerID, player.ClientSeq, &proto.GetOnlinePlayerInfoRsp{
+	g.SendMsg(cmd.GetOnlinePlayerInfoRsp, player.PlayerId, player.ClientSeq, &proto.GetOnlinePlayerInfoRsp{
 		TargetUid:        targetUid.TargetUid,
 		TargetPlayerInfo: g.PacketOnlinePlayerInfo(targetPlayer),
 	})
 }
 
-func (g *Game) PacketOnlinePlayerInfo(player *model.Player) *proto.OnlinePlayerInfo {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
-	worldPlayerNum := uint32(1)
-	if world != nil {
-		worldPlayerNum = uint32(world.GetWorldPlayerNum())
-	} else {
-		// TODO 远程玩家的世界内人数
-		worldPlayerNum = 1
-	}
-	onlinePlayerInfo := &proto.OnlinePlayerInfo{
-		Uid:                 player.PlayerID,
-		Nickname:            player.NickName,
-		PlayerLevel:         player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
-		AvatarId:            player.HeadImage,
-		MpSettingType:       proto.MpSettingType(player.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
-		NameCardId:          player.NameCard,
-		Signature:           player.Signature,
-		ProfilePicture:      &proto.ProfilePicture{AvatarId: player.HeadImage},
-		CurPlayerNumInWorld: worldPlayerNum,
-	}
-	return onlinePlayerInfo
-}
+/************************************************** 游戏功能 **************************************************/
 
 // 跨服添加好友通知
 
@@ -496,7 +477,7 @@ func (g *Game) ServerAddFriendNotify(addFriendInfo *mq.AddFriendInfo) {
 			IsGameSource:      true,
 			PlatformType:      proto.PlatformType_PC,
 		}
-		g.SendMsg(cmd.AskAddFriendNotify, targetPlayer.PlayerID, targetPlayer.ClientSeq, askAddFriendNotify)
+		g.SendMsg(cmd.AskAddFriendNotify, targetPlayer.PlayerId, targetPlayer.ClientSeq, askAddFriendNotify)
 	case "DealAddFriendReq":
 		targetPlayer := USER_MANAGER.GetOnlineUser(addFriendInfo.TargetUserId)
 		if targetPlayer == nil {
@@ -505,4 +486,29 @@ func (g *Game) ServerAddFriendNotify(addFriendInfo *mq.AddFriendInfo) {
 		}
 		targetPlayer.FriendList[addFriendInfo.ApplyPlayerOnlineInfo.UserId] = true
 	}
+}
+
+/************************************************** 打包封装 **************************************************/
+
+func (g *Game) PacketOnlinePlayerInfo(player *model.Player) *proto.OnlinePlayerInfo {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	worldPlayerNum := uint32(1)
+	if world != nil {
+		worldPlayerNum = uint32(world.GetWorldPlayerNum())
+	} else {
+		// TODO 远程玩家的世界内人数
+		worldPlayerNum = 1
+	}
+	onlinePlayerInfo := &proto.OnlinePlayerInfo{
+		Uid:                 player.PlayerId,
+		Nickname:            player.NickName,
+		PlayerLevel:         player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+		AvatarId:            player.HeadImage,
+		MpSettingType:       proto.MpSettingType(player.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
+		NameCardId:          player.NameCard,
+		Signature:           player.Signature,
+		ProfilePicture:      &proto.ProfilePicture{AvatarId: player.HeadImage},
+		CurPlayerNumInWorld: worldPlayerNum,
+	}
+	return onlinePlayerInfo
 }

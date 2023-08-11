@@ -14,6 +14,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 // AvatarUpgradeReq 角色升级请求
 func (g *Game) AvatarUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.AvatarUpgradeReq)
@@ -41,7 +43,7 @@ func (g *Game) AvatarUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 	// 角色获得的经验
 	expCount := uint32(itemParam) * req.Count
 	// 摩拉数量是否足够
-	if g.GetPlayerItemCount(player.PlayerID, constant.ITEM_ID_SCOIN) < expCount/5 {
+	if g.GetPlayerItemCount(player.PlayerId, constant.ITEM_ID_SCOIN) < expCount/5 {
 		logger.Error("item count not enough, itemId: %v", constant.ITEM_ID_SCOIN)
 		g.SendError(cmd.AvatarUpgradeRsp, player, &proto.AvatarUpgradeRsp{}, proto.Retcode_RET_SCOIN_NOT_ENOUGH)
 		return
@@ -67,12 +69,12 @@ func (g *Game) AvatarUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	// 消耗升级材料以及摩拉
-	ok = g.CostUserItem(player.PlayerID, []*ChangeItem{
+	ok = g.CostPlayerItem(player.PlayerId, []*ChangeItem{
 		{ItemId: req.ItemId, ChangeCount: req.Count},
 		{ItemId: constant.ITEM_ID_SCOIN, ChangeCount: expCount / 5},
 	})
 	if !ok {
-		logger.Error("item count not enough, uid: %v", player.PlayerID)
+		logger.Error("item count not enough, uid: %v", player.PlayerId)
 		g.SendError(cmd.AvatarUpgradeRsp, player, &proto.AvatarUpgradeRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
 		return
 	}
@@ -93,7 +95,7 @@ func (g *Game) AvatarUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 		CurFightPropMap: avatar.FightPropMap,
 		AvatarGuid:      req.AvatarGuid,
 	}
-	g.SendMsg(cmd.AvatarUpgradeRsp, player.PlayerID, player.ClientSeq, avatarUpgradeRsp)
+	g.SendMsg(cmd.AvatarUpgradeRsp, player.PlayerId, player.ClientSeq, avatarUpgradeRsp)
 }
 
 // AvatarPromoteReq 角色突破请求
@@ -149,7 +151,7 @@ func (g *Game) AvatarPromoteReq(player *model.Player, payloadMsg pb.Message) {
 	})
 	// 突破材料以及摩拉是否足够
 	for _, item := range costItemList {
-		if g.GetPlayerItemCount(player.PlayerID, item.ItemId) < item.ChangeCount {
+		if g.GetPlayerItemCount(player.PlayerId, item.ItemId) < item.ChangeCount {
 			logger.Error("item count not enough, itemId: %v", item.ItemId)
 			// 摩拉的错误提示与材料不同
 			if item.ItemId == constant.ITEM_ID_SCOIN {
@@ -166,9 +168,9 @@ func (g *Game) AvatarPromoteReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	// 消耗突破材料和摩拉
-	ok = g.CostUserItem(player.PlayerID, costItemList)
+	ok = g.CostPlayerItem(player.PlayerId, costItemList)
 	if !ok {
-		logger.Error("item count not enough, uid: %v", player.PlayerID)
+		logger.Error("item count not enough, uid: %v", player.PlayerId)
 		g.SendError(cmd.AvatarPromoteRsp, player, &proto.AvatarPromoteRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
 		return
 	}
@@ -176,14 +178,14 @@ func (g *Game) AvatarPromoteReq(player *model.Player, payloadMsg pb.Message) {
 	// 角色突破等级+1
 	avatar.Promote++
 	// 角色更新面板
-	g.UpdateUserAvatarFightProp(player.PlayerID, avatar.AvatarId)
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	// 角色属性表更新通知
-	g.SendMsg(cmd.AvatarPropNotify, player.PlayerID, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
+	g.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
 
 	avatarPromoteRsp := &proto.AvatarPromoteRsp{
 		Guid: req.Guid,
 	}
-	g.SendMsg(cmd.AvatarPromoteRsp, player.PlayerID, player.ClientSeq, avatarPromoteRsp)
+	g.SendMsg(cmd.AvatarPromoteRsp, player.PlayerId, player.ClientSeq, avatarPromoteRsp)
 }
 
 // AvatarPromoteGetRewardReq 角色突破获取奖励请求
@@ -226,23 +228,23 @@ func (g *Game) AvatarPromoteGetRewardReq(player *model.Player, payloadMsg pb.Mes
 			ChangeCount: count,
 		})
 	}
-	g.AddUserItem(player.PlayerID, rewardItemList, false, 0)
+	g.AddPlayerItem(player.PlayerId, rewardItemList, false, 0)
 
 	avatarPromoteGetRewardRsp := &proto.AvatarPromoteGetRewardRsp{
-		RewardId:     uint32(rewardConfig.RewardID),
+		RewardId:     uint32(rewardConfig.RewardId),
 		AvatarGuid:   req.AvatarGuid,
 		PromoteLevel: req.PromoteLevel,
 	}
-	g.SendMsg(cmd.AvatarPromoteGetRewardRsp, player.PlayerID, player.ClientSeq, avatarPromoteGetRewardRsp)
+	g.SendMsg(cmd.AvatarPromoteGetRewardRsp, player.PlayerId, player.ClientSeq, avatarPromoteGetRewardRsp)
 }
 
 // AvatarWearFlycloakReq 角色装备风之翼请求
 func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.AvatarWearFlycloakReq)
 
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		g.SendError(cmd.AvatarWearFlycloakRsp, player, &proto.AvatarWearFlycloakRsp{})
 		return
 	}
@@ -282,16 +284,16 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 		AvatarGuid: req.AvatarGuid,
 		FlycloakId: req.FlycloakId,
 	}
-	g.SendMsg(cmd.AvatarWearFlycloakRsp, player.PlayerID, player.ClientSeq, avatarWearFlycloakRsp)
+	g.SendMsg(cmd.AvatarWearFlycloakRsp, player.PlayerId, player.ClientSeq, avatarWearFlycloakRsp)
 }
 
 // AvatarChangeCostumeReq 角色更换时装请求
 func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.AvatarChangeCostumeReq)
 
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		g.SendError(cmd.AvatarChangeCostumeRsp, player, &proto.AvatarChangeCostumeRsp{})
 		return
 	}
@@ -342,8 +344,173 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 		AvatarGuid: req.AvatarGuid,
 		CostumeId:  req.CostumeId,
 	}
-	g.SendMsg(cmd.AvatarChangeCostumeRsp, player.PlayerID, player.ClientSeq, avatarChangeCostumeRsp)
+	g.SendMsg(cmd.AvatarChangeCostumeRsp, player.PlayerId, player.ClientSeq, avatarChangeCostumeRsp)
 }
+
+/************************************************** 游戏功能 **************************************************/
+
+func (g *Game) GetAllAvatarDataConfig() map[int32]*gdconf.AvatarData {
+	allAvatarDataConfig := make(map[int32]*gdconf.AvatarData)
+	for avatarId, avatarData := range gdconf.GetAvatarDataMap() {
+		if avatarId <= 10000001 || avatarId >= 11000000 {
+			// 跳过无效角色
+			continue
+		}
+		if avatarId == 10000005 || avatarId == 10000007 {
+			// 跳过主角
+			continue
+		}
+		allAvatarDataConfig[avatarId] = avatarData
+	}
+	return allAvatarDataConfig
+}
+
+func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 判断玩家是否已有该角色
+	dbAvatar := player.GetDbAvatar()
+	_, ok := dbAvatar.AvatarMap[avatarId]
+	if ok {
+		// TODO 如果已有转换命座材料
+		return
+	}
+	dbAvatar.AddAvatar(player, avatarId)
+
+	// 添加初始武器
+	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatarId))
+	if avatarDataConfig == nil {
+		logger.Error("config is nil, itemId: %v", avatarId)
+		return
+	}
+	weaponId := g.AddPlayerWeapon(player.PlayerId, uint32(avatarDataConfig.InitialWeapon))
+
+	// 角色装上初始武器
+	g.WearPlayerAvatarWeapon(player.PlayerId, avatarId, weaponId)
+
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
+
+	avatarAddNotify := &proto.AvatarAddNotify{
+		Avatar:   g.PacketAvatarInfo(dbAvatar.AvatarMap[avatarId]),
+		IsInTeam: false,
+	}
+	g.SendMsg(cmd.AvatarAddNotify, userId, player.ClientSeq, avatarAddNotify)
+}
+
+// AddPlayerFlycloak 给予玩家风之翼
+func (g *Game) AddPlayerFlycloak(userId uint32, flyCloakId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 验证玩家是否已拥有该风之翼
+	for _, flycloak := range player.FlyCloakList {
+		if flycloak == flyCloakId {
+			logger.Error("player has flycloak, flycloakId: %v", flyCloakId)
+			return
+		}
+	}
+	player.FlyCloakList = append(player.FlyCloakList, flyCloakId)
+
+	avatarGainFlycloakNotify := &proto.AvatarGainFlycloakNotify{
+		FlycloakId: flyCloakId,
+	}
+	g.SendMsg(cmd.AvatarGainFlycloakNotify, userId, player.ClientSeq, avatarGainFlycloakNotify)
+}
+
+// AddPlayerCostume 给予玩家时装
+func (g *Game) AddPlayerCostume(userId uint32, costumeId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 验证玩家是否已拥有该时装
+	for _, costume := range player.CostumeList {
+		if costume == costumeId {
+			logger.Error("player has costume, costumeId: %v", costumeId)
+			return
+		}
+	}
+	player.CostumeList = append(player.CostumeList, costumeId)
+
+	avatarGainCostumeNotify := &proto.AvatarGainCostumeNotify{
+		CostumeId: costumeId,
+	}
+	g.SendMsg(cmd.AvatarGainCostumeNotify, userId, player.ClientSeq, avatarGainCostumeNotify)
+}
+
+// UpgradePlayerAvatar 玩家角色升级
+func (g *Game) UpgradePlayerAvatar(player *model.Player, avatar *model.Avatar, expCount uint32) {
+	// 获取角色配置表
+	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatar.AvatarId))
+	if avatarDataConfig == nil {
+		logger.Error("avatar config error, avatarId: %v", avatar.AvatarId)
+		return
+	}
+	// 获取角色突破配置表
+	avatarPromoteConfig := gdconf.GetAvatarPromoteDataByIdAndLevel(avatarDataConfig.PromoteId, int32(avatar.Promote))
+	if avatarPromoteConfig == nil {
+		logger.Error("avatar promote config error, promoteLevel: %v", avatar.Promote)
+		return
+	}
+	// 角色增加经验
+	avatar.Exp += expCount
+	// 角色升级
+	for {
+		// 获取角色等级配置表
+		avatarLevelConfig := gdconf.GetAvatarLevelDataByLevel(int32(avatar.Level))
+		if avatarLevelConfig == nil {
+			// 获取不到代表已经到达最大等级
+			break
+		}
+		// 角色当前等级未突破则跳出循环
+		if avatar.Level >= uint8(avatarPromoteConfig.LevelLimit) {
+			// 角色未突破溢出的经验处理
+			avatar.Exp = 0
+			break
+		}
+		// 角色经验小于升级所需的经验则跳出循环
+		if avatar.Exp < uint32(avatarLevelConfig.Exp) {
+			break
+		}
+		// 角色等级提升
+		avatar.Exp -= uint32(avatarLevelConfig.Exp)
+		avatar.Level++
+	}
+	// 角色更新面板
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
+	// 角色属性表更新通知
+	g.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
+}
+
+func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbAvatar := player.GetDbAvatar()
+	avatar, ok := dbAvatar.AvatarMap[avatarId]
+	if !ok {
+		logger.Error("avatar is nil, avatarId: %v", avatar)
+		return
+	}
+	// 角色初始化面板
+	dbAvatar.InitAvatarFightProp(avatar)
+
+	avatarFightPropNotify := &proto.AvatarFightPropNotify{
+		AvatarGuid:   avatar.Guid,
+		FightPropMap: avatar.FightPropMap,
+	}
+	g.SendMsg(cmd.AvatarFightPropNotify, userId, player.ClientSeq, avatarFightPropNotify)
+}
+
+/************************************************** 打包封装 **************************************************/
 
 func (g *Game) PacketAvatarInfo(avatar *model.Avatar) *proto.AvatarInfo {
 	pbAvatar := &proto.AvatarInfo{
@@ -436,163 +603,31 @@ func (g *Game) PacketAvatarPropNotify(avatar *model.Avatar) *proto.AvatarPropNot
 	return avatarPropNotify
 }
 
-func (g *Game) GetAllAvatarDataConfig() map[int32]*gdconf.AvatarData {
-	allAvatarDataConfig := make(map[int32]*gdconf.AvatarData)
-	for avatarId, avatarData := range gdconf.GetAvatarDataMap() {
-		if avatarId <= 10000001 || avatarId >= 11000000 {
-			// 跳过无效角色
-			continue
-		}
-		if avatarId == 10000005 || avatarId == 10000007 {
-			// 跳过主角
-			continue
-		}
-		allAvatarDataConfig[avatarId] = avatarData
-	}
-	return allAvatarDataConfig
-}
-
-func (g *Game) AddUserAvatar(userId uint32, avatarId uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	// 判断玩家是否已有该角色
+func (g *Game) PacketAvatarDataNotify(player *model.Player) *proto.AvatarDataNotify {
 	dbAvatar := player.GetDbAvatar()
-	_, ok := dbAvatar.AvatarMap[avatarId]
-	if ok {
-		// TODO 如果已有转换命座材料
-		return
+	dbTeam := player.GetDbTeam()
+	avatarDataNotify := &proto.AvatarDataNotify{
+		CurAvatarTeamId:   uint32(dbTeam.GetActiveTeamId()),
+		ChooseAvatarGuid:  dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId].Guid,
+		OwnedFlycloakList: player.FlyCloakList,
+		// 角色衣装
+		OwnedCostumeList: player.CostumeList,
+		AvatarList:       make([]*proto.AvatarInfo, 0),
+		AvatarTeamMap:    make(map[uint32]*proto.AvatarTeam),
 	}
-	dbAvatar.AddAvatar(player, avatarId)
-
-	// 添加初始武器
-	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatarId))
-	if avatarDataConfig == nil {
-		logger.Error("config is nil, itemId: %v", avatarId)
-		return
+	for _, avatar := range dbAvatar.AvatarMap {
+		pbAvatar := g.PacketAvatarInfo(avatar)
+		avatarDataNotify.AvatarList = append(avatarDataNotify.AvatarList, pbAvatar)
 	}
-	weaponId := g.AddUserWeapon(player.PlayerID, uint32(avatarDataConfig.InitialWeapon))
-
-	// 角色装上初始武器
-	g.WearUserAvatarWeapon(player.PlayerID, avatarId, weaponId)
-
-	g.UpdateUserAvatarFightProp(player.PlayerID, avatarId)
-
-	avatarAddNotify := &proto.AvatarAddNotify{
-		Avatar:   g.PacketAvatarInfo(dbAvatar.AvatarMap[avatarId]),
-		IsInTeam: false,
-	}
-	g.SendMsg(cmd.AvatarAddNotify, userId, player.ClientSeq, avatarAddNotify)
-}
-
-// AddUserFlycloak 给予玩家风之翼
-func (g *Game) AddUserFlycloak(userId uint32, flyCloakId uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	// 验证玩家是否已拥有该风之翼
-	for _, flycloak := range player.FlyCloakList {
-		if flycloak == flyCloakId {
-			logger.Error("player has flycloak, flycloakId: %v", flyCloakId)
-			return
+	for teamIndex, team := range dbTeam.TeamList {
+		var teamAvatarGuidList []uint64 = nil
+		for _, avatarId := range team.GetAvatarIdList() {
+			teamAvatarGuidList = append(teamAvatarGuidList, dbAvatar.AvatarMap[avatarId].Guid)
+		}
+		avatarDataNotify.AvatarTeamMap[uint32(teamIndex)+1] = &proto.AvatarTeam{
+			AvatarGuidList: teamAvatarGuidList,
+			TeamName:       team.Name,
 		}
 	}
-	player.FlyCloakList = append(player.FlyCloakList, flyCloakId)
-
-	avatarGainFlycloakNotify := &proto.AvatarGainFlycloakNotify{
-		FlycloakId: flyCloakId,
-	}
-	g.SendMsg(cmd.AvatarGainFlycloakNotify, userId, player.ClientSeq, avatarGainFlycloakNotify)
-}
-
-// AddUserCostume 给予玩家时装
-func (g *Game) AddUserCostume(userId uint32, costumeId uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	// 验证玩家是否已拥有该时装
-	for _, costume := range player.CostumeList {
-		if costume == costumeId {
-			logger.Error("player has costume, costumeId: %v", costumeId)
-			return
-		}
-	}
-	player.CostumeList = append(player.CostumeList, costumeId)
-
-	avatarGainCostumeNotify := &proto.AvatarGainCostumeNotify{
-		CostumeId: costumeId,
-	}
-	g.SendMsg(cmd.AvatarGainCostumeNotify, userId, player.ClientSeq, avatarGainCostumeNotify)
-}
-
-// UpgradePlayerAvatar 玩家角色升级
-func (g *Game) UpgradePlayerAvatar(player *model.Player, avatar *model.Avatar, expCount uint32) {
-	// 获取角色配置表
-	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatar.AvatarId))
-	if avatarDataConfig == nil {
-		logger.Error("avatar config error, avatarId: %v", avatar.AvatarId)
-		return
-	}
-	// 获取角色突破配置表
-	avatarPromoteConfig := gdconf.GetAvatarPromoteDataByIdAndLevel(avatarDataConfig.PromoteId, int32(avatar.Promote))
-	if avatarPromoteConfig == nil {
-		logger.Error("avatar promote config error, promoteLevel: %v", avatar.Promote)
-		return
-	}
-	// 角色增加经验
-	avatar.Exp += expCount
-	// 角色升级
-	for {
-		// 获取角色等级配置表
-		avatarLevelConfig := gdconf.GetAvatarLevelDataByLevel(int32(avatar.Level))
-		if avatarLevelConfig == nil {
-			// 获取不到代表已经到达最大等级
-			break
-		}
-		// 角色当前等级未突破则跳出循环
-		if avatar.Level >= uint8(avatarPromoteConfig.LevelLimit) {
-			// 角色未突破溢出的经验处理
-			avatar.Exp = 0
-			break
-		}
-		// 角色经验小于升级所需的经验则跳出循环
-		if avatar.Exp < uint32(avatarLevelConfig.Exp) {
-			break
-		}
-		// 角色等级提升
-		avatar.Exp -= uint32(avatarLevelConfig.Exp)
-		avatar.Level++
-	}
-	// 角色更新面板
-	g.UpdateUserAvatarFightProp(player.PlayerID, avatar.AvatarId)
-	// 角色属性表更新通知
-	g.SendMsg(cmd.AvatarPropNotify, player.PlayerID, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
-}
-
-func (g *Game) UpdateUserAvatarFightProp(userId uint32, avatarId uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[avatarId]
-	if !ok {
-		logger.Error("avatar is nil, avatarId: %v", avatar)
-		return
-	}
-	// 角色初始化面板
-	dbAvatar.InitAvatarFightProp(avatar)
-
-	avatarFightPropNotify := &proto.AvatarFightPropNotify{
-		AvatarGuid:   avatar.Guid,
-		FightPropMap: avatar.FightPropMap,
-	}
-	g.SendMsg(cmd.AvatarFightPropNotify, userId, player.ClientSeq, avatarFightPropNotify)
+	return avatarDataNotify
 }

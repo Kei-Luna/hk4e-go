@@ -123,7 +123,7 @@ func (d *Dao) UpdatePlayer(player *model.Player) error {
 	db := d.db.Collection("player")
 	_, err := db.UpdateMany(
 		context.TODO(),
-		bson.D{{"player_id", player.PlayerID}},
+		bson.D{{"player_id", player.PlayerId}},
 		bson.D{{"$set", player}},
 	)
 	if err != nil {
@@ -152,7 +152,7 @@ func (d *Dao) UpdatePlayerList(playerList []*model.Player) error {
 	db := d.db.Collection("player")
 	modelOperateList := make([]mongo.WriteModel, 0)
 	for _, player := range playerList {
-		modelOperate := mongo.NewUpdateManyModel().SetFilter(bson.D{{"player_id", player.PlayerID}}).SetUpdate(bson.D{{"$set", player}})
+		modelOperate := mongo.NewUpdateManyModel().SetFilter(bson.D{{"player_id", player.PlayerId}}).SetUpdate(bson.D{{"$set", player}})
 		modelOperateList = append(modelOperateList, modelOperate)
 	}
 	_, err := db.BulkWrite(context.TODO(), modelOperateList)

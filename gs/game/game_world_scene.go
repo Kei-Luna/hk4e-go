@@ -1,9 +1,10 @@
 package game
 
 import (
-	"hk4e/gdconf"
 	"math"
 	"time"
+
+	"hk4e/gdconf"
 
 	"hk4e/common/constant"
 	"hk4e/gs/model"
@@ -73,12 +74,12 @@ func (s *Scene) GetSceneTime() int64 {
 }
 
 func (s *Scene) AddPlayer(player *model.Player) {
-	s.playerMap[player.PlayerID] = player
+	s.playerMap[player.PlayerId] = player
 	s.world.InitPlayerWorldAvatar(player)
 }
 
 func (s *Scene) RemovePlayer(player *model.Player) {
-	delete(s.playerMap, player.PlayerID)
+	delete(s.playerMap, player.PlayerId)
 	worldAvatarList := s.world.GetPlayerWorldAvatarList(player)
 	for _, worldAvatar := range worldAvatarList {
 		s.DestroyEntity(worldAvatar.avatarEntityId)
@@ -106,7 +107,7 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 		fightProp:           avatar.FightPropMap, // 使用角色结构的数据
 		entityType:          constant.ENTITY_TYPE_AVATAR,
 		avatarEntity: &AvatarEntity{
-			uid:      player.PlayerID,
+			uid:      player.PlayerId,
 			avatarId: avatarId,
 		},
 	}

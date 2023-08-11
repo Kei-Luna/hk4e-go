@@ -9,7 +9,7 @@ import (
 )
 
 func forEachPlayerSceneGroup(player *model.Player, handleFunc func(suiteConfig *gdconf.Suite, groupConfig *gdconf.Group)) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -17,7 +17,7 @@ func forEachPlayerSceneGroup(player *model.Player, handleFunc func(suiteConfig *
 	for groupId, group := range scene.GetAllGroup() {
 		groupConfig := gdconf.GetSceneGroup(int32(groupId))
 		if groupConfig == nil {
-			logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
+			logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerId)
 			continue
 		}
 		for suiteId := range group.GetAllSuite() {
@@ -28,7 +28,7 @@ func forEachPlayerSceneGroup(player *model.Player, handleFunc func(suiteConfig *
 }
 
 func forEachPlayerSceneGroupTrigger(player *model.Player, handleFunc func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group)) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -36,7 +36,7 @@ func forEachPlayerSceneGroupTrigger(player *model.Player, handleFunc func(trigge
 	for groupId, group := range scene.GetAllGroup() {
 		groupConfig := gdconf.GetSceneGroup(int32(groupId))
 		if groupConfig == nil {
-			logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerID)
+			logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerId)
 			continue
 		}
 		for suiteId := range group.GetAllSuite() {
@@ -52,7 +52,7 @@ func forEachPlayerSceneGroupTrigger(player *model.Player, handleFunc func(trigge
 func forEachGroupTrigger(player *model.Player, group *Group, handleFunc func(triggerConfig *gdconf.Trigger, groupConfig *gdconf.Group)) {
 	groupConfig := gdconf.GetSceneGroup(int32(group.GetId()))
 	if groupConfig == nil {
-		logger.Error("get group config is nil, groupId: %v, uid: %v", group.GetId(), player.PlayerID)
+		logger.Error("get group config is nil, groupId: %v, uid: %v", group.GetId(), player.PlayerId)
 		return
 	}
 	for suiteId := range group.GetAllSuite() {
@@ -94,7 +94,7 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 			oldPosInRegion := shape.Contain(&alg.Vector3{X: float32(oldPos.X), Y: float32(oldPos.Y), Z: float32(oldPos.Z)})
 			newPosInRegion := shape.Contain(&alg.Vector3{X: float32(newPos.X), Y: float32(newPos.Y), Z: float32(newPos.Z)})
 			if !oldPosInRegion && newPosInRegion {
-				logger.Debug("player enter region: %v, uid: %v", regionConfig, player.PlayerID)
+				logger.Debug("player enter region: %v, uid: %v", regionConfig, player.PlayerId)
 				for _, triggerName := range suiteConfig.TriggerNameList {
 					triggerConfig := groupConfig.TriggerMap[triggerName]
 					if triggerConfig.Event != constant.LUA_EVENT_ENTER_REGION {
@@ -102,20 +102,20 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 					}
 					if triggerConfig.Condition != "" {
 						cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+							&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId, sourceEntityId: uint32(regionConfig.ConfigId)})
 						if !cond {
 							continue
 						}
 					}
-					logger.Debug("scene group trigger fire, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+					logger.Debug("scene group trigger fire, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 					if triggerConfig.Action != "" {
-						logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+						logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 						ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+							&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 							&LuaEvt{})
 						if !ok {
-							logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+							logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 						}
 					}
 					for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
@@ -125,7 +125,7 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 					}
 				}
 			} else if oldPosInRegion && !newPosInRegion {
-				logger.Debug("player leave region: %v, uid: %v", regionConfig, player.PlayerID)
+				logger.Debug("player leave region: %v, uid: %v", regionConfig, player.PlayerId)
 				for _, triggerName := range suiteConfig.TriggerNameList {
 					triggerConfig := groupConfig.TriggerMap[triggerName]
 					if triggerConfig.Event != constant.LUA_EVENT_LEAVE_REGION {
@@ -133,20 +133,20 @@ func (g *Game) SceneRegionTriggerCheck(player *model.Player, oldPos *model.Vecto
 					}
 					if triggerConfig.Condition != "" {
 						cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+							&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 							&LuaEvt{param1: regionConfig.ConfigId, targetEntityId: entityId, sourceEntityId: uint32(regionConfig.ConfigId)})
 						if !cond {
 							continue
 						}
 					}
-					logger.Debug("scene group trigger fire, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+					logger.Debug("scene group trigger fire, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 					if triggerConfig.Action != "" {
-						logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+						logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 						ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-							&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+							&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 							&LuaEvt{})
 						if !ok {
-							logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+							logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 						}
 					}
 				}
@@ -163,19 +163,19 @@ func (g *Game) QuestStartTriggerCheck(player *model.Player, questId uint32) {
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{param1: int32(questId)})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -189,19 +189,19 @@ func (g *Game) MonsterCreateTriggerCheck(player *model.Player, group *Group, con
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{param1: int32(configId)})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -215,19 +215,19 @@ func (g *Game) MonsterDieTriggerCheck(player *model.Player, group *Group) {
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -241,19 +241,19 @@ func (g *Game) GadgetCreateTriggerCheck(player *model.Player, group *Group, conf
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{param1: int32(configId)})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -267,19 +267,19 @@ func (g *Game) GadgetStateChangeTriggerCheck(player *model.Player, group *Group,
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{param1: int32(state), param2: int32(configId)})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -293,19 +293,19 @@ func (g *Game) GadgetDieTriggerCheck(player *model.Player, group *Group, configI
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{param1: int32(configId)})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -319,19 +319,19 @@ func (g *Game) GroupLoadTriggerCheck(player *model.Player, group *Group) {
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})
@@ -350,19 +350,19 @@ func (g *Game) TimerEventTriggerCheck(player *model.Player, group *Group, source
 		}
 		if triggerConfig.Condition != "" {
 			cond := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Condition,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{sourceName: source})
 			if !cond {
 				return
 			}
 		}
 		if triggerConfig.Action != "" {
-			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+			logger.Debug("scene group trigger do action, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			ok := CallLuaFunc(groupConfig.GetLuaState(), triggerConfig.Action,
-				&LuaCtx{uid: player.PlayerID, groupId: uint32(groupConfig.Id)},
+				&LuaCtx{uid: player.PlayerId, groupId: uint32(groupConfig.Id)},
 				&LuaEvt{})
 			if !ok {
-				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerID)
+				logger.Error("trigger action fail, trigger: %+v, uid: %v", triggerConfig, player.PlayerId)
 			}
 		}
 	})

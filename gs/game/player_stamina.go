@@ -13,6 +13,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 // SceneAvatarStaminaStepReq 缓慢游泳或缓慢攀爬时消耗耐力
 func (g *Game) SceneAvatarStaminaStepReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SceneAvatarStaminaStepReq)
@@ -29,7 +31,7 @@ func (g *Game) SceneAvatarStaminaStepReq(player *model.Player, payloadMsg pb.Mes
 		} else if req.Rot.X > 270 && req.Rot.X < 360 {
 			angleRevise = int32(req.Rot.X - 360.0)
 		} else {
-			logger.Error("invalid rot x angle: %v, uid: %v", req.Rot.X, player.PlayerID)
+			logger.Error("invalid rot x angle: %v, uid: %v", req.Rot.X, player.PlayerId)
 			g.SendError(cmd.SceneAvatarStaminaStepRsp, player, &proto.SceneAvatarStaminaStepRsp{})
 			return
 		}
@@ -54,12 +56,14 @@ func (g *Game) SceneAvatarStaminaStepReq(player *model.Player, payloadMsg pb.Mes
 	sceneAvatarStaminaStepRsp := new(proto.SceneAvatarStaminaStepRsp)
 	sceneAvatarStaminaStepRsp.UseClientRot = true
 	sceneAvatarStaminaStepRsp.Rot = req.Rot
-	g.SendMsg(cmd.SceneAvatarStaminaStepRsp, player.PlayerID, player.ClientSeq, sceneAvatarStaminaStepRsp)
+	g.SendMsg(cmd.SceneAvatarStaminaStepRsp, player.PlayerId, player.ClientSeq, sceneAvatarStaminaStepRsp)
 }
+
+/************************************************** 游戏功能 **************************************************/
 
 // HandleAbilityStamina 处理来自ability的耐力消耗
 func (g *Game) HandleAbilityStamina(player *model.Player, entry *proto.AbilityInvokeEntry) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -124,7 +128,7 @@ func (g *Game) ImmediateStamina(player *model.Player, motionState proto.MotionSt
 		return
 	}
 	staminaInfo := player.StaminaInfo
-	// logger.Debug("stamina handle, uid: %v, motionState: %v", player.PlayerID, motionState)
+	// logger.Debug("stamina handle, uid: %v, motionState: %v", player.PlayerId, motionState)
 	// 设置用于持续消耗或恢复耐力的值
 	staminaInfo.SetStaminaCost(motionState)
 	// 未改变状态不执行后面 有些仅在动作开始消耗耐力
@@ -163,7 +167,7 @@ func (g *Game) RestoreCountStaminaHandler(player *model.Player) {
 	if player.Pause {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -206,7 +210,7 @@ func (g *Game) VehicleRestoreStaminaHandler(player *model.Player) {
 	if player.Pause {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -240,7 +244,7 @@ func (g *Game) SustainStaminaHandler(player *model.Player) {
 	if player.Pause {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -433,7 +437,7 @@ func (g *Game) SetVehicleStamina(player *model.Player, vehicleEntity *Entity, st
 	vehicleStaminaNotify := new(proto.VehicleStaminaNotify)
 	vehicleStaminaNotify.EntityId = vehicleEntity.GetId()
 	vehicleStaminaNotify.CurStamina = stamina
-	g.SendMsg(cmd.VehicleStaminaNotify, player.PlayerID, player.ClientSeq, vehicleStaminaNotify)
+	g.SendMsg(cmd.VehicleStaminaNotify, player.PlayerId, player.ClientSeq, vehicleStaminaNotify)
 }
 
 // SetPlayerStamina 设置玩家耐力
@@ -443,6 +447,8 @@ func (g *Game) SetPlayerStamina(player *model.Player, stamina uint32) {
 	// logger.Debug("player stamina set, stamina: %v", stamina)
 	g.PlayerPropNotify(player, uint16(constant.PLAYER_PROP_CUR_PERSIST_STAMINA))
 }
+
+/************************************************** 打包封装 **************************************************/
 
 func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint16) {
 	playerPropNotify := new(proto.PlayerPropNotify)
@@ -454,5 +460,5 @@ func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint16) {
 			Ival: int64(player.PropertiesMap[playerPropId]),
 		},
 	}
-	g.SendMsg(cmd.PlayerPropNotify, player.PlayerID, player.ClientSeq, playerPropNotify)
+	g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, playerPropNotify)
 }

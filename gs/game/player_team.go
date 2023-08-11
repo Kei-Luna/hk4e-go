@@ -12,12 +12,14 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChangeAvatarReq)
 	targetAvatarGuid := req.Guid
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -29,12 +31,12 @@ func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 	targetAvatarId := targetAvatar.AvatarId
 	oldAvatarId := world.GetPlayerActiveAvatarId(player)
 	if targetAvatarId == oldAvatarId {
-		logger.Error("can not change to the same avatar, uid: %v, oldAvatarId: %v, targetAvatarId: %v", player.PlayerID, oldAvatarId, targetAvatarId)
+		logger.Error("can not change to the same avatar, uid: %v, oldAvatarId: %v, targetAvatarId: %v", player.PlayerId, oldAvatarId, targetAvatarId)
 		return
 	}
 	newAvatarIndex := world.GetPlayerAvatarIndexByAvatarId(player, targetAvatarId)
 	if newAvatarIndex == -1 {
-		logger.Error("can not find the target avatar in team, uid: %v, targetAvatarId: %v", player.PlayerID, targetAvatarId)
+		logger.Error("can not find the target avatar in team, uid: %v, targetAvatarId: %v", player.PlayerId, targetAvatarId)
 		return
 	}
 	if !world.GetMultiplayer() {
@@ -68,14 +70,14 @@ func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 	changeAvatarRsp := &proto.ChangeAvatarRsp{
 		CurGuid: targetAvatarGuid,
 	}
-	g.SendMsg(cmd.ChangeAvatarRsp, player.PlayerID, player.ClientSeq, changeAvatarRsp)
+	g.SendMsg(cmd.ChangeAvatarRsp, player.PlayerId, player.ClientSeq, changeAvatarRsp)
 }
 
 func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SetUpAvatarTeamReq)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
 	if world.GetMultiplayer() {
@@ -118,7 +120,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		avatarTeamUpdateNotify.AvatarTeamMap[uint32(teamIndex)+1] = avatarTeam
 	}
-	g.SendMsg(cmd.AvatarTeamUpdateNotify, player.PlayerID, player.ClientSeq, avatarTeamUpdateNotify)
+	g.SendMsg(cmd.AvatarTeamUpdateNotify, player.PlayerId, player.ClientSeq, avatarTeamUpdateNotify)
 
 	if selfTeam {
 		// player.TeamConfig.UpdateTeam()
@@ -138,7 +140,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		world.SetPlayerAvatarIndex(player, currAvatarIndex)
 
 		sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
-		g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerID, player.ClientSeq, sceneTeamUpdateNotify)
+		g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerId, player.ClientSeq, sceneTeamUpdateNotify)
 	}
 
 	setUpAvatarTeamRsp := &proto.SetUpAvatarTeamRsp{
@@ -146,15 +148,15 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		CurAvatarGuid:      req.CurAvatarGuid,
 		AvatarTeamGuidList: req.AvatarTeamGuidList,
 	}
-	g.SendMsg(cmd.SetUpAvatarTeamRsp, player.PlayerID, player.ClientSeq, setUpAvatarTeamRsp)
+	g.SendMsg(cmd.SetUpAvatarTeamRsp, player.PlayerId, player.ClientSeq, setUpAvatarTeamRsp)
 }
 
 func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChooseCurAvatarTeamReq)
 	teamId := req.TeamId
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
 	if world.GetMultiplayer() {
@@ -175,20 +177,20 @@ func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Messag
 	world.InitPlayerWorldAvatar(player)
 
 	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
-	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerID, player.ClientSeq, sceneTeamUpdateNotify)
+	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerId, player.ClientSeq, sceneTeamUpdateNotify)
 
 	chooseCurAvatarTeamRsp := &proto.ChooseCurAvatarTeamRsp{
 		CurTeamId: teamId,
 	}
-	g.SendMsg(cmd.ChooseCurAvatarTeamRsp, player.PlayerID, player.ClientSeq, chooseCurAvatarTeamRsp)
+	g.SendMsg(cmd.ChooseCurAvatarTeamRsp, player.PlayerId, player.ClientSeq, chooseCurAvatarTeamRsp)
 }
 
 func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChangeMpTeamAvatarReq)
 	avatarGuidList := req.AvatarGuidList
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerID)
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
 	if WORLD_MANAGER.IsBigWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
@@ -226,8 +228,12 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		CurAvatarGuid:  req.CurAvatarGuid,
 		AvatarGuidList: req.AvatarGuidList,
 	}
-	g.SendMsg(cmd.ChangeMpTeamAvatarRsp, player.PlayerID, player.ClientSeq, changeMpTeamAvatarRsp)
+	g.SendMsg(cmd.ChangeMpTeamAvatarRsp, player.PlayerId, player.ClientSeq, changeMpTeamAvatarRsp)
 }
+
+/************************************************** 游戏功能 **************************************************/
+
+/************************************************** 打包封装 **************************************************/
 
 func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *proto.SceneTeamUpdateNotify {
 	sceneTeamUpdateNotify := &proto.SceneTeamUpdateNotify{
@@ -235,7 +241,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 	}
 	empty := new(proto.AbilitySyncStateInfo)
 	for _, worldAvatar := range world.GetWorldAvatarList() {
-		if WORLD_MANAGER.IsBigWorld(world) && worldAvatar.uid != player.PlayerID {
+		if WORLD_MANAGER.IsBigWorld(world) && worldAvatar.uid != player.PlayerId {
 			continue
 		}
 		worldPlayer := USER_MANAGER.GetOnlineUser(worldAvatar.GetUid())
@@ -253,7 +259,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			equipIdList = append(equipIdList, reliquary.ItemId)
 		}
 		sceneTeamAvatar := &proto.SceneTeamAvatar{
-			PlayerUid:         worldPlayer.PlayerID,
+			PlayerUid:         worldPlayer.PlayerId,
 			AvatarGuid:        worldPlayerAvatar.Guid,
 			SceneId:           worldPlayer.SceneId,
 			EntityId:          world.GetPlayerWorldAvatarEntityId(worldPlayer, worldAvatar.GetAvatarId()),

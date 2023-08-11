@@ -14,6 +14,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 // AddQuestContentProgressReq 添加任务内容进度请求
 func (g *Game) AddQuestContentProgressReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.AddQuestContentProgressReq)
@@ -26,10 +28,12 @@ func (g *Game) AddQuestContentProgressReq(player *model.Player, payloadMsg pb.Me
 	rsp := &proto.AddQuestContentProgressRsp{
 		ContentType: req.ContentType,
 	}
-	g.SendMsg(cmd.AddQuestContentProgressRsp, player.PlayerID, player.ClientSeq, rsp)
+	g.SendMsg(cmd.AddQuestContentProgressRsp, player.PlayerId, player.ClientSeq, rsp)
 
 	g.AcceptQuest(player, true)
 }
+
+/************************************************** 游戏功能 **************************************************/
 
 // AddQuestProgress 添加任务进度
 func (g *Game) AddQuestProgress(player *model.Player, req *proto.AddQuestContentProgressReq) {
@@ -62,7 +66,7 @@ func (g *Game) AddQuestProgress(player *model.Player, req *proto.AddQuestContent
 			QuestId:            quest.QuestId,
 			FinishProgressList: quest.FinishProgressList,
 		}
-		g.SendMsg(cmd.QuestProgressUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+		g.SendMsg(cmd.QuestProgressUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	}
 }
 
@@ -146,7 +150,7 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 			}
 			ntf.QuestList = append(ntf.QuestList, pbQuest)
 		}
-		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	}
 	// TODO 判断任务是否能开始
 	for _, questId := range addQuestIdList {
@@ -171,7 +175,7 @@ func (g *Game) StartQuest(player *model.Player, questId uint32, notifyClient boo
 			return
 		}
 		ntf.QuestList = append(ntf.QuestList, pbQuest)
-		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, ntf)
+		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	}
 }
 
@@ -295,7 +299,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 			}
 			questList = append(questList, pbQuest)
 		}
-		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerID, player.ClientSeq, &proto.QuestListUpdateNotify{
+		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, &proto.QuestListUpdateNotify{
 			QuestList: questList,
 		})
 		parentQuestList := make([]*proto.ParentQuest, 0)
@@ -340,13 +344,15 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 			}
 		}
 		if len(parentQuestList) > 0 {
-			g.SendMsg(cmd.FinishedParentQuestUpdateNotify, player.PlayerID, player.ClientSeq, &proto.FinishedParentQuestUpdateNotify{
+			g.SendMsg(cmd.FinishedParentQuestUpdateNotify, player.PlayerId, player.ClientSeq, &proto.FinishedParentQuestUpdateNotify{
 				ParentQuestList: parentQuestList,
 			})
 		}
 		g.AcceptQuest(player, true)
 	}
 }
+
+/************************************************** 打包封装 **************************************************/
 
 // PacketQuest 打包一个任务
 func (g *Game) PacketQuest(player *model.Player, questId uint32) *proto.Quest {

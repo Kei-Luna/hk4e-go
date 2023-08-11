@@ -121,7 +121,7 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 	// 机器人不会读命令所以写到了 PrivateChatReq
 
 	// 确保私聊的目标是处理命令的机器人
-	if targetUid != c.system.PlayerID {
+	if targetUid != c.system.PlayerId {
 		return
 	}
 	// 输入的命令将在主协程中处理
@@ -296,7 +296,7 @@ func (c *CommandManager) GetFriendList(friendList map[uint32]bool) map[uint32]bo
 		tempFriendList[userId] = b
 	}
 	// 添加系统
-	tempFriendList[c.system.PlayerID] = true
+	tempFriendList[c.system.PlayerId] = true
 
 	return tempFriendList
 }
@@ -323,7 +323,7 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 	// 判断玩家的权限是否符合要求
 	player, ok := executor.(*model.Player)
 	if ok && player.CmdPerm < uint8(cmdPerm) {
-		logger.Debug("exec command permission denied, uid: %v, CmdPerm: %v", player.PlayerID, player.CmdPerm)
+		logger.Debug("exec command permission denied, uid: %v, CmdPerm: %v", player.PlayerId, player.CmdPerm)
 		c.SendMessage(player, "权限不足，该命令需要%v级权限。\n你目前的权限等级：%v", cmdPerm, player.CmdPerm)
 		return
 	}
@@ -338,7 +338,7 @@ func (c *CommandManager) SendMessage(executor any, msg string, param ...any) {
 	case *model.Player:
 		// 玩家类型
 		player := executor.(*model.Player)
-		GAME.SendPrivateChat(c.system, player.PlayerID, fmt.Sprintf(msg, param...))
+		GAME.SendPrivateChat(c.system, player.PlayerId, fmt.Sprintf(msg, param...))
 	// case string:
 	// GM接口等
 	// str := executor.(string)
@@ -355,7 +355,7 @@ func (c *CommandManager) GetExecutorId(executor any) uint32 {
 	case *model.Player:
 		// 玩家类型
 		player := executor.(*model.Player)
-		return player.PlayerID
+		return player.PlayerId
 	// case string:
 	// GM接口等
 	// return 123

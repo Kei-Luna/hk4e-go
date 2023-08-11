@@ -16,7 +16,7 @@ import (
 )
 
 func (g *Game) PlayerLoginReq(userId uint32, clientSeq uint32, gateAppId string, payloadMsg pb.Message) {
-	logger.Info("user login req, uid: %v, gateAppId: %v", userId, gateAppId)
+	logger.Info("player login req, uid: %v, gateAppId: %v", userId, gateAppId)
 	req := payloadMsg.(*proto.PlayerLoginReq)
 	logger.Debug("login data: %v", req)
 	USER_MANAGER.OnlineUser(userId, clientSeq, gateAppId, req.TargetUid)
@@ -27,7 +27,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	logger.Debug("avatar id: %v, nickname: %v", req.AvatarId, req.NickName)
 
 	if player.IsBorn {
-		logger.Error("player is already born, uid: %v", player.PlayerID)
+		logger.Error("player is already born, uid: %v", player.PlayerId)
 		return
 	}
 	player.IsBorn = true
@@ -60,7 +60,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 
 	g.AcceptQuest(player, false)
 
-	g.LoginNotify(player.PlayerID, player.ClientSeq, player)
+	g.LoginNotify(player.PlayerId, player.ClientSeq, player)
 
 	// 创建世界
 	world := WORLD_MANAGER.CreateWorld(player)
@@ -70,9 +70,9 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	player.SceneJump = true
 	player.SceneLoadState = model.SceneNone
 
-	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerID, player.ClientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
+	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
 
-	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerID, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
+	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
 }
 
 func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player *model.Player, joinHostUserId uint32) {
@@ -164,7 +164,7 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 
 func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player := new(model.Player)
-	player.PlayerID = userId
+	player.PlayerId = userId
 	player.NickName = ""
 	player.Signature = ""
 	player.HeadImage = 0
@@ -202,7 +202,7 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 		player.Pos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
 		player.Rot = &model.Vector{X: float64(bornRot.X), Y: float64(bornRot.Y), Z: float64(bornRot.Z)}
 	} else {
-		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerID)
+		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
 		player.SafePos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
@@ -210,17 +210,27 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	return player
 }
 
-func (g *Game) OnUserOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
-	logger.Info("user offline, uid: %v", userId)
+func (g *Game) ServerAppidBindNotify(userId uint32, anticheatAppId string) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	logger.Debug("server appid bind notify, uid: %v, anticheatAppId: %v", userId, anticheatAppId)
+	player.AnticheatAppId = anticheatAppId
+}
+
+func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
+	logger.Info("player offline, uid: %v", userId)
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
 	TICK_MANAGER.DestroyUserGlobalTick(userId)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world != nil {
-		g.UserWorldRemovePlayer(world, player)
+		g.WorldRemovePlayer(world, player)
 	}
 	player.OfflineTime = uint32(time.Now().Unix())
 	player.Online = false
@@ -238,176 +248,4 @@ func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player
 	g.SendMsg(cmd.QuestListNotify, userId, clientSeq, g.PacketQuestListNotify(player))
 	g.SendMsg(cmd.FinishedParentQuestNotify, userId, clientSeq, g.PacketFinishedParentQuestNotify(player))
 	// g.GCGLogin(player) // 发送GCG登录相关的通知包
-}
-
-func (g *Game) PacketPlayerDataNotify(player *model.Player) *proto.PlayerDataNotify {
-	playerDataNotify := &proto.PlayerDataNotify{
-		NickName:          player.NickName,
-		ServerTime:        uint64(time.Now().UnixMilli()),
-		IsFirstLoginToday: true,
-		RegionId:          1,
-		PropMap:           make(map[uint32]*proto.PropValue),
-	}
-	for k, v := range player.PropertiesMap {
-		propValue := &proto.PropValue{
-			Type:  uint32(k),
-			Value: &proto.PropValue_Ival{Ival: int64(v)},
-			Val:   int64(v),
-		}
-		playerDataNotify.PropMap[uint32(k)] = propValue
-	}
-	return playerDataNotify
-}
-
-func (g *Game) PacketStoreWeightLimitNotify() *proto.StoreWeightLimitNotify {
-	storeWeightLimitNotify := &proto.StoreWeightLimitNotify{
-		StoreType: proto.StoreType_STORE_PACK,
-		// 背包容量限制
-		WeightLimit:         constant.STORE_PACK_LIMIT_WEIGHT,
-		WeaponCountLimit:    constant.STORE_PACK_LIMIT_WEAPON,
-		ReliquaryCountLimit: constant.STORE_PACK_LIMIT_RELIQUARY,
-		MaterialCountLimit:  constant.STORE_PACK_LIMIT_MATERIAL,
-		FurnitureCountLimit: constant.STORE_PACK_LIMIT_FURNITURE,
-	}
-	return storeWeightLimitNotify
-}
-
-func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreNotify {
-	dbItem := player.GetDbItem()
-	dbWeapon := player.GetDbWeapon()
-	dbReliquary := player.GetDbReliquary()
-	playerStoreNotify := &proto.PlayerStoreNotify{
-		StoreType:   proto.StoreType_STORE_PACK,
-		WeightLimit: constant.STORE_PACK_LIMIT_WEIGHT,
-		ItemList:    make([]*proto.Item, 0, len(dbItem.ItemMap)+len(dbWeapon.WeaponMap)+len(dbReliquary.ReliquaryMap)),
-	}
-	for _, weapon := range dbWeapon.WeaponMap {
-		itemDataConfig := gdconf.GetItemDataById(int32(weapon.ItemId))
-		if itemDataConfig == nil {
-			logger.Error("get item data config is nil, itemId: %v", weapon.ItemId)
-			continue
-		}
-		if itemDataConfig.Type != constant.ITEM_TYPE_WEAPON {
-			continue
-		}
-		affixMap := make(map[uint32]uint32)
-		for _, affixId := range weapon.AffixIdList {
-			affixMap[affixId] = uint32(weapon.Refinement)
-		}
-		pbItem := &proto.Item{
-			ItemId: weapon.ItemId,
-			Guid:   weapon.Guid,
-			Detail: &proto.Item_Equip{
-				Equip: &proto.Equip{
-					Detail: &proto.Equip_Weapon{
-						Weapon: &proto.Weapon{
-							Level:        uint32(weapon.Level),
-							Exp:          weapon.Exp,
-							PromoteLevel: uint32(weapon.Promote),
-							AffixMap:     affixMap,
-						},
-					},
-					IsLocked: weapon.Lock,
-				},
-			},
-		}
-		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
-	}
-	for _, reliquary := range dbReliquary.ReliquaryMap {
-		itemDataConfig := gdconf.GetItemDataById(int32(reliquary.ItemId))
-		if itemDataConfig == nil {
-			logger.Error("get item data config is nil, itemId: %v", reliquary.ItemId)
-			continue
-		}
-		if itemDataConfig.Type != constant.ITEM_TYPE_RELIQUARY {
-			continue
-		}
-		pbItem := &proto.Item{
-			ItemId: reliquary.ItemId,
-			Guid:   reliquary.Guid,
-			Detail: &proto.Item_Equip{
-				Equip: &proto.Equip{
-					Detail: &proto.Equip_Reliquary{
-						Reliquary: &proto.Reliquary{
-							Level:            uint32(reliquary.Level),
-							Exp:              reliquary.Exp,
-							PromoteLevel:     uint32(reliquary.Promote),
-							MainPropId:       reliquary.MainPropId,
-							AppendPropIdList: reliquary.AppendPropIdList,
-						},
-					},
-					IsLocked: reliquary.Lock,
-				},
-			},
-		}
-		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
-	}
-	for _, item := range dbItem.ItemMap {
-		itemDataConfig := gdconf.GetItemDataById(int32(item.ItemId))
-		if itemDataConfig == nil {
-			logger.Error("get item data config is nil, itemId: %v", item.ItemId)
-			continue
-		}
-		pbItem := &proto.Item{
-			ItemId: item.ItemId,
-			Guid:   item.Guid,
-			Detail: nil,
-		}
-		if itemDataConfig != nil && itemDataConfig.Type == constant.ITEM_TYPE_FURNITURE {
-			pbItem.Detail = &proto.Item_Furniture{
-				Furniture: &proto.Furniture{
-					Count: item.Count,
-				},
-			}
-		} else {
-			pbItem.Detail = &proto.Item_Material{
-				Material: &proto.Material{
-					Count:      item.Count,
-					DeleteInfo: nil,
-				},
-			}
-		}
-		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
-	}
-	return playerStoreNotify
-}
-
-func (g *Game) PacketAvatarDataNotify(player *model.Player) *proto.AvatarDataNotify {
-	dbAvatar := player.GetDbAvatar()
-	dbTeam := player.GetDbTeam()
-	avatarDataNotify := &proto.AvatarDataNotify{
-		CurAvatarTeamId:   uint32(dbTeam.GetActiveTeamId()),
-		ChooseAvatarGuid:  dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId].Guid,
-		OwnedFlycloakList: player.FlyCloakList,
-		// 角色衣装
-		OwnedCostumeList: player.CostumeList,
-		AvatarList:       make([]*proto.AvatarInfo, 0),
-		AvatarTeamMap:    make(map[uint32]*proto.AvatarTeam),
-	}
-	for _, avatar := range dbAvatar.AvatarMap {
-		pbAvatar := g.PacketAvatarInfo(avatar)
-		avatarDataNotify.AvatarList = append(avatarDataNotify.AvatarList, pbAvatar)
-	}
-	for teamIndex, team := range dbTeam.TeamList {
-		var teamAvatarGuidList []uint64 = nil
-		for _, avatarId := range team.GetAvatarIdList() {
-			teamAvatarGuidList = append(teamAvatarGuidList, dbAvatar.AvatarMap[avatarId].Guid)
-		}
-		avatarDataNotify.AvatarTeamMap[uint32(teamIndex)+1] = &proto.AvatarTeam{
-			AvatarGuidList: teamAvatarGuidList,
-			TeamName:       team.Name,
-		}
-	}
-	return avatarDataNotify
-}
-
-func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {
-	openStateUpdateNotify := &proto.OpenStateUpdateNotify{
-		OpenStateMap: make(map[uint32]uint32),
-	}
-	// 先暂时开放全部功能模块
-	for _, v := range constant.ALL_OPEN_STATE {
-		openStateUpdateNotify.OpenStateMap[uint32(v)] = 1
-	}
-	return openStateUpdateNotify
 }

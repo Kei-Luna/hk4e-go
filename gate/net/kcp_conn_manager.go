@@ -32,7 +32,8 @@ const (
 	ConnRecvTimeout       = 30         // 收包超时时间 秒
 	ConnSendTimeout       = 10         // 发包超时时间 秒
 	MaxClientConnNumLimit = 1000       // 最大客户端连接数限制
-	TcpNoDelay            = true
+	TcpNoDelay            = true       // 是否禁用tcp的nagle
+	SessionSendChanLen    = 100        // 会话发送管道缓存包容量
 )
 
 var CLIENT_CONN_NUM int32 = 0 // 当前客户端连接数
@@ -234,13 +235,12 @@ func (k *KcpConnManager) acceptHandle(tcpMode bool, kcpListener *kcp.Listener, t
 		}
 		logger.Info("[ACCEPT] client connect, tcpMode: %v, sessionId: %v, conv: %v, addr: %v",
 			tcpMode, sessionId, conn.GetConv(), conn.RemoteAddr())
-		kcpRawSendChan := make(chan *ProtoMsg, 1000)
 		session := &Session{
 			sessionId:              sessionId,
 			conn:                   conn,
 			connState:              ConnEst,
 			userId:                 0,
-			kcpRawSendChan:         kcpRawSendChan,
+			sendChan:               make(chan *ProtoMsg, SessionSendChanLen),
 			seed:                   0,
 			xorKey:                 k.dispatchKey,
 			changeXorKeyFin:        false,
@@ -339,7 +339,7 @@ type Session struct {
 	conn                   *Conn
 	connState              uint8
 	userId                 uint32
-	kcpRawSendChan         chan *ProtoMsg
+	sendChan               chan *ProtoMsg
 	seed                   uint64
 	xorKey                 []byte
 	changeXorKeyFin        bool
@@ -458,7 +458,7 @@ func (k *KcpConnManager) sendHandle(session *Session) {
 	pktFreqLimitCounter := 0
 	pktFreqLimitTimer := time.Now().UnixNano()
 	for {
-		protoMsg, ok := <-session.kcpRawSendChan
+		protoMsg, ok := <-session.sendChan
 		if !ok {
 			logger.Debug("exit send loop, send chan close, sessionId: %v", session.sessionId)
 			k.closeKcpConn(session, kcp.EnetServerKick)

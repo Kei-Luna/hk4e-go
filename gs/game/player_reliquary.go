@@ -10,6 +10,10 @@ import (
 	"hk4e/protocol/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
+/************************************************** 游戏功能 **************************************************/
+
 func (g *Game) GetAllReliquaryDataConfig() map[int32]*gdconf.ItemData {
 	allReliquaryDataConfig := make(map[int32]*gdconf.ItemData)
 	for itemId, itemData := range gdconf.GetItemDataMap() {
@@ -44,7 +48,7 @@ func (g *Game) GetReliquaryMainDataRandomByDepotId(mainPropDepotId int32) *gdcon
 	return nil
 }
 
-func (g *Game) AddUserReliquary(userId uint32, itemId uint32) uint64 {
+func (g *Game) AddPlayerReliquary(userId uint32, itemId uint32) uint64 {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -155,7 +159,7 @@ func (g *Game) AppendReliquaryProp(reliquary *model.Reliquary, count int32) {
 	}
 }
 
-func (g *Game) CostUserReliquary(userId uint32, reliquaryIdList []uint64) {
+func (g *Game) CostPlayerReliquary(userId uint32, reliquaryIdList []uint64) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -176,6 +180,8 @@ func (g *Game) CostUserReliquary(userId uint32, reliquaryIdList []uint64) {
 	}
 	g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, storeItemDelNotify)
 }
+
+/************************************************** 打包封装 **************************************************/
 
 func (g *Game) PacketStoreItemChangeNotifyByReliquary(reliquary *model.Reliquary) *proto.StoreItemChangeNotify {
 	storeItemChangeNotify := &proto.StoreItemChangeNotify{

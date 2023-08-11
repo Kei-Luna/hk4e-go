@@ -23,7 +23,7 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	if cmdProtoMap == nil {
 		cmdProtoMap = cmd.NewCmdProtoMap()
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -42,7 +42,7 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	}
 	if invokeHandler.AllExceptCurLen() > 0 {
 		reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardAllExceptCur)
-		GAME.SendToSceneAEC(scene, cmdId, player.ClientSeq, newNtf, player.PlayerID)
+		GAME.SendToSceneAEC(scene, cmdId, player.ClientSeq, newNtf, player.PlayerId)
 	}
 	if invokeHandler.HostLen() > 0 {
 		reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardHost)
@@ -71,7 +71,7 @@ func (g *Game) MassiveEntityElementOpBatchNotify(player *model.Player, payloadMs
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -86,7 +86,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -132,7 +132,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 					logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
 					break
 				}
-				logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerID)
+				logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerId)
 				g.handleGadgetEntityBeHitLow(player, target, attackResult.ElementType)
 			}
 		case proto.CombatTypeArgument_ENTITY_MOVE:
@@ -239,14 +239,14 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
 	aoiManager, exist := sceneBlockAoiMap[player.SceneId]
 	if !exist {
-		logger.Error("get scene block aoi is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerID)
+		logger.Error("get scene block aoi is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
 		return
 	}
 	oldGid := aoiManager.GetGidByPos(float32(oldPos.X), 0.0, float32(oldPos.Z))
 	newGid := aoiManager.GetGidByPos(float32(newPos.X), 0.0, float32(newPos.Z))
 	if oldGid != newGid {
 		// 跨越了block格子
-		logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
+		logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
 	}
 	// 加载和卸载的group
 	oldNeighborGroupMap := g.GetNeighborGroup(player.SceneId, oldPos)
@@ -338,7 +338,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 	newGid := bigWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
 	if oldGid != newGid {
 		// 玩家跨越了格子
-		logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerID)
+		logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
 		// 找出本次移动所带来的消失和出现的格子
 		oldGridList := bigWorldAoi.GetSurrGridListByGid(oldGid)
 		newGridList := bigWorldAoi.GetSurrGridListByGid(newGid)
@@ -373,7 +373,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 		// 老格子移除玩家
-		bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerID), oldGid)
+		bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerId), oldGid)
 		// 处理消失的格子
 		for _, delGridId := range delGridIdList {
 			// 通知自己 老格子里的其它玩家消失
@@ -390,7 +390,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			for otherPlayerId := range oldOtherWorldAvatarMap {
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
 				if otherPlayer == nil {
-					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerID)
+					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerId)
 					continue
 				}
 				g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{activeWorldAvatar.GetAvatarEntityId()})
@@ -412,7 +412,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			for otherPlayerId := range newOtherWorldAvatarMap {
 				otherPlayer := USER_MANAGER.GetOnlineUser(uint32(otherPlayerId))
 				if otherPlayer == nil {
-					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerID)
+					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerId)
 					continue
 				}
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
@@ -420,10 +420,10 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			}
 		}
 		// 新格子添加玩家
-		bigWorldAoi.AddObjectToGrid(int64(player.PlayerID), activeWorldAvatar, newGid)
+		bigWorldAoi.AddObjectToGrid(int64(player.PlayerId), activeWorldAvatar, newGid)
 		// aoi区域玩家数量限制
 		if len(bigWorldAoi.GetObjectListByGid(newGid)) > 8 {
-			g.LogoutPlayer(player.PlayerID)
+			g.LogoutPlayer(player.PlayerId)
 		}
 	}
 }
@@ -497,7 +497,7 @@ func (g *Game) ClientAbilityChangeNotify(player *model.Player, payloadMsg pb.Mes
 	DoForward[proto.AbilityInvokeEntry](player, invokeHandler,
 		cmd.ClientAbilityChangeNotify, new(proto.ClientAbilityChangeNotify), "Invokes",
 		req, []string{"IsInitHash", "EntityId"})
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -566,7 +566,7 @@ func (g *Game) EvtAvatarEnterFocusNotify(player *model.Player, payloadMsg pb.Mes
 		return
 	}
 	// logger.Debug("EvtAvatarEnterFocusNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -580,7 +580,7 @@ func (g *Game) EvtAvatarUpdateFocusNotify(player *model.Player, payloadMsg pb.Me
 		return
 	}
 	// logger.Debug("EvtAvatarUpdateFocusNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -594,7 +594,7 @@ func (g *Game) EvtAvatarExitFocusNotify(player *model.Player, payloadMsg pb.Mess
 		return
 	}
 	// logger.Debug("EvtAvatarExitFocusNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -608,7 +608,7 @@ func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg 
 		return
 	}
 	// logger.Debug("EvtEntityRenderersChangedNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -622,7 +622,7 @@ func (g *Game) EvtBulletDeactiveNotify(player *model.Player, payloadMsg pb.Messa
 		return
 	}
 	// logger.Debug("EvtBulletDeactiveNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -636,7 +636,7 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	// logger.Debug("EvtBulletHitNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -650,7 +650,7 @@ func (g *Game) EvtBulletMoveNotify(player *model.Player, payloadMsg pb.Message) 
 		return
 	}
 	// logger.Debug("EvtBulletMoveNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -664,7 +664,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 		return
 	}
 	// logger.Debug("EvtCreateGadgetNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -690,7 +690,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 		return
 	}
 	// logger.Debug("EvtDestroyGadgetNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -705,7 +705,7 @@ func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Messag
 		return
 	}
 	// logger.Debug("EvtAiSyncSkillCdNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -719,7 +719,7 @@ func (g *Game) EvtAiSyncCombatThreatInfoNotify(player *model.Player, payloadMsg 
 		return
 	}
 	// logger.Debug("EvtAiSyncCombatThreatInfoNotify: %v", req)
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -739,7 +739,7 @@ func (g *Game) MonsterAIConfigHashNotify(player *model.Player, payloadMsg pb.Mes
 
 func (g *Game) SetEntityClientDataNotify(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SetEntityClientDataNotify)
-	g.SendMsg(cmd.SetEntityClientDataNotify, player.PlayerID, player.ClientSeq, req)
+	g.SendMsg(cmd.SetEntityClientDataNotify, player.PlayerId, player.ClientSeq, req)
 }
 
 func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
@@ -754,13 +754,13 @@ func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
 			IsSelfKilling:   false,
 		})
 	}
-	g.SendMsg(cmd.EntityAiSyncNotify, player.PlayerID, player.ClientSeq, entityAiSyncNotify)
+	g.SendMsg(cmd.EntityAiSyncNotify, player.PlayerId, player.ClientSeq, entityAiSyncNotify)
 }
 
 // TODO 一些很low的解决方案 我本来是不想写的 有多low？要多low有多low！
 
 func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, hitElementType uint32) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -812,7 +812,7 @@ func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, 
 }
 
 func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint32, argument proto.AbilityInvokeArgument, entry pb.Message) {
-	world := WORLD_MANAGER.GetWorldByID(player.WorldId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
@@ -840,7 +840,7 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 		}
 		if strings.Contains(gadgetDataConfig.Name, "碎石堆") ||
 			strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
-			logger.Debug("物件破碎, entityId: %v, modifierChange: %v, uid: %v", entityId, modifierChange, player.PlayerID)
+			logger.Debug("物件破碎, entityId: %v, modifierChange: %v, uid: %v", entityId, modifierChange, player.PlayerId)
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_Ore") {
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)

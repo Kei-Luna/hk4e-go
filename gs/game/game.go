@@ -88,7 +88,7 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	r.isStop = false
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
-	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerID, 3)
+	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerId, 3)
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
 	r.run()
 	return r
@@ -122,7 +122,7 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 	robot.DbState = model.DbNormal
 	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
 	robot.Signature = sign
-	world := WORLD_MANAGER.GetWorldByID(robot.WorldId)
+	world := WORLD_MANAGER.GetWorldById(robot.WorldId)
 	g.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
 		EnterSceneToken: world.GetEnterSceneToken(),
 	})
@@ -158,10 +158,10 @@ func (g *Game) gameMainLoop() {
 			logger.Error("error: %v", err)
 			logger.Error("stack: %v", logger.Stack())
 			if SELF != nil {
-				logger.Error("the motherfucker player uid: %v", SELF.PlayerID)
+				logger.Error("the motherfucker player uid: %v", SELF.PlayerId)
 				// info, _ := json.Marshal(SELF)
 				// logger.Error("the motherfucker player info: %v", string(info))
-				GAME.KickPlayer(SELF.PlayerID, kcp.EnetServerKick)
+				GAME.KickPlayer(SELF.PlayerId, kcp.EnetServerKick)
 			}
 		}
 	}()
@@ -264,12 +264,12 @@ func (g *Game) Close() {
 	// 告诉网关下线玩家并全服广播玩家离线
 	userList := USER_MANAGER.GetAllOnlineUserList()
 	for _, player := range userList {
-		g.KickPlayer(player.PlayerID, kcp.EnetServerShutdown)
+		g.KickPlayer(player.PlayerId, kcp.EnetServerShutdown)
 		MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerUserOnlineStateChangeNotify,
 			ServerMsg: &mq.ServerMsg{
-				UserId:   player.PlayerID,
+				UserId:   player.PlayerId,
 				IsOnline: false,
 			},
 		})
@@ -361,7 +361,7 @@ func (g *Game) SendError(cmdId uint16, player *model.Player, rsp pb.Message, ret
 		return
 	}
 	logger.Debug("send common error: %v", rsp)
-	g.SendMsg(cmdId, player.PlayerID, player.ClientSeq, rsp)
+	g.SendMsg(cmdId, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // SendSucc 通用返回成功
@@ -373,29 +373,29 @@ func (g *Game) SendSucc(cmdId uint16, player *model.Player, rsp pb.Message) {
 	if !ok {
 		return
 	}
-	g.SendMsg(cmdId, player.PlayerID, player.ClientSeq, rsp)
+	g.SendMsg(cmdId, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // SendToWorldA 给世界内所有玩家发消息
 func (g *Game) SendToWorldA(world *World, cmdId uint16, seq uint32, msg pb.Message) {
 	for _, v := range world.GetAllPlayer() {
-		g.SendMsg(cmdId, v.PlayerID, seq, msg)
+		g.SendMsg(cmdId, v.PlayerId, seq, msg)
 	}
 }
 
 // SendToWorldAEC 给世界内除某玩家(一般是自己)以外的所有玩家发消息
 func (g *Game) SendToWorldAEC(world *World, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
 	for _, v := range world.GetAllPlayer() {
-		if aecUid == v.PlayerID {
+		if aecUid == v.PlayerId {
 			continue
 		}
-		g.SendMsg(cmdId, v.PlayerID, seq, msg)
+		g.SendMsg(cmdId, v.PlayerId, seq, msg)
 	}
 }
 
 // SendToWorldH 给世界房主发消息
 func (g *Game) SendToWorldH(world *World, cmdId uint16, seq uint32, msg pb.Message) {
-	g.SendMsg(cmdId, world.GetOwner().PlayerID, seq, msg)
+	g.SendMsg(cmdId, world.GetOwner().PlayerId, seq, msg)
 }
 
 // SendToSceneA 给场景内所有玩家发消息
@@ -409,7 +409,7 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 		}
 	} else {
 		for _, v := range scene.GetAllPlayer() {
-			g.SendMsg(cmdId, v.PlayerID, seq, msg)
+			g.SendMsg(cmdId, v.PlayerId, seq, msg)
 		}
 	}
 }
@@ -428,10 +428,10 @@ func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 		}
 	} else {
 		for _, v := range scene.GetAllPlayer() {
-			if aecUid == v.PlayerID {
+			if aecUid == v.PlayerId {
 				continue
 			}
-			g.SendMsg(cmdId, v.PlayerID, seq, msg)
+			g.SendMsg(cmdId, v.PlayerId, seq, msg)
 		}
 	}
 }

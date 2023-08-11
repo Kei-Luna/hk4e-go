@@ -3,10 +3,15 @@ package game
 import (
 	"hk4e/common/constant"
 	"hk4e/gdconf"
+	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 )
+
+/************************************************** 接口请求 **************************************************/
+
+/************************************************** 游戏功能 **************************************************/
 
 type ChangeItem struct {
 	ItemId      uint32
@@ -46,8 +51,8 @@ func (g *Game) GetPlayerItemCount(userId uint32, itemId uint32) uint32 {
 	}
 }
 
-// AddUserItem 玩家添加物品
-func (g *Game) AddUserItem(userId uint32, itemList []*ChangeItem, isHint bool, hintReason uint16) bool {
+// AddPlayerItem 玩家添加物品
+func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool, hintReason uint16) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -122,7 +127,7 @@ func (g *Game) AddUserItem(userId uint32, itemList []*ChangeItem, isHint bool, h
 	return true
 }
 
-func (g *Game) CostUserItem(userId uint32, itemList []*ChangeItem) bool {
+func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -142,7 +147,7 @@ func (g *Game) CostUserItem(userId uint32, itemList []*ChangeItem) bool {
 	}
 	for _, changeItem := range itemList {
 		// 检查剩余道具数量
-		count := g.GetPlayerItemCount(player.PlayerID, changeItem.ItemId)
+		count := g.GetPlayerItemCount(player.PlayerId, changeItem.ItemId)
 		if count < changeItem.ChangeCount {
 			return false
 		}
@@ -167,7 +172,7 @@ func (g *Game) CostUserItem(userId uint32, itemList []*ChangeItem) bool {
 			// 物品为普通物品 直接扣除
 			dbItem.CostItem(player, changeItem.ItemId, changeItem.ChangeCount)
 		}
-		count = g.GetPlayerItemCount(player.PlayerID, changeItem.ItemId)
+		count = g.GetPlayerItemCount(player.PlayerId, changeItem.ItemId)
 		if count > 0 {
 			pbItem := &proto.Item{
 				ItemId: changeItem.ItemId,
@@ -195,4 +200,119 @@ func (g *Game) CostUserItem(userId uint32, itemList []*ChangeItem) bool {
 	}
 
 	return true
+}
+
+/************************************************** 打包封装 **************************************************/
+
+func (g *Game) PacketStoreWeightLimitNotify() *proto.StoreWeightLimitNotify {
+	storeWeightLimitNotify := &proto.StoreWeightLimitNotify{
+		StoreType: proto.StoreType_STORE_PACK,
+		// 背包容量限制
+		WeightLimit:         constant.STORE_PACK_LIMIT_WEIGHT,
+		WeaponCountLimit:    constant.STORE_PACK_LIMIT_WEAPON,
+		ReliquaryCountLimit: constant.STORE_PACK_LIMIT_RELIQUARY,
+		MaterialCountLimit:  constant.STORE_PACK_LIMIT_MATERIAL,
+		FurnitureCountLimit: constant.STORE_PACK_LIMIT_FURNITURE,
+	}
+	return storeWeightLimitNotify
+}
+
+func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreNotify {
+	dbItem := player.GetDbItem()
+	dbWeapon := player.GetDbWeapon()
+	dbReliquary := player.GetDbReliquary()
+	playerStoreNotify := &proto.PlayerStoreNotify{
+		StoreType:   proto.StoreType_STORE_PACK,
+		WeightLimit: constant.STORE_PACK_LIMIT_WEIGHT,
+		ItemList:    make([]*proto.Item, 0, len(dbItem.ItemMap)+len(dbWeapon.WeaponMap)+len(dbReliquary.ReliquaryMap)),
+	}
+	for _, weapon := range dbWeapon.WeaponMap {
+		itemDataConfig := gdconf.GetItemDataById(int32(weapon.ItemId))
+		if itemDataConfig == nil {
+			logger.Error("get item data config is nil, itemId: %v", weapon.ItemId)
+			continue
+		}
+		if itemDataConfig.Type != constant.ITEM_TYPE_WEAPON {
+			continue
+		}
+		affixMap := make(map[uint32]uint32)
+		for _, affixId := range weapon.AffixIdList {
+			affixMap[affixId] = uint32(weapon.Refinement)
+		}
+		pbItem := &proto.Item{
+			ItemId: weapon.ItemId,
+			Guid:   weapon.Guid,
+			Detail: &proto.Item_Equip{
+				Equip: &proto.Equip{
+					Detail: &proto.Equip_Weapon{
+						Weapon: &proto.Weapon{
+							Level:        uint32(weapon.Level),
+							Exp:          weapon.Exp,
+							PromoteLevel: uint32(weapon.Promote),
+							AffixMap:     affixMap,
+						},
+					},
+					IsLocked: weapon.Lock,
+				},
+			},
+		}
+		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
+	}
+	for _, reliquary := range dbReliquary.ReliquaryMap {
+		itemDataConfig := gdconf.GetItemDataById(int32(reliquary.ItemId))
+		if itemDataConfig == nil {
+			logger.Error("get item data config is nil, itemId: %v", reliquary.ItemId)
+			continue
+		}
+		if itemDataConfig.Type != constant.ITEM_TYPE_RELIQUARY {
+			continue
+		}
+		pbItem := &proto.Item{
+			ItemId: reliquary.ItemId,
+			Guid:   reliquary.Guid,
+			Detail: &proto.Item_Equip{
+				Equip: &proto.Equip{
+					Detail: &proto.Equip_Reliquary{
+						Reliquary: &proto.Reliquary{
+							Level:            uint32(reliquary.Level),
+							Exp:              reliquary.Exp,
+							PromoteLevel:     uint32(reliquary.Promote),
+							MainPropId:       reliquary.MainPropId,
+							AppendPropIdList: reliquary.AppendPropIdList,
+						},
+					},
+					IsLocked: reliquary.Lock,
+				},
+			},
+		}
+		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
+	}
+	for _, item := range dbItem.ItemMap {
+		itemDataConfig := gdconf.GetItemDataById(int32(item.ItemId))
+		if itemDataConfig == nil {
+			logger.Error("get item data config is nil, itemId: %v", item.ItemId)
+			continue
+		}
+		pbItem := &proto.Item{
+			ItemId: item.ItemId,
+			Guid:   item.Guid,
+			Detail: nil,
+		}
+		if itemDataConfig != nil && itemDataConfig.Type == constant.ITEM_TYPE_FURNITURE {
+			pbItem.Detail = &proto.Item_Furniture{
+				Furniture: &proto.Furniture{
+					Count: item.Count,
+				},
+			}
+		} else {
+			pbItem.Detail = &proto.Item_Material{
+				Material: &proto.Material{
+					Count:      item.Count,
+					DeleteInfo: nil,
+				},
+			}
+		}
+		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
+	}
+	return playerStoreNotify
 }

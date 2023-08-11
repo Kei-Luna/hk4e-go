@@ -185,7 +185,7 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 		case mq.ClientTimeNotify:
 			GAME.ClientTimeNotify(connCtrlMsg.UserId, connCtrlMsg.ClientTime)
 		case mq.UserOfflineNotify:
-			GAME.OnUserOffline(connCtrlMsg.UserId, &ChangeGsInfo{
+			GAME.OnOffline(connCtrlMsg.UserId, &ChangeGsInfo{
 				IsChangeGs: false,
 			})
 		}
@@ -197,10 +197,10 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 			USER_MANAGER.SetRemoteUserOnlineState(serverMsg.UserId, serverMsg.IsOnline, netMsg.OriginServerAppId)
 		case mq.ServerAppidBindNotify:
 			GAME.ServerAppidBindNotify(serverMsg.UserId, serverMsg.AnticheatServerAppId)
-		case mq.ServerUserMpReq:
-			GAME.ServerUserMpReq(serverMsg.UserMpInfo, netMsg.OriginServerAppId)
-		case mq.ServerUserMpRsp:
-			GAME.ServerUserMpRsp(serverMsg.UserMpInfo)
+		case mq.ServerPlayerMpReq:
+			GAME.ServerPlayerMpReq(serverMsg.PlayerMpInfo, netMsg.OriginServerAppId)
+		case mq.ServerPlayerMpRsp:
+			GAME.ServerPlayerMpRsp(serverMsg.PlayerMpInfo)
 		case mq.ServerChatMsgNotify:
 			GAME.ServerChatMsgNotify(serverMsg.ChatMsgInfo)
 		case mq.ServerAddFriendNotify:

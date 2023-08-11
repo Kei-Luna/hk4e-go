@@ -253,7 +253,7 @@ func (g *GCGManager) PhaseMain(game *GCGGame) {
 		game.AddMsgPack(controller, 0, proto.GCGActionType_GCG_ACTION_NOTIFY_COST, game.GCGMsgCostRevise(controller))
 		// 如果玩家当前允许操作则发送技能预览信息
 		if controller.allow == 1 && controller.player != nil {
-			GAME.SendMsg(cmd.GCGSkillPreviewNotify, controller.player.PlayerID, controller.player.ClientSeq, GAME.PacketGCGSkillPreviewNotify(game, controller))
+			GAME.SendMsg(cmd.GCGSkillPreviewNotify, controller.player.PlayerId, controller.player.ClientSeq, GAME.PacketGCGSkillPreviewNotify(game, controller))
 		}
 	}
 }
@@ -631,7 +631,7 @@ func (g *GCGGame) onTick() {
 			gcgHeartBeatNotify := &proto.GCGHeartBeatNotify{
 				ServerSeq: controller.serverSeqCounter,
 			}
-			GAME.SendMsg(cmd.GCGHeartBeatNotify, controller.player.PlayerID, controller.player.ClientSeq, gcgHeartBeatNotify)
+			GAME.SendMsg(cmd.GCGHeartBeatNotify, controller.player.PlayerId, controller.player.ClientSeq, gcgHeartBeatNotify)
 		}
 	}
 	g.gameTick++
@@ -1163,7 +1163,7 @@ func (g *GCGGame) GetControllerByUserId(userId uint32) *GCGController {
 		if controller.player == nil {
 			continue
 		}
-		if controller.player.PlayerID == userId {
+		if controller.player.PlayerId == userId {
 			return controller
 		}
 	}

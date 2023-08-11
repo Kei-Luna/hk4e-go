@@ -18,7 +18,7 @@ func (g *Game) PlayerSetPauseReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerSetPauseReq)
 	isPaused := req.IsPaused
 	player.Pause = isPaused
-	g.SendMsg(cmd.PlayerSetPauseRsp, player.PlayerID, player.ClientSeq, new(proto.PlayerSetPauseRsp))
+	g.SendMsg(cmd.PlayerSetPauseRsp, player.PlayerId, player.ClientSeq, new(proto.PlayerSetPauseRsp))
 }
 
 func (g *Game) TowerAllDataReq(player *model.Player, payloadMsg pb.Message) {
@@ -35,7 +35,7 @@ func (g *Game) TowerAllDataReq(player *model.Player, payloadMsg pb.Message) {
 		},
 		ScheduleStartTime: 1630486800,
 	}
-	g.SendMsg(cmd.TowerAllDataRsp, player.PlayerID, player.ClientSeq, towerAllDataRsp)
+	g.SendMsg(cmd.TowerAllDataRsp, player.PlayerId, player.ClientSeq, towerAllDataRsp)
 }
 
 func (g *Game) ClientRttNotify(userId uint32, clientRtt uint32) {
@@ -75,7 +75,7 @@ func (g *Game) ServerAnnounceNotify(announceId uint32, announceMsg string) {
 				CenterSystemFrequency: 1,
 			}},
 		}
-		g.SendMsg(cmd.ServerAnnounceNotify, onlinePlayer.PlayerID, 0, serverAnnounceNotify)
+		g.SendMsg(cmd.ServerAnnounceNotify, onlinePlayer.PlayerId, 0, serverAnnounceNotify)
 	}
 }
 
@@ -84,22 +84,22 @@ func (g *Game) ServerAnnounceRevokeNotify(announceId uint32) {
 		serverAnnounceRevokeNotify := &proto.ServerAnnounceRevokeNotify{
 			ConfigIdList: []uint32{announceId},
 		}
-		g.SendMsg(cmd.ServerAnnounceRevokeNotify, onlinePlayer.PlayerID, 0, serverAnnounceRevokeNotify)
+		g.SendMsg(cmd.ServerAnnounceRevokeNotify, onlinePlayer.PlayerId, 0, serverAnnounceRevokeNotify)
 	}
 }
 
 func (g *Game) ToTheMoonEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
-	logger.Debug("player ttm enter scene, uid: %v", player.PlayerID)
+	logger.Debug("player ttm enter scene, uid: %v", player.PlayerId)
 	req := payloadMsg.(*proto.ToTheMoonEnterSceneReq)
 	_ = req
-	g.SendMsg(cmd.ToTheMoonEnterSceneRsp, player.PlayerID, player.ClientSeq, new(proto.ToTheMoonEnterSceneRsp))
+	g.SendMsg(cmd.ToTheMoonEnterSceneRsp, player.PlayerId, player.ClientSeq, new(proto.ToTheMoonEnterSceneRsp))
 }
 
 func (g *Game) PathfindingEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
-	logger.Debug("player pf enter scene, uid: %v", player.PlayerID)
+	logger.Debug("player pf enter scene, uid: %v", player.PlayerId)
 	req := payloadMsg.(*proto.PathfindingEnterSceneReq)
 	_ = req
-	g.SendMsg(cmd.PathfindingEnterSceneRsp, player.PlayerID, player.ClientSeq, new(proto.PathfindingEnterSceneRsp))
+	g.SendMsg(cmd.PathfindingEnterSceneRsp, player.PlayerId, player.ClientSeq, new(proto.PathfindingEnterSceneRsp))
 }
 
 func (g *Game) QueryPathReq(player *model.Player, payloadMsg pb.Message) {
@@ -109,23 +109,13 @@ func (g *Game) QueryPathReq(player *model.Player, payloadMsg pb.Message) {
 		QueryStatus: proto.QueryPathRsp_STATUS_SUCC,
 		Corners:     []*proto.Vector{req.DestinationPos[0]},
 	}
-	g.SendMsg(cmd.QueryPathRsp, player.PlayerID, player.ClientSeq, queryPathRsp)
+	g.SendMsg(cmd.QueryPathRsp, player.PlayerId, player.ClientSeq, queryPathRsp)
 }
 
 func (g *Game) ObstacleModifyNotify(player *model.Player, payloadMsg pb.Message) {
 	ntf := payloadMsg.(*proto.ObstacleModifyNotify)
 	_ = ntf
-	// logger.Debug("ObstacleModifyNotify: %v, uid: %v", ntf, player.PlayerID)
-}
-
-func (g *Game) ServerAppidBindNotify(userId uint32, anticheatAppId string) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	logger.Debug("server appid bind notify, uid: %v, anticheatAppId: %v", userId, anticheatAppId)
-	player.AnticheatAppId = anticheatAppId
+	// logger.Debug("ObstacleModifyNotify: %v, uid: %v", ntf, player.PlayerId)
 }
 
 // WorldPlayerRTTNotify 世界里所有玩家的网络延迟广播
@@ -134,7 +124,7 @@ func (g *Game) WorldPlayerRTTNotify(world *World) {
 		PlayerRttList: make([]*proto.PlayerRTTInfo, 0),
 	}
 	for _, worldPlayer := range world.GetAllPlayer() {
-		playerRTTInfo := &proto.PlayerRTTInfo{Uid: worldPlayer.PlayerID, Rtt: worldPlayer.ClientRTT}
+		playerRTTInfo := &proto.PlayerRTTInfo{Uid: worldPlayer.PlayerId, Rtt: worldPlayer.ClientRTT}
 		worldPlayerRTTNotify.PlayerRttList = append(worldPlayerRTTNotify.PlayerRttList, playerRTTInfo)
 	}
 	g.SendToWorldA(world, cmd.WorldPlayerRTTNotify, 0, worldPlayerRTTNotify)
@@ -149,7 +139,7 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 		playerWorldLocationInfo := &proto.PlayerWorldLocationInfo{
 			SceneId: worldPlayer.SceneId,
 			PlayerLoc: &proto.PlayerLocationInfo{
-				Uid: worldPlayer.PlayerID,
+				Uid: worldPlayer.PlayerId,
 				Pos: &proto.Vector{
 					X: float32(worldPlayer.Pos.X),
 					Y: float32(worldPlayer.Pos.Y),
@@ -177,7 +167,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 		for _, scenePlayer := range scene.GetAllPlayer() {
 			// 玩家位置
 			playerLocationInfo := &proto.PlayerLocationInfo{
-				Uid: scenePlayer.PlayerID,
+				Uid: scenePlayer.PlayerId,
 				Pos: &proto.Vector{
 					X: float32(scenePlayer.Pos.X),
 					Y: float32(scenePlayer.Pos.Y),
@@ -214,7 +204,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 						MaxHp:    entity.fightProp[constant.FIGHT_PROP_MAX_HP],
 					}
 					for _, p := range entity.gadgetEntity.gadgetVehicleEntity.memberMap {
-						vehicleLocationInfo.UidList = append(vehicleLocationInfo.UidList, p.PlayerID)
+						vehicleLocationInfo.UidList = append(vehicleLocationInfo.UidList, p.PlayerId)
 					}
 					scenePlayerLocationNotify.VehicleLocList = append(scenePlayerLocationNotify.VehicleLocList, vehicleLocationInfo)
 				}
@@ -231,7 +221,7 @@ func (g *Game) SceneTimeNotify(world *World) {
 				SceneId:   player.SceneId,
 				SceneTime: uint64(scene.GetSceneTime()),
 			}
-			g.SendMsg(cmd.SceneTimeNotify, player.PlayerID, 0, sceneTimeNotify)
+			g.SendMsg(cmd.SceneTimeNotify, player.PlayerId, 0, sceneTimeNotify)
 		}
 	}
 }
@@ -243,7 +233,7 @@ func (g *Game) PlayerTimeNotify(world *World) {
 			PlayerTime: uint64(player.TotalOnlineTime),
 			ServerTime: uint64(time.Now().UnixMilli()),
 		}
-		g.SendMsg(cmd.PlayerTimeNotify, player.PlayerID, 0, playerTimeNotify)
+		g.SendMsg(cmd.PlayerTimeNotify, player.PlayerId, 0, playerTimeNotify)
 	}
 }
 
@@ -254,15 +244,26 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	beginIndex := strings.Index(commandText, "(")
 	endIndex := strings.Index(commandText, ")")
 	if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
 		return
 	}
 	funcName := commandText[:beginIndex]
 	paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
 	ok := COMMAND_MANAGER.HandleCommand(&CommandMessage{FuncName: funcName, ParamList: paramList})
 	if ok {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
 	} else {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerID, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行失败", Msg: req.Msg})
+		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行失败", Msg: req.Msg})
 	}
+}
+
+func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {
+	openStateUpdateNotify := &proto.OpenStateUpdateNotify{
+		OpenStateMap: make(map[uint32]uint32),
+	}
+	// 先暂时开放全部功能模块
+	for _, v := range constant.ALL_OPEN_STATE {
+		openStateUpdateNotify.OpenStateMap[uint32(v)] = 1
+	}
+	return openStateUpdateNotify
 }

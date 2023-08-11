@@ -38,7 +38,7 @@ func NewWorldManager(snowflake *alg.SnowflakeWorker) (r *WorldManager) {
 	return r
 }
 
-func (w *WorldManager) GetWorldByID(worldId uint32) *World {
+func (w *WorldManager) GetWorldById(worldId uint32) *World {
 	return w.worldMap[worldId]
 }
 
@@ -73,13 +73,13 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		aoiManager.SetAoiRange(-8000, 4000, -200, 1000, -5500, 6500)
 		aoiManager.Init3DRectAoiManager(1200, 12, 1200, true)
 		world.bigWorldAoi = aoiManager
+		logger.Info("big world aoi init finish")
 	}
-	logger.Info("big world aoi init finish")
 	return world
 }
 
 func (w *WorldManager) DestroyWorld(worldId uint32) {
-	world := w.GetWorldByID(worldId)
+	world := w.GetWorldById(worldId)
 	for _, player := range world.playerMap {
 		world.RemovePlayer(player)
 		player.WorldId = 0
@@ -97,16 +97,16 @@ func (w *WorldManager) GetAiWorld() *World {
 
 // InitAiWorld 初始化Ai世界
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
-	w.aiWorld = w.GetWorldByID(owner.WorldId)
+	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
-	return world.owner.PlayerID < PlayerBaseUid
+	return world.owner.PlayerId < PlayerBaseUid
 }
 
 func (w *WorldManager) IsBigWorld(world *World) bool {
-	return world.owner.PlayerID == BigWorldAiUid
+	return world.owner.PlayerId == BigWorldAiUid
 }
 
 func (w *WorldManager) GetSceneBlockAoiMap() map[uint32]*alg.AoiManager {
@@ -316,7 +316,7 @@ func (w *World) GetNextWorldEntityId(entityType uint8) uint32 {
 func (w *World) GetPlayerPeerId(player *model.Player) uint32 {
 	peerId := uint32(0)
 	for peerIdIndex, worldPlayer := range w.peerList {
-		if worldPlayer.PlayerID == player.PlayerID {
+		if worldPlayer.PlayerId == player.PlayerId {
 			peerId = uint32(peerIdIndex) + 1
 		}
 	}
@@ -343,11 +343,11 @@ func (w *World) GetBigWorldAoi() *alg.AoiManager {
 
 func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 	w.peerList = append(w.peerList, player)
-	w.playerMap[player.PlayerID] = player
+	w.playerMap[player.PlayerId] = player
 	// 将玩家自身当前的队伍角色信息复制到世界的玩家本地队伍
 	dbTeam := player.GetDbTeam()
 	team := dbTeam.GetActiveTeam()
-	if player.PlayerID == w.owner.PlayerID {
+	if player.PlayerId == w.owner.PlayerId {
 		w.SetPlayerLocalTeam(player, team.GetAvatarIdList())
 	} else {
 		activeAvatarId := dbTeam.GetActiveAvatarId()
@@ -379,16 +379,16 @@ func (w *World) RemovePlayer(player *model.Player) {
 	w.peerList = append(w.peerList[:peerId-1], w.peerList[peerId:]...)
 	scene := w.sceneMap[player.SceneId]
 	scene.RemovePlayer(player)
-	w.RemoveAllEnterSceneContextByUid(player.PlayerID)
-	delete(w.playerMap, player.PlayerID)
-	delete(w.playerFirstEnterMap, player.PlayerID)
-	delete(w.multiplayerTeam.localTeamMap, player.PlayerID)
-	delete(w.multiplayerTeam.localAvatarIndexMap, player.PlayerID)
-	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerID)
+	w.RemoveAllEnterSceneContextByUid(player.PlayerId)
+	delete(w.playerMap, player.PlayerId)
+	delete(w.playerFirstEnterMap, player.PlayerId)
+	delete(w.multiplayerTeam.localTeamMap, player.PlayerId)
+	delete(w.multiplayerTeam.localAvatarIndexMap, player.PlayerId)
+	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerId)
 	if WORLD_MANAGER.IsBigWorld(w) {
 		w.RemoveMultiplayerTeam(player)
 	} else {
-		if player.PlayerID != w.owner.PlayerID {
+		if player.PlayerId != w.owner.PlayerId {
 			w.UpdateMultiplayerTeam()
 		}
 	}
@@ -467,7 +467,7 @@ func (w *World) GetWorldAvatarList() []*WorldAvatar {
 // GetPlayerWorldAvatar 获取某玩家在世界队伍中的某角色
 func (w *World) GetPlayerWorldAvatar(player *model.Player, avatarId uint32) *WorldAvatar {
 	for _, worldAvatar := range w.GetWorldAvatarList() {
-		if worldAvatar.uid == player.PlayerID && worldAvatar.avatarId == avatarId {
+		if worldAvatar.uid == player.PlayerId && worldAvatar.avatarId == avatarId {
 			return worldAvatar
 		}
 	}
@@ -478,7 +478,7 @@ func (w *World) GetPlayerWorldAvatar(player *model.Player, avatarId uint32) *Wor
 func (w *World) GetPlayerWorldAvatarList(player *model.Player) []*WorldAvatar {
 	worldAvatarList := make([]*WorldAvatar, 0)
 	for _, worldAvatar := range w.GetWorldAvatarList() {
-		if worldAvatar.uid == player.PlayerID {
+		if worldAvatar.uid == player.PlayerId {
 			worldAvatarList = append(worldAvatarList, worldAvatar)
 		}
 	}
@@ -499,7 +499,7 @@ func (w *World) GetWorldAvatarByEntityId(avatarEntityId uint32) *WorldAvatar {
 func (w *World) InitPlayerWorldAvatar(player *model.Player) {
 	scene := w.GetSceneById(player.SceneId)
 	for _, worldAvatar := range w.GetWorldAvatarList() {
-		if worldAvatar.uid != player.PlayerID {
+		if worldAvatar.uid != player.PlayerId {
 			continue
 		}
 		if !player.SceneJump && (worldAvatar.avatarEntityId != 0 || worldAvatar.weaponEntityId != 0) {
@@ -514,12 +514,12 @@ func (w *World) InitPlayerWorldAvatar(player *model.Player) {
 
 // GetPlayerTeamEntityId 获取某玩家的本地队伍实体id
 func (w *World) GetPlayerTeamEntityId(player *model.Player) uint32 {
-	return w.multiplayerTeam.localTeamEntityMap[player.PlayerID]
+	return w.multiplayerTeam.localTeamEntityMap[player.PlayerId]
 }
 
 // InitPlayerTeamEntityId 初始化某玩家的本地队伍实体id
 func (w *World) InitPlayerTeamEntityId(player *model.Player) {
-	w.multiplayerTeam.localTeamEntityMap[player.PlayerID] = w.GetNextWorldEntityId(constant.ENTITY_TYPE_TEAM)
+	w.multiplayerTeam.localTeamEntityMap[player.PlayerId] = w.GetNextWorldEntityId(constant.ENTITY_TYPE_TEAM)
 }
 
 // GetPlayerWorldAvatarEntityId 获取某玩家在世界队伍中的某角色的实体id
@@ -542,7 +542,7 @@ func (w *World) GetPlayerWorldAvatarWeaponEntityId(player *model.Player, avatarI
 
 // GetPlayerAvatarIndex 获取某玩家当前角色索引
 func (w *World) GetPlayerAvatarIndex(player *model.Player) int {
-	return w.multiplayerTeam.localAvatarIndexMap[player.PlayerID]
+	return w.multiplayerTeam.localAvatarIndexMap[player.PlayerId]
 }
 
 // SetPlayerAvatarIndex 设置某玩家当前角色索引
@@ -550,7 +550,7 @@ func (w *World) SetPlayerAvatarIndex(player *model.Player, index int) {
 	if index > len(w.GetPlayerLocalTeam(player))-1 {
 		return
 	}
-	w.multiplayerTeam.localAvatarIndexMap[player.PlayerID] = index
+	w.multiplayerTeam.localAvatarIndexMap[player.PlayerId] = index
 }
 
 // GetPlayerActiveAvatarId 获取玩家当前活跃角色id
@@ -592,11 +592,11 @@ func CreateMultiplayerTeam() (r *MultiplayerTeam) {
 }
 
 func (w *World) GetPlayerLocalTeam(player *model.Player) []*WorldAvatar {
-	return w.multiplayerTeam.localTeamMap[player.PlayerID]
+	return w.multiplayerTeam.localTeamMap[player.PlayerId]
 }
 
 func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) {
-	oldLocalTeam := w.multiplayerTeam.localTeamMap[player.PlayerID]
+	oldLocalTeam := w.multiplayerTeam.localTeamMap[player.PlayerId]
 	sameAvatarIdList := make([]uint32, 0)
 	diffAvatarIdList := make([]uint32, 0)
 	for _, avatarId := range avatarIdList {
@@ -634,7 +634,7 @@ func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) 
 			}
 		}
 		newLocalTeam[index] = &WorldAvatar{
-			uid:            player.PlayerID,
+			uid:            player.PlayerId,
 			avatarId:       avatarId,
 			avatarEntityId: 0,
 			weaponEntityId: 0,
@@ -642,7 +642,7 @@ func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) 
 			modifierMap:    make(map[uint32]*proto.AbilityAppliedModifier),
 		}
 	}
-	w.multiplayerTeam.localTeamMap[player.PlayerID] = newLocalTeam
+	w.multiplayerTeam.localTeamMap[player.PlayerId] = newLocalTeam
 }
 
 func (w *World) copyLocalTeamToWorld(start int, end int, peerId uint32) {
@@ -678,7 +678,7 @@ func (w *World) AddMultiplayerTeam(player *model.Player) {
 func (w *World) RemoveMultiplayerTeam(player *model.Player) {
 	worldTeam := make([]*WorldAvatar, 0)
 	for _, worldAvatar := range w.multiplayerTeam.worldTeam {
-		if worldAvatar.uid == player.PlayerID {
+		if worldAvatar.uid == player.PlayerId {
 			continue
 		}
 		worldTeam = append(worldTeam, worldAvatar)
@@ -736,7 +736,7 @@ func (w *World) ChangeToMultiplayer() {
 
 // IsPlayerFirstEnter 获取玩家是否首次加入本世界
 func (w *World) IsPlayerFirstEnter(player *model.Player) bool {
-	_, exist := w.playerFirstEnterMap[player.PlayerID]
+	_, exist := w.playerFirstEnterMap[player.PlayerId]
 	if !exist {
 		return true
 	} else {

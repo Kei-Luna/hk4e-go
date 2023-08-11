@@ -14,91 +14,7 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
-func (g *Game) GetAllWeaponDataConfig() map[int32]*gdconf.ItemData {
-	allWeaponDataConfig := make(map[int32]*gdconf.ItemData)
-	for itemId, itemData := range gdconf.GetItemDataMap() {
-		if itemData.Type != constant.ITEM_TYPE_WEAPON {
-			continue
-		}
-		allWeaponDataConfig[itemId] = itemData
-	}
-	return allWeaponDataConfig
-}
-
-func (g *Game) AddUserWeapon(userId uint32, itemId uint32) uint64 {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return 0
-	}
-	weaponId := uint64(g.snowflake.GenId())
-	dbWeapon := player.GetDbWeapon()
-	// 校验背包武器容量
-	if dbWeapon.GetWeaponMapLen() > constant.STORE_PACK_LIMIT_WEAPON {
-		return 0
-	}
-	dbWeapon.AddWeapon(player, itemId, weaponId)
-	weapon := dbWeapon.GetWeapon(weaponId)
-	if weapon == nil {
-		logger.Error("weapon is nil, itemId: %v, weaponId: %v", itemId, weaponId)
-		return 0
-	}
-	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
-	return weaponId
-}
-
-func (g *Game) CostUserWeapon(userId uint32, weaponIdList []uint64) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	storeItemDelNotify := &proto.StoreItemDelNotify{
-		GuidList:  make([]uint64, 0, len(weaponIdList)),
-		StoreType: proto.StoreType_STORE_PACK,
-	}
-	dbWeapon := player.GetDbWeapon()
-	for _, weaponId := range weaponIdList {
-		weaponGuid := dbWeapon.CostWeapon(player, weaponId)
-		if weaponGuid == 0 {
-			logger.Error("weapon cost error, weaponId: %v", weaponId)
-			return
-		}
-		storeItemDelNotify.GuidList = append(storeItemDelNotify.GuidList, weaponGuid)
-	}
-	g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, storeItemDelNotify)
-}
-
-func (g *Game) PacketStoreItemChangeNotifyByWeapon(weapon *model.Weapon) *proto.StoreItemChangeNotify {
-	storeItemChangeNotify := &proto.StoreItemChangeNotify{
-		StoreType: proto.StoreType_STORE_PACK,
-		ItemList:  make([]*proto.Item, 0),
-	}
-	affixMap := make(map[uint32]uint32)
-	for _, affixId := range weapon.AffixIdList {
-		affixMap[affixId] = uint32(weapon.Refinement)
-	}
-	pbItem := &proto.Item{
-		ItemId: weapon.ItemId,
-		Guid:   weapon.Guid,
-		Detail: &proto.Item_Equip{
-			Equip: &proto.Equip{
-				Detail: &proto.Equip_Weapon{
-					Weapon: &proto.Weapon{
-						Level:        uint32(weapon.Level),
-						Exp:          weapon.Exp,
-						PromoteLevel: uint32(weapon.Promote),
-						// key:武器效果id value:精炼等阶
-						AffixMap: affixMap,
-					},
-				},
-				IsLocked: weapon.Lock,
-			},
-		},
-	}
-	storeItemChangeNotify.ItemList = append(storeItemChangeNotify.ItemList, pbItem)
-	return storeItemChangeNotify
-}
+/************************************************** 接口请求 **************************************************/
 
 // WeaponAwakenReq 武器精炼请求
 func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
@@ -188,7 +104,7 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 			return
 		}
 		// 消耗作为精炼材料的武器
-		g.CostUserWeapon(player.PlayerID, []uint64{foodWeapon.WeaponId})
+		g.CostPlayerWeapon(player.PlayerId, []uint64{foodWeapon.WeaponId})
 	case constant.ITEM_TYPE_MATERIAL:
 		// 精炼材料为道具
 		// 是否拥有将被用于精炼的道具
@@ -205,9 +121,9 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 			return
 		}
 		// 消耗作为精炼材料的道具
-		ok = g.CostUserItem(player.PlayerID, []*ChangeItem{{ItemId: item.ItemId, ChangeCount: 1}})
+		ok = g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: item.ItemId, ChangeCount: 1}})
 		if !ok {
-			logger.Error("item count not enough, uid: %v", player.PlayerID)
+			logger.Error("item count not enough, uid: %v", player.PlayerId)
 			g.SendError(cmd.WeaponAwakenRsp, player, &proto.WeaponAwakenRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
 			return
 		}
@@ -217,9 +133,9 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	// 消耗摩拉
-	ok = g.CostUserItem(player.PlayerID, []*ChangeItem{{ItemId: constant.ITEM_ID_SCOIN, ChangeCount: uint32(weaponConfig.AwakenCoinCost[weapon.Refinement])}})
+	ok = g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: constant.ITEM_ID_SCOIN, ChangeCount: uint32(weaponConfig.AwakenCoinCost[weapon.Refinement])}})
 	if !ok {
-		logger.Error("item count not enough, uid: %v", player.PlayerID)
+		logger.Error("item count not enough, uid: %v", player.PlayerId)
 		g.SendError(cmd.WeaponAwakenRsp, player, &proto.WeaponAwakenRsp{}, proto.Retcode_RET_SCOIN_NOT_ENOUGH)
 		return
 	}
@@ -239,7 +155,7 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 	// 武器精炼等级+1
 	weapon.Refinement++
 	// 更新武器的物品数据
-	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerID, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
+	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
 	// 获取持有该武器的角色
 	dbAvatar := player.GetDbAvatar()
 	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
@@ -247,7 +163,7 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 	if ok {
 		weaponAwakenRsp.AvatarGuid = avatar.Guid
 		// 角色更新面板
-		g.UpdateUserAvatarFightProp(player.PlayerID, avatar.AvatarId)
+		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	}
 
 	// 武器精炼后的信息
@@ -255,7 +171,7 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 	for _, affixId := range weapon.AffixIdList {
 		weaponAwakenRsp.CurAffixLevelMap[affixId] = uint32(weapon.Refinement)
 	}
-	g.SendMsg(cmd.WeaponAwakenRsp, player.PlayerID, player.ClientSeq, weaponAwakenRsp)
+	g.SendMsg(cmd.WeaponAwakenRsp, player.PlayerId, player.ClientSeq, weaponAwakenRsp)
 }
 
 // WeaponPromoteReq 武器突破请求
@@ -311,7 +227,7 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 	})
 	// 突破材料以及摩拉是否足够
 	for _, item := range costItemList {
-		if g.GetPlayerItemCount(player.PlayerID, item.ItemId) < item.ChangeCount {
+		if g.GetPlayerItemCount(player.PlayerId, item.ItemId) < item.ChangeCount {
 			logger.Error("item count not enough, itemId: %v", item.ItemId)
 			// 摩拉的错误提示与材料不同
 			if item.ItemId == constant.ITEM_ID_SCOIN {
@@ -328,10 +244,10 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	// 消耗突破材料和摩拉
-	ok = g.CostUserItem(player.PlayerID, costItemList)
+	ok = g.CostPlayerItem(player.PlayerId, costItemList)
 	if !ok {
 		if !ok {
-			logger.Error("item count not enough, uid: %v", player.PlayerID)
+			logger.Error("item count not enough, uid: %v", player.PlayerId)
 			g.SendError(cmd.WeaponPromoteRsp, player, &proto.WeaponPromoteRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
 			return
 		}
@@ -343,14 +259,14 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 	// 武器突破等级+1
 	weapon.Promote++
 	// 更新武器的物品数据
-	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerID, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
+	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
 	// 获取持有该武器的角色
 	dbAvatar := player.GetDbAvatar()
 	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
 	// 武器可能没被任何角色装备 仅在被装备时更新面板
 	if ok {
 		// 角色更新面板
-		g.UpdateUserAvatarFightProp(player.PlayerID, avatar.AvatarId)
+		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	}
 
 	weaponPromoteRsp := &proto.WeaponPromoteRsp{
@@ -358,7 +274,236 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 		OldPromoteLevel:  uint32(oldPromote),
 		CurPromoteLevel:  uint32(weapon.Promote),
 	}
-	g.SendMsg(cmd.WeaponPromoteRsp, player.PlayerID, player.ClientSeq, weaponPromoteRsp)
+	g.SendMsg(cmd.WeaponPromoteRsp, player.PlayerId, player.ClientSeq, weaponPromoteRsp)
+}
+
+// WeaponUpgradeReq 武器升级请求
+func (g *Game) WeaponUpgradeReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.WeaponUpgradeReq)
+	// 是否拥有武器
+	weapon, ok := player.GameObjectGuidMap[req.TargetWeaponGuid].(*model.Weapon)
+	if !ok {
+		logger.Error("weapon error, weaponGuid: %v", req.TargetWeaponGuid)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
+		return
+	}
+	// 获取武器配置表
+	weaponConfig := gdconf.GetItemDataById(int32(weapon.ItemId))
+	if weaponConfig == nil {
+		logger.Error("weapon config error, itemId: %v", weapon.ItemId)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
+		return
+	}
+	// 获取武器突破配置表
+	weaponPromoteConfig := gdconf.GetWeaponPromoteDataByIdAndLevel(weaponConfig.PromoteId, int32(weapon.Promote))
+	if weaponPromoteConfig == nil {
+		logger.Error("weapon promote config error, promoteLevel: %v", weapon.Promote)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
+		return
+	}
+	// 武器等级是否达到限制
+	if weapon.Level >= uint8(weaponPromoteConfig.LevelLimit) {
+		logger.Error("weapon level ge level limit, level: %v", weapon.Level)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_WEAPON_PROMOTE_LEVEL_EXCEED_LIMIT)
+		return
+	}
+	// 将被消耗的物品列表
+	costItemList := make([]*ChangeItem, 0, len(req.ItemParamList)+1)
+	// 突破材料是否足够并添加到消耗物品列表
+	for _, itemParam := range req.ItemParamList {
+		costItemList = append(costItemList, &ChangeItem{
+			ItemId:      itemParam.ItemId,
+			ChangeCount: itemParam.Count,
+		})
+	}
+	// 计算使用材料强化武器后将会获得的经验数
+	expCount, coinCost, success := g.CalcWeaponUpgradeExpAndCoin(player, req.ItemParamList, req.FoodWeaponGuidList)
+	if !success {
+		logger.Error("calc weapon upgrade exp and coin error, uid: %v", player.PlayerId)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
+		return
+	}
+	// 消耗列表添加摩拉的消耗
+	costItemList = append(costItemList, &ChangeItem{
+		ItemId:      constant.ITEM_ID_SCOIN,
+		ChangeCount: coinCost,
+	})
+	// 校验物品是否足够
+	for _, item := range costItemList {
+		if g.GetPlayerItemCount(player.PlayerId, item.ItemId) < item.ChangeCount {
+			logger.Error("item count not enough, itemId: %v", item.ItemId)
+			// 摩拉的错误提示与材料不同
+			if item.ItemId == constant.ITEM_ID_SCOIN {
+				g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_SCOIN_NOT_ENOUGH)
+			}
+			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
+			return
+		}
+	}
+	// 校验作为升级材料的武器是否存在
+	costWeaponIdList := make([]uint64, 0, len(req.FoodWeaponGuidList))
+	for _, weaponGuid := range req.FoodWeaponGuidList {
+		foodWeapon, ok := player.GameObjectGuidMap[weaponGuid].(*model.Weapon)
+		if !ok {
+			logger.Error("food weapon error, weaponGuid: %v", weaponGuid)
+			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
+		}
+		// 确保被精炼武器没有被任何角色装备
+		if foodWeapon.AvatarId != 0 {
+			logger.Error("food weapon has been wear, weaponGuid: %v", weaponGuid)
+			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_EQUIP_HAS_BEEN_WEARED)
+			return
+		}
+		// 确保被精炼武器没有上锁
+		if foodWeapon.Lock {
+			logger.Error("food weapon has been lock, weaponGuid: %v", weaponGuid)
+			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_EQUIP_IS_LOCKED)
+			return
+		}
+		costWeaponIdList = append(costWeaponIdList, foodWeapon.WeaponId)
+	}
+	// 消耗升级材料和摩拉
+	ok = g.CostPlayerItem(player.PlayerId, costItemList)
+	if !ok {
+		logger.Error("item count not enough, uid: %v", player.PlayerId)
+		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
+		return
+	}
+	// 消耗作为升级材料的武器
+	g.CostPlayerWeapon(player.PlayerId, costWeaponIdList)
+	// 武器升级前的信息
+	oldLevel := weapon.Level
+
+	// 计算武器使用材料升级后的等级经验以及返回的矿石
+	weaponLevel, weaponExp, returnItemList, success := g.CalcWeaponUpgrade(weapon, expCount)
+	if !success {
+		logger.Error("calc weapon upgrade error, uid: %v", player.PlayerId)
+		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
+		return
+	}
+
+	// 武器添加经验
+	weapon.Level = weaponLevel
+	weapon.Exp = weaponExp
+	// 更新武器的物品数据
+	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
+
+	// 获取持有该武器的角色
+	dbAvatar := player.GetDbAvatar()
+	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
+	// 武器可能没被任何角色装备 仅在被装备时更新面板
+	if ok {
+		// 角色更新面板
+		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
+	}
+
+	// 将给予的材料列表
+	addItemList := make([]*ChangeItem, 0, len(returnItemList))
+	for _, param := range returnItemList {
+		addItemList = append(addItemList, &ChangeItem{
+			ItemId:      param.ItemId,
+			ChangeCount: param.Count,
+		})
+	}
+	// 给予玩家返回的矿石
+	g.AddPlayerItem(player.PlayerId, addItemList, false, 0)
+
+	weaponUpgradeRsp := &proto.WeaponUpgradeRsp{
+		CurLevel:         uint32(weapon.Level),
+		OldLevel:         uint32(oldLevel),
+		ItemParamList:    returnItemList,
+		TargetWeaponGuid: req.TargetWeaponGuid,
+	}
+	g.SendMsg(cmd.WeaponUpgradeRsp, player.PlayerId, player.ClientSeq, weaponUpgradeRsp)
+}
+
+// CalcWeaponUpgradeReturnItemsReq 计算武器升级返回矿石请求
+func (g *Game) CalcWeaponUpgradeReturnItemsReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.CalcWeaponUpgradeReturnItemsReq)
+	// 是否拥有武器
+	weapon, ok := player.GameObjectGuidMap[req.TargetWeaponGuid].(*model.Weapon)
+	if !ok {
+		logger.Error("weapon error, weaponGuid: %v", req.TargetWeaponGuid)
+		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
+		return
+	}
+	// 计算使用材料强化武器后将会获得的经验数
+	expCount, _, success := g.CalcWeaponUpgradeExpAndCoin(player, req.ItemParamList, req.FoodWeaponGuidList)
+	if !success {
+		logger.Error("calc weapon upgrade exp and coin error, uid: %v", player.PlayerId)
+		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
+		return
+	}
+	// 计算武器使用材料升级后的等级经验以及返回的矿石
+	_, _, returnItemList, success := g.CalcWeaponUpgrade(weapon, expCount)
+	if !success {
+		logger.Error("calc weapon upgrade error, weaponGuid: %v", req.TargetWeaponGuid)
+		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
+		return
+	}
+
+	calcWeaponUpgradeReturnItemsRsp := &proto.CalcWeaponUpgradeReturnItemsRsp{
+		ItemParamList:    returnItemList,
+		TargetWeaponGuid: req.TargetWeaponGuid,
+	}
+	g.SendMsg(cmd.CalcWeaponUpgradeReturnItemsRsp, player.PlayerId, player.ClientSeq, calcWeaponUpgradeReturnItemsRsp)
+}
+
+/************************************************** 游戏功能 **************************************************/
+
+func (g *Game) GetAllWeaponDataConfig() map[int32]*gdconf.ItemData {
+	allWeaponDataConfig := make(map[int32]*gdconf.ItemData)
+	for itemId, itemData := range gdconf.GetItemDataMap() {
+		if itemData.Type != constant.ITEM_TYPE_WEAPON {
+			continue
+		}
+		allWeaponDataConfig[itemId] = itemData
+	}
+	return allWeaponDataConfig
+}
+
+func (g *Game) AddPlayerWeapon(userId uint32, itemId uint32) uint64 {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return 0
+	}
+	weaponId := uint64(g.snowflake.GenId())
+	dbWeapon := player.GetDbWeapon()
+	// 校验背包武器容量
+	if dbWeapon.GetWeaponMapLen() > constant.STORE_PACK_LIMIT_WEAPON {
+		return 0
+	}
+	dbWeapon.AddWeapon(player, itemId, weaponId)
+	weapon := dbWeapon.GetWeapon(weaponId)
+	if weapon == nil {
+		logger.Error("weapon is nil, itemId: %v, weaponId: %v", itemId, weaponId)
+		return 0
+	}
+	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
+	return weaponId
+}
+
+func (g *Game) CostPlayerWeapon(userId uint32, weaponIdList []uint64) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	storeItemDelNotify := &proto.StoreItemDelNotify{
+		GuidList:  make([]uint64, 0, len(weaponIdList)),
+		StoreType: proto.StoreType_STORE_PACK,
+	}
+	dbWeapon := player.GetDbWeapon()
+	for _, weaponId := range weaponIdList {
+		weaponGuid := dbWeapon.CostWeapon(player, weaponId)
+		if weaponGuid == 0 {
+			logger.Error("weapon cost error, weaponId: %v", weaponId)
+			return
+		}
+		storeItemDelNotify.GuidList = append(storeItemDelNotify.GuidList, weaponGuid)
+	}
+	g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, storeItemDelNotify)
 }
 
 // GetWeaponUpgradeReturnMaterial 获取武器强化返回的材料
@@ -533,174 +678,35 @@ func (g *Game) CalcWeaponUpgrade(weapon *model.Weapon, expCount uint32) (weaponL
 	return
 }
 
-// WeaponUpgradeReq 武器升级请求
-func (g *Game) WeaponUpgradeReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.WeaponUpgradeReq)
-	// 是否拥有武器
-	weapon, ok := player.GameObjectGuidMap[req.TargetWeaponGuid].(*model.Weapon)
-	if !ok {
-		logger.Error("weapon error, weaponGuid: %v", req.TargetWeaponGuid)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
-		return
-	}
-	// 获取武器配置表
-	weaponConfig := gdconf.GetItemDataById(int32(weapon.ItemId))
-	if weaponConfig == nil {
-		logger.Error("weapon config error, itemId: %v", weapon.ItemId)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
-		return
-	}
-	// 获取武器突破配置表
-	weaponPromoteConfig := gdconf.GetWeaponPromoteDataByIdAndLevel(weaponConfig.PromoteId, int32(weapon.Promote))
-	if weaponPromoteConfig == nil {
-		logger.Error("weapon promote config error, promoteLevel: %v", weapon.Promote)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
-		return
-	}
-	// 武器等级是否达到限制
-	if weapon.Level >= uint8(weaponPromoteConfig.LevelLimit) {
-		logger.Error("weapon level ge level limit, level: %v", weapon.Level)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_WEAPON_PROMOTE_LEVEL_EXCEED_LIMIT)
-		return
-	}
-	// 将被消耗的物品列表
-	costItemList := make([]*ChangeItem, 0, len(req.ItemParamList)+1)
-	// 突破材料是否足够并添加到消耗物品列表
-	for _, itemParam := range req.ItemParamList {
-		costItemList = append(costItemList, &ChangeItem{
-			ItemId:      itemParam.ItemId,
-			ChangeCount: itemParam.Count,
-		})
-	}
-	// 计算使用材料强化武器后将会获得的经验数
-	expCount, coinCost, success := g.CalcWeaponUpgradeExpAndCoin(player, req.ItemParamList, req.FoodWeaponGuidList)
-	if !success {
-		logger.Error("calc weapon upgrade exp and coin error, uid: %v", player.PlayerID)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{})
-		return
-	}
-	// 消耗列表添加摩拉的消耗
-	costItemList = append(costItemList, &ChangeItem{
-		ItemId:      constant.ITEM_ID_SCOIN,
-		ChangeCount: coinCost,
-	})
-	// 校验物品是否足够
-	for _, item := range costItemList {
-		if g.GetPlayerItemCount(player.PlayerID, item.ItemId) < item.ChangeCount {
-			logger.Error("item count not enough, itemId: %v", item.ItemId)
-			// 摩拉的错误提示与材料不同
-			if item.ItemId == constant.ITEM_ID_SCOIN {
-				g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_SCOIN_NOT_ENOUGH)
-			}
-			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
-			return
-		}
-	}
-	// 校验作为升级材料的武器是否存在
-	costWeaponIdList := make([]uint64, 0, len(req.FoodWeaponGuidList))
-	for _, weaponGuid := range req.FoodWeaponGuidList {
-		foodWeapon, ok := player.GameObjectGuidMap[weaponGuid].(*model.Weapon)
-		if !ok {
-			logger.Error("food weapon error, weaponGuid: %v", weaponGuid)
-			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
-		}
-		// 确保被精炼武器没有被任何角色装备
-		if foodWeapon.AvatarId != 0 {
-			logger.Error("food weapon has been wear, weaponGuid: %v", weaponGuid)
-			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_EQUIP_HAS_BEEN_WEARED)
-			return
-		}
-		// 确保被精炼武器没有上锁
-		if foodWeapon.Lock {
-			logger.Error("food weapon has been lock, weaponGuid: %v", weaponGuid)
-			g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_EQUIP_IS_LOCKED)
-			return
-		}
-		costWeaponIdList = append(costWeaponIdList, foodWeapon.WeaponId)
-	}
-	// 消耗升级材料和摩拉
-	ok = g.CostUserItem(player.PlayerID, costItemList)
-	if !ok {
-		logger.Error("item count not enough, uid: %v", player.PlayerID)
-		g.SendError(cmd.WeaponUpgradeRsp, player, &proto.WeaponUpgradeRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
-		return
-	}
-	// 消耗作为升级材料的武器
-	g.CostUserWeapon(player.PlayerID, costWeaponIdList)
-	// 武器升级前的信息
-	oldLevel := weapon.Level
+/************************************************** 打包封装 **************************************************/
 
-	// 计算武器使用材料升级后的等级经验以及返回的矿石
-	weaponLevel, weaponExp, returnItemList, success := g.CalcWeaponUpgrade(weapon, expCount)
-	if !success {
-		logger.Error("calc weapon upgrade error, uid: %v", player.PlayerID)
-		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
-		return
+func (g *Game) PacketStoreItemChangeNotifyByWeapon(weapon *model.Weapon) *proto.StoreItemChangeNotify {
+	storeItemChangeNotify := &proto.StoreItemChangeNotify{
+		StoreType: proto.StoreType_STORE_PACK,
+		ItemList:  make([]*proto.Item, 0),
 	}
-
-	// 武器添加经验
-	weapon.Level = weaponLevel
-	weapon.Exp = weaponExp
-	// 更新武器的物品数据
-	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerID, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
-
-	// 获取持有该武器的角色
-	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
-	// 武器可能没被任何角色装备 仅在被装备时更新面板
-	if ok {
-		// 角色更新面板
-		g.UpdateUserAvatarFightProp(player.PlayerID, avatar.AvatarId)
+	affixMap := make(map[uint32]uint32)
+	for _, affixId := range weapon.AffixIdList {
+		affixMap[affixId] = uint32(weapon.Refinement)
 	}
-
-	// 将给予的材料列表
-	addItemList := make([]*ChangeItem, 0, len(returnItemList))
-	for _, param := range returnItemList {
-		addItemList = append(addItemList, &ChangeItem{
-			ItemId:      param.ItemId,
-			ChangeCount: param.Count,
-		})
+	pbItem := &proto.Item{
+		ItemId: weapon.ItemId,
+		Guid:   weapon.Guid,
+		Detail: &proto.Item_Equip{
+			Equip: &proto.Equip{
+				Detail: &proto.Equip_Weapon{
+					Weapon: &proto.Weapon{
+						Level:        uint32(weapon.Level),
+						Exp:          weapon.Exp,
+						PromoteLevel: uint32(weapon.Promote),
+						// key:武器效果id value:精炼等阶
+						AffixMap: affixMap,
+					},
+				},
+				IsLocked: weapon.Lock,
+			},
+		},
 	}
-	// 给予玩家返回的矿石
-	g.AddUserItem(player.PlayerID, addItemList, false, 0)
-
-	weaponUpgradeRsp := &proto.WeaponUpgradeRsp{
-		CurLevel:         uint32(weapon.Level),
-		OldLevel:         uint32(oldLevel),
-		ItemParamList:    returnItemList,
-		TargetWeaponGuid: req.TargetWeaponGuid,
-	}
-	g.SendMsg(cmd.WeaponUpgradeRsp, player.PlayerID, player.ClientSeq, weaponUpgradeRsp)
-}
-
-// CalcWeaponUpgradeReturnItemsReq 计算武器升级返回矿石请求
-func (g *Game) CalcWeaponUpgradeReturnItemsReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.CalcWeaponUpgradeReturnItemsReq)
-	// 是否拥有武器
-	weapon, ok := player.GameObjectGuidMap[req.TargetWeaponGuid].(*model.Weapon)
-	if !ok {
-		logger.Error("weapon error, weaponGuid: %v", req.TargetWeaponGuid)
-		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
-		return
-	}
-	// 计算使用材料强化武器后将会获得的经验数
-	expCount, _, success := g.CalcWeaponUpgradeExpAndCoin(player, req.ItemParamList, req.FoodWeaponGuidList)
-	if !success {
-		logger.Error("calc weapon upgrade exp and coin error, uid: %v", player.PlayerID)
-		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
-		return
-	}
-	// 计算武器使用材料升级后的等级经验以及返回的矿石
-	_, _, returnItemList, success := g.CalcWeaponUpgrade(weapon, expCount)
-	if !success {
-		logger.Error("calc weapon upgrade error, weaponGuid: %v", req.TargetWeaponGuid)
-		g.SendError(cmd.CalcWeaponUpgradeReturnItemsRsp, player, &proto.CalcWeaponUpgradeReturnItemsRsp{})
-		return
-	}
-
-	calcWeaponUpgradeReturnItemsRsp := &proto.CalcWeaponUpgradeReturnItemsRsp{
-		ItemParamList:    returnItemList,
-		TargetWeaponGuid: req.TargetWeaponGuid,
-	}
-	g.SendMsg(cmd.CalcWeaponUpgradeReturnItemsRsp, player.PlayerID, player.ClientSeq, calcWeaponUpgradeReturnItemsRsp)
+	storeItemChangeNotify.ItemList = append(storeItemChangeNotify.ItemList, pbItem)
+	return storeItemChangeNotify
 }

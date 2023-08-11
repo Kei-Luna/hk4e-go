@@ -14,6 +14,8 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+/************************************************** 接口请求 **************************************************/
+
 type UserInfo struct {
 	UserId uint32 `json:"userId"`
 	jwt.RegisteredClaims
@@ -23,7 +25,7 @@ type UserInfo struct {
 func (g *Game) GetGachaInfoReq(player *model.Player, payloadMsg pb.Message) {
 	serverAddr := "http://223.5.5.5"
 	userInfo := &UserInfo{
-		UserId: player.PlayerID,
+		UserId: player.PlayerId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour * time.Duration(1))),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -188,7 +190,7 @@ func (g *Game) GetGachaInfoReq(player *model.Player, payloadMsg pb.Message) {
 			IsNewWish:          false,
 		},
 	}
-	g.SendMsg(cmd.GetGachaInfoRsp, player.PlayerID, player.ClientSeq, getGachaInfoRsp)
+	g.SendMsg(cmd.GetGachaInfoRsp, player.PlayerId, player.ClientSeq, getGachaInfoRsp)
 }
 
 func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
@@ -216,7 +218,7 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 		costItemId = 224
 	}
 	// 先扣掉粉球或蓝球再进行抽卡
-	ok := g.CostUserItem(player.PlayerID, []*ChangeItem{{ItemId: costItemId, ChangeCount: gachaTimes}})
+	ok := g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: costItemId, ChangeCount: gachaTimes}})
 	if !ok {
 		return
 	}
@@ -241,13 +243,13 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 			ok, itemId = g.doGachaKlee()
 		} else if gachaType == 300 {
 			// 角色UP池
-			ok, itemId = g.doGachaOnce(player.PlayerID, gachaType, true, false)
+			ok, itemId = g.doGachaOnce(player.PlayerId, gachaType, true, false)
 		} else if gachaType == 431 {
 			// 武器UP池
-			ok, itemId = g.doGachaOnce(player.PlayerID, gachaType, true, true)
+			ok, itemId = g.doGachaOnce(player.PlayerId, gachaType, true, true)
 		} else if gachaType == 201 {
 			// 常驻
-			ok, itemId = g.doGachaOnce(player.PlayerID, gachaType, false, false)
+			ok, itemId = g.doGachaOnce(player.PlayerId, gachaType, false, false)
 		} else {
 			ok, itemId = false, 0
 		}
@@ -260,17 +262,17 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 			dbAvatar := player.GetDbAvatar()
 			_, exist := dbAvatar.AvatarMap[avatarId]
 			if !exist {
-				g.AddUserAvatar(player.PlayerID, avatarId)
+				g.AddPlayerAvatar(player.PlayerId, avatarId)
 			} else {
 				constellationItemId := itemId + 100
-				if g.GetPlayerItemCount(player.PlayerID, constellationItemId) < 6 {
-					g.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: constellationItemId, ChangeCount: 1}}, false, 0)
+				if g.GetPlayerItemCount(player.PlayerId, constellationItemId) < 6 {
+					g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: constellationItemId, ChangeCount: 1}}, false, 0)
 				}
 			}
 		} else if itemId > 10000 && itemId < 20000 {
-			g.AddUserWeapon(player.PlayerID, itemId)
+			g.AddPlayerWeapon(player.PlayerId, itemId)
 		} else {
-			g.AddUserItem(player.PlayerID, []*ChangeItem{{ItemId: itemId, ChangeCount: 1}}, false, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: 1}}, false, 0)
 		}
 		// 计算星尘星辉
 		xc := uint32(random.GetRandomInt32(0, 10))
@@ -282,7 +284,7 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		// 星尘
 		if xc != 0 {
-			g.AddUserItem(player.PlayerID, []*ChangeItem{{
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
 				ItemId:      222,
 				ChangeCount: xc,
 			}}, false, 0)
@@ -293,7 +295,7 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		// 星辉
 		if xh != 0 {
-			g.AddUserItem(player.PlayerID, []*ChangeItem{{
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
 				ItemId:      221,
 				ChangeCount: xh,
 			}}, false, 0)
@@ -307,8 +309,10 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 		doGachaRsp.GachaItemList = append(doGachaRsp.GachaItemList, gachaItem)
 	}
 	logger.Debug("doGachaRsp: %v", doGachaRsp.String())
-	g.SendMsg(cmd.DoGachaRsp, player.PlayerID, player.ClientSeq, doGachaRsp)
+	g.SendMsg(cmd.DoGachaRsp, player.PlayerId, player.ClientSeq, doGachaRsp)
 }
+
+/************************************************** 游戏功能 **************************************************/
 
 // 扣1给可莉刷烧烤酱
 func (g *Game) doGachaKlee() (bool, uint32) {
@@ -380,7 +384,7 @@ func (g *Game) doGachaOnce(userId uint32, gachaType uint32, mustGetUpEnable bool
 	dbGacha := player.GetDbGacha()
 	gachaPoolInfo := dbGacha.GachaPoolInfo[gachaType]
 	if gachaPoolInfo == nil {
-		logger.Error("user gacha pool info not found, gacha type: %v", gachaType)
+		logger.Error("player gacha pool info not found, gacha type: %v", gachaType)
 		return false, 0
 	}
 	// 保底计数+1
@@ -595,3 +599,5 @@ func (g *Game) doGachaRandDropOnce(dropGroupDataConfig *gdconf.GachaDropGroupDat
 	}
 	return nil
 }
+
+/************************************************** 打包封装 **************************************************/
