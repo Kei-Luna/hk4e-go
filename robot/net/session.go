@@ -46,10 +46,7 @@ type Session struct {
 	PktLock                sync.Mutex
 }
 
-func NewSession(gateAddr string, dispatchKey []byte, localPort int) (*Session, error) {
-	// // DPDK模式需开启
-	// conn, err := kcp.DialWithOptions(gateAddr, "0.0.0.0:"+strconv.Itoa(localPort))
-
+func NewSession(gateAddr string, dispatchKey []byte) (*Session, error) {
 	conn, err := kcp.DialWithOptions(gateAddr)
 	if err != nil {
 		logger.Error("kcp client conn to server error: %v", err)

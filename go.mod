@@ -50,9 +50,6 @@ require github.com/yuin/gopher-lua v1.0.0
 // lz4
 require github.com/pierrec/lz4/v4 v4.1.17
 
-// dpdk-go
-require github.com/flswld/dpdk-go v1.0.1
-
 // websocket
 require github.com/gorilla/websocket v1.4.2
 

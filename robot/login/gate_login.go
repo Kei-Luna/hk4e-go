@@ -23,7 +23,7 @@ import (
 func GateLogin(dispatchInfo *DispatchInfo, accountInfo *AccountInfo, keyId string, req *proto.GetPlayerTokenReq, clientSeq uint32) (*net.Session, error, *proto.GetPlayerTokenRsp) {
 	gateAddr := dispatchInfo.GateIp + ":" + strconv.Itoa(int(dispatchInfo.GatePort))
 	logger.Debug("connect gate addr: %v", gateAddr)
-	session, err := net.NewSession(gateAddr, dispatchInfo.DispatchKey, 30000)
+	session, err := net.NewSession(gateAddr, dispatchInfo.DispatchKey)
 	if err != nil {
 		return nil, err, nil
 	}
