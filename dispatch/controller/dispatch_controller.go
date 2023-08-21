@@ -51,6 +51,8 @@ type ClientCustomConfig struct {
 	LoadPatch      bool              `json:"loadPatch"`
 	RegionConfig   string            `json:"regionConfig"`
 	DownloadMode   int32             `json:"downloadMode"`
+	CodeSwitch     []int32           `json:"codeSwitch"`
+	CoverSwitch    []int32           `json:"coverSwitch"`
 }
 
 // GetRegionList 一级dispatch信息
@@ -79,6 +81,8 @@ func GetRegionList(ec2b *random.Ec2b) *proto.QueryRegionListHttpRsp {
 		DebugMenu:      true,
 		DebugLogSwitch: []int32{0},
 		DebugLog:       true,
+		CodeSwitch:     []int32{3628},
+		CoverSwitch:    []int32{40},
 	})
 	endec.Xor(clientCustomConfig, dispatchXorKey)
 	regionList.ClientCustomConfigEncrypted = clientCustomConfig // 加密后的客户端版本定义的配置
@@ -133,6 +137,8 @@ func GetRegionCurr(ec2b *random.Ec2b, gateServerAddr *api.GateServerAddr, stopSe
 		DebugMenu:      true,
 		DebugLogSwitch: []int32{0},
 		DebugLog:       true,
+		CodeSwitch:     []int32{3628},
+		CoverSwitch:    []int32{40},
 	})
 	endec.Xor(clientCustomConfig, dispatchXorKey)
 	regionCurr.ClientRegionCustomConfigEncrypted = clientCustomConfig // 加密后的客户端区服定义的配置
