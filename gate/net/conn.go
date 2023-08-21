@@ -97,14 +97,6 @@ func (c *Conn) Write(b []byte) (int, error) {
 	}
 }
 
-func (c *Conn) SendEnetNotifyToPeer(enet *kcp.Enet) {
-	if c.isKcp {
-		c.kcpConn.SendEnetNotifyToPeer(enet)
-	} else {
-		return
-	}
-}
-
 func (c *Conn) GetKcpRTO() uint32 {
 	if c.isKcp {
 		return c.kcpConn.GetRTO()

@@ -51,6 +51,7 @@ type KcpEvent struct {
 }
 
 type KcpConnManager struct {
+	kcpListener           *kcp.Listener
 	db                    *dao.Dao
 	discovery             *rpc.DiscoveryClient // 节点服务器rpc客户端
 	messageQueue          *mq.MessageQueue     // 消息队列
@@ -75,8 +76,9 @@ type KcpConnManager struct {
 	dispatchKey  []byte
 }
 
-func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rpc.DiscoveryClient) (r *KcpConnManager) {
-	r = new(KcpConnManager)
+func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rpc.DiscoveryClient) (*KcpConnManager, error) {
+	r := new(KcpConnManager)
+	r.kcpListener = nil
 	r.db = db
 	r.discovery = discovery
 	r.messageQueue = messageQueue
@@ -92,23 +94,26 @@ func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rp
 	if config.GetConfig().Hk4e.ClientProtoProxyEnable {
 		r.clientCmdProtoMap = client_proto.NewClientCmdProtoMap()
 	}
-	r.run()
-	return r
+	err := r.run()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
-func (k *KcpConnManager) run() {
+func (k *KcpConnManager) run() error {
 	// 读取密钥相关文件
 	k.signRsaKey, k.encRsaKeyMap, _ = region.LoadRegionRsaKey()
 	// key
 	rsp, err := k.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get region ec2b error: %v", err)
-		return
+		return err
 	}
 	ec2b, err := random.LoadEc2bKey(rsp.Data)
 	if err != nil {
 		logger.Error("parse region ec2b error: %v", err)
-		return
+		return err
 	}
 	regionEc2b := random.NewEc2b()
 	regionEc2b.SetSeed(ec2b.Seed())
@@ -118,8 +123,9 @@ func (k *KcpConnManager) run() {
 	kcpListener, err := kcp.ListenWithOptions(addr)
 	if err != nil {
 		logger.Error("listen kcp err: %v", err)
-		return
+		return err
 	}
+	k.kcpListener = kcpListener
 	logger.Info("listen kcp at addr: %v", addr)
 	go k.kcpNetInfo()
 	go k.kcpEnetHandle(kcpListener)
@@ -130,12 +136,12 @@ func (k *KcpConnManager) run() {
 		tcpAddr, err := net.ResolveTCPAddr("tcp4", addr)
 		if err != nil {
 			logger.Error("parse tcp addr err: %v", err)
-			return
+			return err
 		}
 		tcpListener, err := net.ListenTCP("tcp4", tcpAddr)
 		if err != nil {
 			logger.Error("listen tcp err: %v", err)
-			return
+			return err
 		}
 		logger.Info("listen tcp at addr: %v", addr)
 		go k.acceptHandle(true, nil, tcpListener)
@@ -151,6 +157,7 @@ func (k *KcpConnManager) run() {
 			logger.Info("[Kcp Event] kcpEvent: %+v", *kcpEvent)
 		}
 	}()
+	return nil
 }
 
 func (k *KcpConnManager) Close() {
@@ -189,6 +196,7 @@ func (k *KcpConnManager) acceptHandle(tcpMode bool, kcpListener *kcp.Listener, t
 			kcpConn.SetACKNoDelay(true)
 			kcpConn.SetWriteDelay(false)
 			kcpConn.SetWindowSize(256, 256)
+			kcpConn.SetMtu(1200)
 			conn = NewKcpConn(kcpConn)
 		} else {
 			tcpConn, err := tcpListener.AcceptTCP()
@@ -288,7 +296,7 @@ func (k *KcpConnManager) acceptHandle(tcpMode bool, kcpListener *kcp.Listener, t
 func (k *KcpConnManager) kcpEnetHandle(listener *kcp.Listener) {
 	logger.Info("kcp enet handle start")
 	for {
-		enetNotify := <-listener.EnetNotify
+		enetNotify := <-listener.GetEnetNotifyChan()
 		logger.Info("[Kcp Enet] addr: %v, conv: %v, sessionId: %v, connType: %v, enetType: %v",
 			enetNotify.Addr, enetNotify.Conv, enetNotify.SessionId, enetNotify.ConnType, enetNotify.EnetType)
 		switch enetNotify.ConnType {
@@ -305,22 +313,16 @@ func (k *KcpConnManager) kcpEnetHandle(listener *kcp.Listener) {
 				ConnType:  kcp.ConnEnetEst,
 				EnetType:  enetNotify.EnetType,
 			})
-		case kcp.ConnEnetEst:
 		case kcp.ConnEnetFin:
 			session := k.GetSession(enetNotify.SessionId)
 			if session == nil {
-				logger.Error("session not exist, sessionId: %v", enetNotify.SessionId)
 				continue
 			}
 			if session.conn.GetConv() != enetNotify.Conv {
 				logger.Error("conv not match, sessionId: %v", enetNotify.SessionId)
 				continue
 			}
-			session.conn.SendEnetNotifyToPeer(&kcp.Enet{
-				ConnType: kcp.ConnEnetFin,
-				EnetType: enetNotify.EnetType,
-			})
-			session.conn.Close()
+			k.closeKcpConn(session, enetNotify.EnetType)
 		case kcp.ConnEnetAddrChange:
 			// 连接地址改变通知
 			k.kcpEventChan <- &KcpEvent{
@@ -566,11 +568,16 @@ func (k *KcpConnManager) closeKcpConn(session *Session, enetType uint32) {
 	// 清理数据
 	k.DeleteSession(session.sessionId, session.userId)
 	// 关闭连接
+	if !session.conn.IsTcpMode() {
+		k.kcpListener.SendEnetNotifyToPeer(&kcp.Enet{
+			Addr:      session.conn.RemoteAddr(),
+			SessionId: session.conn.GetSessionId(),
+			Conv:      session.conn.GetConv(),
+			ConnType:  kcp.ConnEnetFin,
+			EnetType:  enetType,
+		})
+	}
 	session.conn.Close()
-	session.conn.SendEnetNotifyToPeer(&kcp.Enet{
-		ConnType: kcp.ConnEnetFin,
-		EnetType: enetType,
-	})
 	// 连接关闭通知
 	k.kcpEventChan <- &KcpEvent{
 		SessionId:    session.sessionId,

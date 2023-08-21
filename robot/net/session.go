@@ -55,6 +55,7 @@ func NewSession(gateAddr string, dispatchKey []byte) (*Session, error) {
 	conn.SetACKNoDelay(true)
 	conn.SetWriteDelay(false)
 	conn.SetWindowSize(256, 256)
+	conn.SetMtu(1200)
 	r := &Session{
 		Conn:                   conn,
 		XorKey:                 dispatchKey,

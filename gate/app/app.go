@@ -81,7 +81,10 @@ func Run(ctx context.Context, configFile string) error {
 	}
 	defer db.CloseDao()
 
-	kcpConnManager := net.NewKcpConnManager(db, messageQueue, discoveryClient)
+	kcpConnManager, err := net.NewKcpConnManager(db, messageQueue, discoveryClient)
+	if err != nil {
+		return err
+	}
 	defer kcpConnManager.Close()
 
 	c := make(chan os.Signal, 1)

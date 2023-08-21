@@ -147,7 +147,7 @@ func newUDPSession(conv uint64, l *Listener, conn net.PacketConn, ownConn bool, 
 	sess.kcp.ReserveBytes(sess.headerSize)
 
 	if sess.l == nil { // it's a client connection
-		go sess.readLoop()
+		go sess.rx()
 		atomic.AddUint64(&DefaultSnmp.ActiveOpens, 1)
 	} else {
 		atomic.AddUint64(&DefaultSnmp.PassiveOpens, 1)
@@ -231,16 +231,16 @@ func (s *UDPSession) Read(b []byte) (n int, err error) {
 	}
 }
 
+func (s *UDPSession) GetMaxPayloadLen() int {
+	return 256 * int(s.kcp.mss)
+}
+
 // Write implements net.Conn
 func (s *UDPSession) Write(b []byte) (n int, err error) {
 	if len(b) > s.GetMaxPayloadLen() {
 		return 0, errors.New("send payload above 256*mss")
 	}
 	return s.WriteBuffers([][]byte{b})
-}
-
-func (s *UDPSession) GetMaxPayloadLen() int {
-	return 256 * int(s.kcp.mss)
 }
 
 // WriteBuffers write a vector of byte slices to the underlying connection
@@ -676,9 +676,16 @@ type (
 
 		rd atomic.Value // read deadline for Accept()
 
-		EnetNotify chan *Enet // Enet事件上报管道
+		xconn           batchConn // for x/net
+		xconnWriteError error
+
+		enetNotifyChan chan *Enet // Enet事件上报管道
 	}
 )
+
+func (l *Listener) GetEnetNotifyChan() chan *Enet {
+	return l.enetNotifyChan
+}
 
 // packet input stage
 func (l *Listener) packetInput(data []byte, addr net.Addr, rawConv uint64) {
@@ -885,8 +892,20 @@ func serveConn(conn net.PacketConn, ownConn bool) (*Listener, error) {
 	l.chSessionClosed = make(chan net.Addr)
 	l.die = make(chan struct{})
 	l.chSocketReadError = make(chan struct{})
-	l.EnetNotify = make(chan *Enet, 1000)
-	go l.monitor()
+	l.enetNotifyChan = make(chan *Enet, 1000)
+
+	if _, ok := l.conn.(*net.UDPConn); ok {
+		addr, err := net.ResolveUDPAddr("udp", l.conn.LocalAddr().String())
+		if err == nil {
+			if addr.IP.To4() != nil {
+				l.xconn = ipv4.NewPacketConn(l.conn)
+			} else {
+				l.xconn = ipv6.NewPacketConn(l.conn)
+			}
+		}
+	}
+
+	go l.rx()
 	return l, nil
 }
 

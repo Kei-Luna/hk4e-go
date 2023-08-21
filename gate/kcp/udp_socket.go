@@ -8,13 +8,13 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-func (s *UDPSession) defaultReadLoop() {
+// 客户端收包循环
+func (s *UDPSession) defaultRx() {
 	buf := make([]byte, mtuLimit)
 	var src string
 	for {
 		if n, addr, err := s.conn.ReadFrom(buf); err == nil {
 			udpPayload := buf[:n]
-
 			// make sure the packet is from the same source
 			if src == "" { // set source address
 				src = addr.String()
@@ -22,9 +22,8 @@ func (s *UDPSession) defaultReadLoop() {
 				s.remote = addr
 				src = addr.String()
 			}
-
 			if n == 20 {
-				connType, _, sessionId, conv, _, err := ParseEnet(udpPayload)
+				connType, enetType, sessionId, conv, _, err := ParseEnet(udpPayload)
 				if err != nil {
 					continue
 				}
@@ -32,11 +31,17 @@ func (s *UDPSession) defaultReadLoop() {
 					continue
 				}
 				if connType == ConnEnetFin {
+					s.defaultSendEnetNotifyToPeer(&Enet{
+						Addr:      s.remote.String(),
+						SessionId: sessionId,
+						Conv:      conv,
+						ConnType:  ConnEnetFin,
+						EnetType:  enetType,
+					})
 					_ = s.Close()
 					continue
 				}
 			}
-
 			s.packetInput(udpPayload)
 		} else {
 			s.notifyReadError(err)
@@ -45,7 +50,8 @@ func (s *UDPSession) defaultReadLoop() {
 	}
 }
 
-func (l *Listener) defaultMonitor() {
+// 服务器全局收包循环
+func (l *Listener) defaultRx() {
 	buf := make([]byte, mtuLimit)
 	for {
 		if n, from, err := l.conn.ReadFrom(buf); err == nil {
@@ -64,31 +70,13 @@ func (l *Listener) defaultMonitor() {
 				switch connType {
 				case ConnEnetSyn:
 					// 客户端前置握手获取conv
-					l.EnetNotify <- &Enet{
-						Addr:      from.String(),
-						SessionId: sessionId,
-						Conv:      conv,
-						ConnType:  ConnEnetSyn,
-						EnetType:  enetType,
-					}
+					l.enetNotifyChan <- &Enet{Addr: from.String(), SessionId: sessionId, Conv: conv, ConnType: ConnEnetSyn, EnetType: enetType}
 				case ConnEnetEst:
 					// 连接建立
-					l.EnetNotify <- &Enet{
-						Addr:      from.String(),
-						SessionId: sessionId,
-						Conv:      conv,
-						ConnType:  ConnEnetEst,
-						EnetType:  enetType,
-					}
+					l.enetNotifyChan <- &Enet{Addr: from.String(), SessionId: sessionId, Conv: conv, ConnType: ConnEnetEst, EnetType: enetType}
 				case ConnEnetFin:
 					// 连接断开
-					l.EnetNotify <- &Enet{
-						Addr:      from.String(),
-						SessionId: sessionId,
-						Conv:      conv,
-						ConnType:  ConnEnetFin,
-						EnetType:  enetType,
-					}
+					l.enetNotifyChan <- &Enet{Addr: from.String(), SessionId: sessionId, Conv: conv, ConnType: ConnEnetFin, EnetType: enetType}
 				default:
 					continue
 				}
@@ -105,12 +93,7 @@ func (l *Listener) defaultMonitor() {
 				if conn.remote.String() != from.String() {
 					conn.remote = from
 					// 连接地址改变
-					l.EnetNotify <- &Enet{
-						Addr:      conn.remote.String(),
-						SessionId: sessionId,
-						Conv:      conv,
-						ConnType:  ConnEnetAddrChange,
-					}
+					l.enetNotifyChan <- &Enet{Addr: conn.remote.String(), SessionId: sessionId, Conv: conv, ConnType: ConnEnetAddrChange}
 				}
 			}
 			l.packetInput(udpPayload, from, rawConv)
@@ -121,6 +104,7 @@ func (l *Listener) defaultMonitor() {
 	}
 }
 
+// 公共发包接口
 func (s *UDPSession) defaultTx(txqueue []ipv4.Message) {
 	nbytes := 0
 	npkts := 0
@@ -144,6 +128,7 @@ func (s *UDPSession) defaultTx(txqueue []ipv4.Message) {
 	atomic.AddUint64(&DefaultSnmp.OutBytes, uint64(nbytes))
 }
 
+// 服务器Enet事件发送接口
 func (l *Listener) defaultSendEnetNotifyToPeer(enet *Enet) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", enet.Addr)
 	if err != nil {
@@ -156,13 +141,11 @@ func (l *Listener) defaultSendEnetNotifyToPeer(enet *Enet) {
 	_, _ = l.conn.WriteTo(data, remoteAddr)
 }
 
+// 客户端Enet事件发送接口
 func (s *UDPSession) defaultSendEnetNotifyToPeer(enet *Enet) {
 	data := BuildEnet(enet.ConnType, enet.EnetType, s.GetSessionId(), s.GetConv())
 	if data == nil {
 		return
 	}
-	s.defaultTx([]ipv4.Message{{
-		Buffers: [][]byte{data},
-		Addr:    s.remote,
-	}})
+	_, _ = s.conn.(*net.UDPConn).Write(data)
 }
