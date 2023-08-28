@@ -30,7 +30,7 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 	r.cmdNameCmdIdMap = make(map[string]uint16)
 	r.cmdIdProtoObjCacheMap = make(map[uint16]*sync.Pool)
 	r.cmdIdProtoObjFastNewMap = make(map[uint16]func() any)
-	if config.GetConfig().Hk4e.ForwardModeEnable || config.GetConfig().Hk4eRobot.RegisterAllMessage {
+	if config.GetConfig().Hk4e.ForwardModeEnable || config.GetConfig().Hk4eRobot.RegisterAllProtoMessage {
 		r.registerAllMessage()
 	} else {
 		r.registerMessage()
