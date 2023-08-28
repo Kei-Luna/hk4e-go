@@ -77,6 +77,7 @@ type Hk4eRobot struct {
 	ClientMoveRangeExt           int32  `toml:"client_move_range_ext"`           // 客户端模拟移动区域半径
 	ForwardChecksum              string `toml:"forward_checksum"`                // 转发模式强制指定校验和
 	ForwardChecksumClientVersion string `toml:"forward_checksum_client_version"` // 转发模式强制指定校验和客户端版本
+	RegisterAllProtoMessage      bool   `toml:"register_all_proto_message"`      // 注册全部pb消息
 }
 
 // MQ 消息队列

@@ -26,8 +26,8 @@ type DispatchInfo struct {
 }
 
 func GetDispatchInfo(regionListUrl string, regionListParam string, curRegionUrl string, curRegionParam string, keyId string) (*DispatchInfo, error) {
-	logger.Info("http get url: %v", regionListUrl+"/query_region_list"+regionListParam)
-	regionListBase64, err := httpclient.GetRaw(regionListUrl + "/query_region_list" + regionListParam)
+	logger.Info("http get url: %v", regionListUrl+regionListParam)
+	regionListBase64, err := httpclient.GetRaw(regionListUrl + regionListParam)
 	if err != nil {
 		return nil, err
 	}

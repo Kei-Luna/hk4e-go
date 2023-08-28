@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"hk4e/common/config"
+	"hk4e/common/constant"
 	hk4egatenet "hk4e/gate/net"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/object"
@@ -22,8 +23,10 @@ func Logic(account string, session *net.Session) {
 	pingSeq := uint32(0)
 	enterSceneDone := false
 	sceneBeginTime := uint32(0)
+	sceneTime := uint32(0)
 	bornPos := new(proto.Vector)
 	currPos := new(proto.Vector)
+	sceneEntityMap := make(map[uint32]struct{})
 	avatarEntityId := uint32(0)
 	moveRot := random.GetRandomFloat32(0.0, 359.9)
 	moveReliableSeq := uint32(0)
@@ -47,10 +50,18 @@ func Logic(account string, session *net.Session) {
 			case cmd.PlayerDataNotify:
 				ntf := protoMsg.PayloadMessage.(*proto.PlayerDataNotify)
 				logger.Info("player name: %v", ntf.NickName)
+				if ntf.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL].Val == 1 {
+					session.SendMsg(cmd.GmTalkReq, &proto.GmTalkReq{Msg: "quest accept 30904"})
+					session.SendMsg(cmd.GmTalkReq, &proto.GmTalkReq{Msg: "player level 60"})
+				}
 			case cmd.PlayerEnterSceneNotify:
 				ntf := protoMsg.PayloadMessage.(*proto.PlayerEnterSceneNotify)
+				logger.Info("player enter scene, sceneId: %v, account: %v", ntf.SceneId, account)
 				bornPos.X, bornPos.Y, bornPos.Z = ntf.Pos.X, ntf.Pos.Y, ntf.Pos.Z
 				currPos.X, currPos.Y, currPos.Z = ntf.Pos.X, ntf.Pos.Y, ntf.Pos.Z
+				enterSceneDone = false
+				sceneEntityMap = make(map[uint32]struct{})
+				avatarEntityId = 0
 				session.SendMsg(cmd.EnterSceneReadyReq, &proto.EnterSceneReadyReq{EnterSceneToken: ntf.EnterSceneToken})
 			case cmd.EnterSceneReadyRsp:
 				ntf := protoMsg.PayloadMessage.(*proto.EnterSceneReadyRsp)
@@ -66,14 +77,47 @@ func Logic(account string, session *net.Session) {
 				if config.GetConfig().Hk4eRobot.DosLoopLogin {
 					session.Close()
 				}
+			case cmd.SceneTimeNotify:
+				ntf := protoMsg.PayloadMessage.(*proto.SceneTimeNotify)
+				sceneTime = uint32(ntf.SceneTime)
 			case cmd.SceneEntityAppearNotify:
 				ntf := protoMsg.PayloadMessage.(*proto.SceneEntityAppearNotify)
 				for _, sceneEntityInfo := range ntf.EntityList {
-					if sceneEntityInfo.EntityType != proto.ProtEntityType_PROT_ENTITY_AVATAR {
-						continue
+					sceneEntityMap[sceneEntityInfo.EntityId] = struct{}{}
+					if sceneEntityInfo.EntityType == proto.ProtEntityType_PROT_ENTITY_AVATAR {
+						avatarEntity := sceneEntityInfo.Entity.(*proto.SceneEntityInfo_Avatar).Avatar
+						if avatarEntity.Uid == session.Uid {
+							avatarEntityId = sceneEntityInfo.EntityId
+							moveReliableSeq = sceneEntityInfo.LastMoveReliableSeq
+						}
 					}
-					avatarEntityId = sceneEntityInfo.EntityId
 				}
+			case cmd.SceneEntityDisappearNotify:
+				ntf := protoMsg.PayloadMessage.(*proto.SceneEntityDisappearNotify)
+				for _, entityId := range ntf.EntityList {
+					delete(sceneEntityMap, entityId)
+				}
+			case cmd.PlayerApplyEnterMpNotify:
+				ntf := protoMsg.PayloadMessage.(*proto.PlayerApplyEnterMpNotify)
+				session.SendMsg(cmd.PlayerApplyEnterMpResultReq, &proto.PlayerApplyEnterMpResultReq{ApplyUid: ntf.SrcPlayerInfo.Uid, IsAgreed: true})
+			case cmd.PlayerApplyEnterMpResultNotify:
+				ntf := protoMsg.PayloadMessage.(*proto.PlayerApplyEnterMpResultNotify)
+				if ntf.IsAgreed {
+					session.SendMsg(cmd.JoinPlayerSceneReq, &proto.JoinPlayerSceneReq{TargetUid: ntf.TargetUid})
+				}
+			case cmd.ServerLogNotify:
+				ntf := protoMsg.PayloadMessage.(*proto.ServerLogNotify)
+				logger.Debug("[Server Log] %v, account: %v", ntf.ServerLog, account)
+			case cmd.GetOnlinePlayerListRsp:
+				rsp := protoMsg.PayloadMessage.(*proto.GetOnlinePlayerListRsp)
+				for _, onlinePlayerInfo := range rsp.PlayerInfoList {
+					if onlinePlayerInfo.MpSettingType != 0 {
+						session.SendMsg(cmd.PlayerApplyEnterMpReq, &proto.PlayerApplyEnterMpReq{TargetUid: onlinePlayerInfo.Uid})
+					}
+				}
+			case cmd.ClientReconnectNotify:
+				logger.Info("client reconnect, account: %v", account)
+				session.Close()
 			}
 		case <-session.DeadEvent:
 			logger.Info("robot exit, account: %v", account)
@@ -107,7 +151,7 @@ func Logic(account string, session *net.Session) {
 							State:  proto.MotionState_MOTION_RUN,
 							RefPos: new(proto.Vector),
 						},
-						SceneTime:   uint32(time.Now().UnixMilli()) - sceneBeginTime,
+						SceneTime:   uint32(time.Now().UnixMilli()) - sceneBeginTime + sceneTime,
 						ReliableSeq: moveReliableSeq,
 						IsReliable:  true,
 					}

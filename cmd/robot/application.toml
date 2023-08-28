@@ -11,7 +11,7 @@ client_proto_proxy_enable = false # 是否开启客户端协议代理功能
 forward_mode_enable = false # 是否开启网关到机器人的转发功能
 
 [hk4e_robot]
-region_list_url = "https://hk4e.flswld.com" # 一级dispatch地址
+region_list_url = "https://hk4e.flswld.com/query_region_list" # 一级dispatch地址
 region_list_param = "" # 一级dispatch的url参数
 select_region_index = 0 # 选择的二级dispatch索引
 cur_region_url = "https://hk4e.flswld.com/query_cur_region" # 二级dispatch地址 可强制指定 为空则使用一级dispatch获取的地址
@@ -30,6 +30,7 @@ client_move_speed = 10 # 客户端模拟移动速度
 client_move_range_ext = 100 # 客户端模拟移动区域半径
 forward_checksum = "" # 转发模式强制指定校验和
 forward_checksum_client_version = "" # 转发模式强制指定校验和客户端版本
+register_all_proto_message = true # 注册全部pb消息
 
 [mq]
 nats_url = "nats://nats:4222"

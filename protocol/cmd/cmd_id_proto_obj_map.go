@@ -30,10 +30,10 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 	r.cmdNameCmdIdMap = make(map[string]uint16)
 	r.cmdIdProtoObjCacheMap = make(map[uint16]*sync.Pool)
 	r.cmdIdProtoObjFastNewMap = make(map[uint16]func() any)
-	if !config.GetConfig().Hk4e.ForwardModeEnable {
-		r.registerMessage()
-	} else {
+	if config.GetConfig().Hk4e.ForwardModeEnable || config.GetConfig().Hk4eRobot.RegisterAllMessage {
 		r.registerAllMessage()
+	} else {
+		r.registerMessage()
 	}
 	return r
 }
@@ -384,6 +384,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GmTalkReq, func() any { return new(proto.GmTalkReq) })
 	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })
 	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })
+	c.regMsg(ServerLogNotify, func() any { return new(proto.ServerLogNotify) })
 }
 
 func (c *CmdProtoMap) regMsg(cmdId uint16, protoObjNewFunc func() any) {

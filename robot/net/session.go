@@ -135,29 +135,27 @@ func (s *Session) recvHandle() {
 			protoMsgList := hk4egatenet.ProtoDecode(v, s.ServerCmdProtoMap, s.ClientCmdProtoMap)
 			for _, vv := range protoMsgList {
 				s.RecvChan <- vv
-				if config.GetConfig().Hk4e.ForwardModeEnable {
-					cmdName := string(vv.PayloadMessage.ProtoReflect().Descriptor().FullName())
-					headMsg, _ := json.Marshal(vv.HeadMessage)
-					payloadMsg, _ := json.Marshal(vv.PayloadMessage)
-					packet := &Packet{
-						Time:       uint64(time.Now().UnixMilli()),
-						Dir:        "RECV",
-						CmdId:      uint32(vv.CmdId),
-						CmdName:    cmdName,
-						HeadMsg:    string(headMsg),
-						PayloadMsg: string(payloadMsg),
-					}
-					packetData, _ := json.Marshal(packet)
-					s.PktLock.Lock()
-					s.PktList = append(s.PktList, packet)
-					if s.PktCapWsConn != nil {
-						err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
-						if err != nil {
-							s.PktCapWsConn = nil
-						}
-					}
-					s.PktLock.Unlock()
+				cmdName := string(vv.PayloadMessage.ProtoReflect().Descriptor().FullName())
+				headMsg, _ := json.Marshal(vv.HeadMessage)
+				payloadMsg, _ := json.Marshal(vv.PayloadMessage)
+				packet := &Packet{
+					Time:       uint64(time.Now().UnixMilli()),
+					Dir:        "RECV",
+					CmdId:      uint32(vv.CmdId),
+					CmdName:    cmdName,
+					HeadMsg:    string(headMsg),
+					PayloadMsg: string(payloadMsg),
 				}
+				packetData, _ := json.Marshal(packet)
+				s.PktLock.Lock()
+				s.PktList = append(s.PktList, packet)
+				if s.PktCapWsConn != nil {
+					err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
+					if err != nil {
+						s.PktCapWsConn = nil
+					}
+				}
+				s.PktLock.Unlock()
 			}
 		}
 	}
@@ -187,28 +185,26 @@ func (s *Session) sendHandle() {
 			s.Close()
 			break
 		}
-		if config.GetConfig().Hk4e.ForwardModeEnable {
-			cmdName := string(protoMsg.PayloadMessage.ProtoReflect().Descriptor().FullName())
-			headMsg, _ := json.Marshal(protoMsg.HeadMessage)
-			payloadMsg, _ := json.Marshal(protoMsg.PayloadMessage)
-			packet := &Packet{
-				Time:       uint64(time.Now().UnixMilli()),
-				Dir:        "SEND",
-				CmdId:      uint32(protoMsg.CmdId),
-				CmdName:    cmdName,
-				HeadMsg:    string(headMsg),
-				PayloadMsg: string(payloadMsg),
-			}
-			packetData, _ := json.Marshal(packet)
-			s.PktLock.Lock()
-			s.PktList = append(s.PktList, packet)
-			if s.PktCapWsConn != nil {
-				err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
-				if err != nil {
-					s.PktCapWsConn = nil
-				}
-			}
-			s.PktLock.Unlock()
+		cmdName := string(protoMsg.PayloadMessage.ProtoReflect().Descriptor().FullName())
+		headMsg, _ := json.Marshal(protoMsg.HeadMessage)
+		payloadMsg, _ := json.Marshal(protoMsg.PayloadMessage)
+		packet := &Packet{
+			Time:       uint64(time.Now().UnixMilli()),
+			Dir:        "SEND",
+			CmdId:      uint32(protoMsg.CmdId),
+			CmdName:    cmdName,
+			HeadMsg:    string(headMsg),
+			PayloadMsg: string(payloadMsg),
 		}
+		packetData, _ := json.Marshal(packet)
+		s.PktLock.Lock()
+		s.PktList = append(s.PktList, packet)
+		if s.PktCapWsConn != nil {
+			err := s.PktCapWsConn.WriteMessage(websocket.TextMessage, packetData)
+			if err != nil {
+				s.PktCapWsConn = nil
+			}
+		}
+		s.PktLock.Unlock()
 	}
 }
