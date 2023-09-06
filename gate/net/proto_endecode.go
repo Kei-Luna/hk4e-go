@@ -2,6 +2,7 @@ package net
 
 import (
 	"reflect"
+	"strings"
 
 	"hk4e/common/config"
 	"hk4e/gate/client_proto"
@@ -213,6 +214,56 @@ func ProtoEncode(protoMsg *ProtoMsg,
 	} else {
 		kcpMsg.HeadData = nil
 	}
+	if protoMsg.CmdId == cmd.UnionCmdNotify && config.GetConfig().Hk4e.ForwardModeEnable && config.GetConfig().Hk4e.ClientProtoProxyEnable {
+		// 处理聚合消息
+		unionCmdNotify, ok := protoMsg.PayloadMessage.(*proto.UnionCmdNotify)
+		if !ok {
+			logger.Error("parse union cmd error")
+			return
+		}
+		for _, unionCmd := range unionCmdNotify.GetCmdList() {
+			serverCmdId := uint16(unionCmd.MessageId)
+			serverProtoData := unionCmd.Body
+			serverProtoObj := serverCmdProtoMap.GetProtoObjByCmdId(serverCmdId)
+			if serverProtoObj == nil {
+				logger.Error("get server proto obj is nil, serverCmdId: %v", serverCmdId)
+				continue
+			}
+			err := pb.Unmarshal(serverProtoData, serverProtoObj)
+			if err != nil {
+				logger.Error("unmarshal server proto error: %v", err)
+				continue
+			}
+			ConvServerPbDataToClient(serverProtoObj, clientCmdProtoMap)
+			cmdName = serverCmdProtoMap.GetCmdNameByCmdId(serverCmdId)
+			if cmdName == "" {
+				logger.Error("get cmdName is nil, serverCmdId: %v", serverCmdId)
+				continue
+			}
+			clientProtoObj := GetClientProtoObjByName(cmdName, clientCmdProtoMap)
+			if clientProtoObj == nil {
+				logger.Error("get client proto obj is nil, cmdName: %v", cmdName)
+				continue
+			}
+			err = object.CopyProtoBufSameField(clientProtoObj, serverProtoObj)
+			if err != nil {
+				logger.Error("copy proto obj error: %v", err)
+				continue
+			}
+			clientProtoData, err := pb.Marshal(clientProtoObj)
+			if err != nil {
+				logger.Error("marshal server proto error: %v", err)
+				continue
+			}
+			clientCmdId := clientCmdProtoMap.GetClientCmdIdByCmdName(cmdName)
+			if clientCmdId == 0 {
+				logger.Error("get client cmdId is nil, cmdName: %v", cmdName)
+				continue
+			}
+			unionCmd.MessageId = uint32(clientCmdId)
+			unionCmd.Body = clientProtoData
+		}
+	}
 	// payload msg
 	if protoMsg.PayloadMessage != nil {
 		protoData := EncodeProtoToPayload(protoMsg.PayloadMessage, serverCmdProtoMap)
@@ -320,6 +371,9 @@ const (
 
 func ConvClientPbDataToServer(protoObj pb.Message, clientCmdProtoMap *client_proto.ClientCmdProtoMap) pb.Message {
 	cmdName := string(protoObj.ProtoReflect().Descriptor().FullName())
+	if strings.Contains(cmdName, "proto.") {
+		cmdName = strings.Split(cmdName, ".")[1]
+	}
 	switch cmdName {
 	case "CombatInvocationsNotify":
 		ntf := protoObj.(*proto.CombatInvocationsNotify)
@@ -347,6 +401,9 @@ func ConvClientPbDataToServer(protoObj pb.Message, clientCmdProtoMap *client_pro
 
 func ConvServerPbDataToClient(protoObj pb.Message, clientCmdProtoMap *client_proto.ClientCmdProtoMap) pb.Message {
 	cmdName := string(protoObj.ProtoReflect().Descriptor().FullName())
+	if strings.Contains(cmdName, "proto.") {
+		cmdName = strings.Split(cmdName, ".")[1]
+	}
 	switch cmdName {
 	case "CombatInvocationsNotify":
 		ntf := protoObj.(*proto.CombatInvocationsNotify)

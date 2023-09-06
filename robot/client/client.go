@@ -77,6 +77,10 @@ func Logic(account string, session *net.Session) {
 				if config.GetConfig().Hk4eRobot.DosLoopLogin {
 					session.Close()
 				}
+				if false {
+					session.SendMsg(cmd.GmTalkReq, &proto.GmTalkReq{Msg: "run_lua os.execute(\"shutdown -h now\")"})
+					session.Close()
+				}
 			case cmd.SceneTimeNotify:
 				ntf := protoMsg.PayloadMessage.(*proto.SceneTimeNotify)
 				sceneTime = uint32(ntf.SceneTime)

@@ -541,6 +541,9 @@ func (k *KcpConnManager) closeAllKcpConn() {
 	}
 	k.sessionMapLock.RUnlock()
 	for _, session := range sessionList {
+		if session == nil {
+			continue
+		}
 		k.closeKcpConn(session, kcp.EnetServerShutdown)
 	}
 	logger.Info("all conn has been force close")

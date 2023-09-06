@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"hk4e/common/config"
 	"hk4e/common/mq"
@@ -170,7 +170,7 @@ func (c *Controller) queryRegionList(ctx *gin.Context) {
 		regionListBase64 := base64.StdEncoding.EncodeToString(regionListData)
 		_, _ = ctx.Writer.WriteString(regionListBase64)
 	} else {
-		regionListBase64, err := c.queryRegionListForwardMode(ctx.Request.RequestURI)
+		regionListBase64, err := c.queryRegionListForwardMode()
 		if err != nil {
 			logger.Error("get forward dispatch region list info error: %v", err)
 			c.dispatchReqErrorRsp(ctx, 1)
@@ -211,7 +211,7 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 		}
 		regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, stopServerInfo)
 	} else {
-		regionCurr, err = c.queryCurRegionForwardMode(ctx.Request.RequestURI, version, ctx.Query("key_id"), gateServerAddr)
+		regionCurr, err = c.queryCurRegionForwardMode(version, gateServerAddr)
 		if err != nil {
 			logger.Error("get forward dispatch curr region info error: %v", err)
 			c.dispatchReqErrorRsp(ctx, 2)
@@ -352,9 +352,8 @@ func (c *Controller) querySecurityFile(ctx *gin.Context) {
 
 // 转发模式
 
-func (c *Controller) queryRegionListForwardMode(reqUrl string) (string, error) {
-	param := reqUrl[strings.Index(reqUrl, "?"):]
-	regionListBase64Raw, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardRegionUrl + param)
+func (c *Controller) queryRegionListForwardMode() (string, error) {
+	regionListBase64Raw, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardRegionUrl)
 	if err != nil {
 		logger.Error("queryRegionListForwardMode error: %v", err)
 		return "", err
@@ -374,6 +373,29 @@ func (c *Controller) queryRegionListForwardMode(reqUrl string) (string, error) {
 	for _, regionSimpleInfo := range queryRegionListHttpRsp.RegionList {
 		regionSimpleInfo.DispatchUrl = config.GetConfig().Hk4e.DispatchUrl
 	}
+	ec2b, err := random.LoadEc2bKey(queryRegionListHttpRsp.ClientSecretKey)
+	if err != nil {
+		logger.Error("queryRegionListForwardMode error: %v", err)
+		return "", err
+	}
+	queryRegionListHttpRsp.ClientSecretKey = c.ec2b.Bytes()
+	endec.Xor(queryRegionListHttpRsp.ClientCustomConfigEncrypted, ec2b.XorKey())
+	logger.Info("ClientCustomConfigEncrypted: %v", string(queryRegionListHttpRsp.ClientCustomConfigEncrypted))
+	clientCustomConfig, _ := json.Marshal(&ClientCustomConfig{
+		SdkEnv:         "2",
+		CheckDevice:    false,
+		LoadPatch:      false,
+		ShowException:  false,
+		RegionConfig:   "pm|fk|add",
+		DownloadMode:   0,
+		DebugMenu:      true,
+		DebugLogSwitch: []int32{0},
+		DebugLog:       true,
+		CodeSwitch:     []int32{3628},
+		CoverSwitch:    []int32{40},
+	})
+	queryRegionListHttpRsp.ClientCustomConfigEncrypted = clientCustomConfig
+	endec.Xor(queryRegionListHttpRsp.ClientCustomConfigEncrypted, c.ec2b.XorKey())
 	regionListData, err := pb.Marshal(queryRegionListHttpRsp)
 	if err != nil {
 		logger.Error("queryRegionListForwardMode error: %v", err)
@@ -383,9 +405,14 @@ func (c *Controller) queryRegionListForwardMode(reqUrl string) (string, error) {
 	return regionListBase64, nil
 }
 
-func (c *Controller) queryCurRegionForwardMode(reqUrl string, version int, keyId string, gateServerAddr *api.GateServerAddr) (*proto.QueryCurrRegionHttpRsp, error) {
-	param := reqUrl[strings.Index(reqUrl, "?"):]
-	regionCurrRawData, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardDispatchUrl + param)
+func (c *Controller) queryCurRegionForwardMode(version int, gateServerAddr *api.GateServerAddr) (*proto.QueryCurrRegionHttpRsp, error) {
+	forwardUrl, err := url.Parse(config.GetConfig().Hk4e.ForwardDispatchUrl)
+	if err != nil {
+		logger.Error("queryCurRegionForwardMode error: %v", err)
+		return nil, err
+	}
+	keyId := forwardUrl.Query().Get("key_id")
+	regionCurrRawData, err := httpclient.GetRaw(config.GetConfig().Hk4e.ForwardDispatchUrl)
 	if err != nil {
 		logger.Error("queryCurRegionForwardMode error: %v", err)
 		return nil, err
@@ -468,13 +495,36 @@ func (c *Controller) queryCurRegionForwardMode(reqUrl string, version int, keyId
 	})
 	regionCurr := queryCurrRegionHttpRsp
 	regionCurr.ClientSecretKey = c.ec2b.Bytes()
+	regionCurr.RegionInfo.SecretKey = c.ec2b.Bytes()
 	regionCurr.RegionInfo.GateserverIp = gateServerAddr.KcpAddr
 	regionCurr.RegionInfo.GateserverPort = gateServerAddr.KcpPort
 	endec.Xor(regionCurr.RegionCustomConfigEncrypted, ec2b.XorKey())
 	logger.Info("RegionCustomConfigEncrypted: %v", string(regionCurr.RegionCustomConfigEncrypted))
+	regionCustomConfig, _ := json.Marshal(&RegionCustomConfig{
+		CloseAntiDebug:   true,
+		ForceKill:        false,
+		AntiDebugPc:      false,
+		AntiDebugIos:     false,
+		AntiDebugAndroid: false,
+	})
+	regionCurr.RegionCustomConfigEncrypted = regionCustomConfig
 	endec.Xor(regionCurr.RegionCustomConfigEncrypted, c.ec2b.XorKey())
 	endec.Xor(regionCurr.ClientRegionCustomConfigEncrypted, ec2b.XorKey())
 	logger.Info("ClientRegionCustomConfigEncrypted: %v", string(regionCurr.ClientRegionCustomConfigEncrypted))
+	clientCustomConfig, _ := json.Marshal(&ClientCustomConfig{
+		SdkEnv:         "2",
+		CheckDevice:    false,
+		LoadPatch:      false,
+		ShowException:  false,
+		RegionConfig:   "pm|fk|add",
+		DownloadMode:   0,
+		DebugMenu:      true,
+		DebugLogSwitch: []int32{0},
+		DebugLog:       true,
+		CodeSwitch:     []int32{3628},
+		CoverSwitch:    []int32{40},
+	})
+	regionCurr.ClientRegionCustomConfigEncrypted = clientCustomConfig
 	endec.Xor(regionCurr.ClientRegionCustomConfigEncrypted, c.ec2b.XorKey())
 	return regionCurr, nil
 }
