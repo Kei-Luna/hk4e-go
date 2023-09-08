@@ -437,7 +437,7 @@ func (g *Game) AddSceneEntityNotifyToPlayer(player *model.Player, visionType pro
 		AppearType: visionType,
 		EntityList: entityList,
 	}
-	logger.Debug("[SceneEntityAppearNotify UC], type: %v, len: %v, uid: %v", ntf.AppearType, len(ntf.EntityList), player.PlayerId)
+	// logger.Debug("[SceneEntityAppearNotify UC], type: %v, len: %v, uid: %v", ntf.AppearType, len(ntf.EntityList), player.PlayerId)
 	g.SendMsg(cmd.SceneEntityAppearNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
@@ -449,7 +449,7 @@ func (g *Game) AddSceneEntityNotifyBroadcast(scene *Scene, visionType proto.Visi
 	}
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	logger.Debug("[SceneEntityAppearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.AppearType, len(ntf.EntityList), owner.PlayerId, aec)
+	// logger.Debug("[SceneEntityAppearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.AppearType, len(ntf.EntityList), owner.PlayerId, aec)
 	if aec {
 		g.SendToSceneAEC(scene, cmd.SceneEntityAppearNotify, owner.ClientSeq, ntf, aecUid)
 	} else {
@@ -463,7 +463,7 @@ func (g *Game) RemoveSceneEntityNotifyToPlayer(player *model.Player, visionType 
 		EntityList:    entityIdList,
 		DisappearType: visionType,
 	}
-	logger.Debug("[SceneEntityDisappearNotify UC], type: %v, len: %v, uid: %v", ntf.DisappearType, len(ntf.EntityList), player.PlayerId)
+	// logger.Debug("[SceneEntityDisappearNotify UC], type: %v, len: %v, uid: %v", ntf.DisappearType, len(ntf.EntityList), player.PlayerId)
 	g.SendMsg(cmd.SceneEntityDisappearNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
@@ -475,7 +475,7 @@ func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.V
 	}
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	logger.Debug("[SceneEntityDisappearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.DisappearType, len(ntf.EntityList), owner.PlayerId, aec)
+	// logger.Debug("[SceneEntityDisappearNotify BC], type: %v, len: %v, uid: %v, aec: %v", ntf.DisappearType, len(ntf.EntityList), owner.PlayerId, aec)
 	if aec {
 		g.SendToSceneAEC(scene, cmd.SceneEntityDisappearNotify, owner.ClientSeq, ntf, aecUid)
 	} else {

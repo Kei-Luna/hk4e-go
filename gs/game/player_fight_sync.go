@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -100,7 +101,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				logger.Error("parse EvtBeingHitInfo error: %v", err)
 				break
 			}
-			// logger.Debug("EvtBeingHitInfo: %v, ForwardType: %v", evtBeingHitInfo, entry.ForwardType)
+			logger.Debug("EvtBeingHitInfo: %+v, ForwardType: %v", evtBeingHitInfo, entry.ForwardType)
 			attackResult := evtBeingHitInfo.AttackResult
 			if attackResult == nil {
 				logger.Error("attackResult is nil")
@@ -142,7 +143,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				logger.Error("parse EntityMoveInfo error: %v", err)
 				break
 			}
-			// logger.Debug("EntityMoveInfo: %v, ForwardType: %v", entityMoveInfo, entry.ForwardType)
+			// logger.Debug("EntityMoveInfo: %+v, ForwardType: %v", entityMoveInfo, entry.ForwardType)
 			motionInfo := entityMoveInfo.MotionInfo
 			if motionInfo.Pos == nil || motionInfo.Rot == nil {
 				break
@@ -215,7 +216,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				logger.Error("parse EvtAnimatorParameterInfo error: %v", err)
 				break
 			}
-			// logger.Debug("EvtAnimatorParameterInfo: %v, ForwardType: %v", evtAnimatorParameterInfo, entry.ForwardType)
+			// logger.Debug("EvtAnimatorParameterInfo: %+v, ForwardType: %v", evtAnimatorParameterInfo, entry.ForwardType)
 		case proto.CombatTypeArgument_COMBAT_ANIMATOR_STATE_CHANGED:
 			evtAnimatorStateChangedInfo := new(proto.EvtAnimatorStateChangedInfo)
 			err := pb.Unmarshal(entry.CombatData, evtAnimatorStateChangedInfo)
@@ -223,7 +224,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				logger.Error("parse EvtAnimatorStateChangedInfo error: %v", err)
 				break
 			}
-			// logger.Debug("EvtAnimatorStateChangedInfo: %v, ForwardType: %v", evtAnimatorStateChangedInfo, entry.ForwardType)
+			// logger.Debug("EvtAnimatorStateChangedInfo: %+v, ForwardType: %v", evtAnimatorStateChangedInfo, entry.ForwardType)
 		}
 		player.CombatInvokeHandler.AddEntry(entry.ForwardType, entry)
 	}
@@ -443,7 +444,7 @@ func (g *Game) AbilityInvocationsNotify(player *model.Player, payloadMsg pb.Mess
 				logger.Error("parse AbilityMetaModifierChange error: %v", err)
 				continue
 			}
-			// logger.Debug("EntityId: %v, ModifierChange: %v", entry.EntityId, modifierChange)
+			// logger.Debug("EntityId: %v, ModifierChange: %+v", entry.EntityId, modifierChange)
 			// 处理耐力消耗
 			g.HandleAbilityStamina(player, entry)
 			g.handleGadgetEntityAbilityLow(player, entry.EntityId, entry.ArgumentType, modifierChange)
@@ -454,7 +455,7 @@ func (g *Game) AbilityInvocationsNotify(player *model.Player, payloadMsg pb.Mess
 				logger.Error("parse AbilityMixinCostStamina error: %v", err)
 				continue
 			}
-			// logger.Debug("EntityId: %v, MixinCostStamina: %v", entry.EntityId, costStamina)
+			// logger.Debug("EntityId: %v, MixinCostStamina: %+v", entry.EntityId, costStamina)
 			// 处理耐力消耗
 			g.HandleAbilityStamina(player, entry)
 		case proto.AbilityInvokeArgument_ABILITY_META_MODIFIER_DURABILITY_CHANGE:
@@ -464,7 +465,7 @@ func (g *Game) AbilityInvocationsNotify(player *model.Player, payloadMsg pb.Mess
 				logger.Error("parse AbilityMetaModifierDurabilityChange error: %v", err)
 				continue
 			}
-			// logger.Debug("EntityId: %v, DurabilityChange: %v", entry.EntityId, modifierDurabilityChange)
+			// logger.Debug("EntityId: %v, DurabilityChange: %+v", entry.EntityId, modifierDurabilityChange)
 		}
 	}
 }
@@ -476,7 +477,7 @@ func (g *Game) ClientAbilityInitFinishNotify(player *model.Player, payloadMsg pb
 	}
 	invokeHandler := model.NewInvokeHandler[proto.AbilityInvokeEntry]()
 	for _, entry := range req.Invokes {
-		// logger.Debug("ClientAbilityInitFinishNotify: %v", entry)
+		// logger.Debug("ClientAbilityInitFinishNotify: %+v", entry)
 		invokeHandler.AddEntry(entry.ForwardType, entry)
 	}
 	DoForward[proto.AbilityInvokeEntry](player, invokeHandler,
@@ -491,7 +492,7 @@ func (g *Game) ClientAbilityChangeNotify(player *model.Player, payloadMsg pb.Mes
 	}
 	invokeHandler := model.NewInvokeHandler[proto.AbilityInvokeEntry]()
 	for _, entry := range req.Invokes {
-		// logger.Debug("ClientAbilityChangeNotify: %v", entry)
+		// logger.Debug("ClientAbilityChangeNotify: %+v", entry)
 		invokeHandler.AddEntry(entry.ForwardType, entry)
 	}
 	DoForward[proto.AbilityInvokeEntry](player, invokeHandler,
@@ -554,7 +555,7 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	logger.Debug("EvtDoSkillSuccNotify: %v", req)
+	// logger.Debug("EvtDoSkillSuccNotify: %+v", req)
 	// 处理技能开始的耐力消耗
 	g.SkillStartStamina(player, req.CasterId, req.SkillId)
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_SKILL, "", int32(req.SkillId))
@@ -565,7 +566,7 @@ func (g *Game) EvtAvatarEnterFocusNotify(player *model.Player, payloadMsg pb.Mes
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtAvatarEnterFocusNotify: %v", req)
+	// logger.Debug("EvtAvatarEnterFocusNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -579,7 +580,7 @@ func (g *Game) EvtAvatarUpdateFocusNotify(player *model.Player, payloadMsg pb.Me
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtAvatarUpdateFocusNotify: %v", req)
+	// logger.Debug("EvtAvatarUpdateFocusNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -593,7 +594,7 @@ func (g *Game) EvtAvatarExitFocusNotify(player *model.Player, payloadMsg pb.Mess
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtAvatarExitFocusNotify: %v", req)
+	// logger.Debug("EvtAvatarExitFocusNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -607,7 +608,7 @@ func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg 
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtEntityRenderersChangedNotify: %v", req)
+	// logger.Debug("EvtEntityRenderersChangedNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -621,7 +622,7 @@ func (g *Game) EvtBulletDeactiveNotify(player *model.Player, payloadMsg pb.Messa
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtBulletDeactiveNotify: %v", req)
+	// logger.Debug("EvtBulletDeactiveNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -635,10 +636,16 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtBulletHitNotify: %v", req)
+	// logger.Debug("EvtBulletHitNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
+	}
+	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+	if bulletPhysicsEngine.IsRigidBody(req.EntityId) {
+		logger.Debug("[FPS] EvtBulletHitNotify: %+v", req)
+		bulletPhysicsEngine.DestroyRigidBody(req.EntityId)
+		_ = req.HitPoint
 	}
 	scene := world.GetSceneById(player.SceneId)
 	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, req)
@@ -649,7 +656,7 @@ func (g *Game) EvtBulletMoveNotify(player *model.Player, payloadMsg pb.Message) 
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtBulletMoveNotify: %v", req)
+	// logger.Debug("EvtBulletMoveNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -663,10 +670,38 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtCreateGadgetNotify: %v", req)
+	// logger.Debug("EvtCreateGadgetNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
+	}
+	// 甘雨冰属性蓄力箭
+	if req.ConfigId == 41037009 && world.GetMultiplayer() {
+		logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", req)
+		pitchAngleRaw := float64(req.InitEulerAngles.X)
+		pitchAngle := 0.0
+		if pitchAngleRaw < 90.0 {
+			pitchAngle = -pitchAngleRaw
+		} else if pitchAngleRaw > 270.0 {
+			pitchAngle = 360.0 - pitchAngleRaw
+		} else {
+			logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
+			return
+		}
+		vy := math.Sin(pitchAngle/360.0*2*math.Pi) * 50.0
+		vxz := math.Cos(pitchAngle/360.0*2*math.Pi) * 50.0
+		yawAngle := float64(req.InitEulerAngles.Y)
+		vx := math.Sin(yawAngle/360.0*2*math.Pi) * vxz
+		vz := math.Cos(yawAngle/360.0*2*math.Pi) * vxz
+		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+		activeAvatarId := world.GetPlayerActiveAvatarId(player)
+		bulletPhysicsEngine.CreateRigidBody(
+			req.EntityId,
+			world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
+			player.SceneId,
+			req.InitPos.X, req.InitPos.Y, req.InitPos.Z,
+			float32(vx), float32(vy), float32(vz),
+		)
 	}
 	scene := world.GetSceneById(player.SceneId)
 	if req.InitPos == nil {
@@ -689,7 +724,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtDestroyGadgetNotify: %v", req)
+	// logger.Debug("EvtDestroyGadgetNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -704,7 +739,7 @@ func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Messag
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtAiSyncSkillCdNotify: %v", req)
+	// logger.Debug("EvtAiSyncSkillCdNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -718,7 +753,7 @@ func (g *Game) EvtAiSyncCombatThreatInfoNotify(player *model.Player, payloadMsg 
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
-	// logger.Debug("EvtAiSyncCombatThreatInfoNotify: %v", req)
+	// logger.Debug("EvtAiSyncCombatThreatInfoNotify: %+v", req)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -755,6 +790,31 @@ func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
 		})
 	}
 	g.SendMsg(cmd.EntityAiSyncNotify, player.PlayerId, player.ClientSeq, entityAiSyncNotify)
+}
+
+func (g *Game) ServerEvtBeingHitInfo(player *model.Player, atkEntityId uint32, defEntityId uint32, dmg float32) {
+	evtBeingHitInfo := &proto.EvtBeingHitInfo{
+		AttackResult: &proto.AttackResult{
+			AttackerId:  atkEntityId,
+			DefenseId:   defEntityId,
+			Damage:      dmg,
+			ElementType: constant.ELEMENT_TYPE_FIRE,
+		},
+	}
+	combatData, err := pb.Marshal(evtBeingHitInfo)
+	if err != nil {
+		logger.Error("marshal EvtBeingHitInfo error: %v", err)
+		return
+	}
+	GAME.CombatInvocationsNotify(player, &proto.CombatInvocationsNotify{
+		InvokeList: []*proto.CombatInvokeEntry{{
+			CombatData:   combatData,
+			ForwardType:  proto.ForwardType_FORWARD_ONLY_SERVER,
+			ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
+		}},
+	})
+	GAME.UnionCmdNotify(player, &proto.UnionCmdNotify{})
+
 }
 
 // TODO 一些很low的解决方案 我本来是不想写的 有多low？要多low有多low！

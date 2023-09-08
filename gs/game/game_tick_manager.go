@@ -263,6 +263,11 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				GAME.RestoreCountStaminaHandler(player)
 			}
 		}
+		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+		hitEntityList := bulletPhysicsEngine.Update(now)
+		for _, entity := range hitEntityList {
+			GAME.ServerEvtBeingHitInfo(world.owner, entity.GetId(), entity.GetId(), 100.0)
+		}
 	}
 }
 

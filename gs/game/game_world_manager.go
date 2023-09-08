@@ -66,6 +66,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		peerList:             make([]*model.Player, 0),
 		bigWorldAoi:          nil,
 	}
+	world.NewPhysicsEngine(w.sceneBlockAoiMap)
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world
 	if w.IsBigWorld(world) {
@@ -177,7 +178,7 @@ func (w *WorldManager) LoadSceneBlockAoiMap() {
 		}
 		// 将每个block作为aoi格子 并在格子中放入block拥有的所有group
 		aoiManager := alg.NewAoiManager()
-		aoiManager.SetAoiRange(minX, maxX, -1.0, 1.0, minZ, maxZ)
+		aoiManager.SetAoiRange(minX, maxX, -1000, 1000, minZ, maxZ)
 		aoiManager.Init3DRectAoiManager(numX, 1, numZ, true)
 		for _, block := range sceneLuaConfig.BlockMap {
 			for _, group := range block.GroupMap {
@@ -221,6 +222,11 @@ type World struct {
 	multiplayerTeam      *MultiplayerTeam              // 多人队伍
 	peerList             []*model.Player               // 玩家编号列表
 	bigWorldAoi          *alg.AoiManager               // 大世界的aoi管理器
+	bulletPhysicsEngine  *PhysicsEngine                // 蓄力箭子弹物理引擎
+}
+
+func (w *World) GetBulletPhysicsEngine() *PhysicsEngine {
+	return w.bulletPhysicsEngine
 }
 
 func (w *World) GetId() uint32 {

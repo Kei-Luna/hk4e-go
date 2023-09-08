@@ -161,9 +161,11 @@ func regionCubicContainPos(cubic *RegionCubic, pos *Vector3) bool {
 
 // 检测一个点是否在球体内
 func regionSphereContainPos(sphere *RegionSphere, pos *Vector3) bool {
-	distance3D := math.Sqrt(float64(sphere.pos.X-pos.X)*float64(sphere.pos.X-pos.X) +
-		float64(sphere.pos.Y-pos.Y)*float64(sphere.pos.Y-pos.Y) +
-		float64(sphere.pos.Z-pos.Z)*float64(sphere.pos.Z-pos.Z))
+	distance3D := math.Sqrt(
+		float64(sphere.pos.X-pos.X)*float64(sphere.pos.X-pos.X) +
+			float64(sphere.pos.Y-pos.Y)*float64(sphere.pos.Y-pos.Y) +
+			float64(sphere.pos.Z-pos.Z)*float64(sphere.pos.Z-pos.Z),
+	)
 	if float32(distance3D) < sphere.radius {
 		return true
 	} else {
@@ -173,8 +175,10 @@ func regionSphereContainPos(sphere *RegionSphere, pos *Vector3) bool {
 
 // 检测一个点是否在圆柱体内
 func regionCylinderContainPos(cylinder *RegionCylinder, pos *Vector3) bool {
-	distance2D := math.Sqrt(float64(cylinder.pos.X-pos.X)*float64(cylinder.pos.X-pos.X) +
-		float64(cylinder.pos.Z-pos.Z)*float64(cylinder.pos.Z-pos.Z))
+	distance2D := math.Sqrt(
+		float64(cylinder.pos.X-pos.X)*float64(cylinder.pos.X-pos.X) +
+			float64(cylinder.pos.Z-pos.Z)*float64(cylinder.pos.Z-pos.Z),
+	)
 	if float32(distance2D) >= cylinder.radius {
 		return false
 	}
