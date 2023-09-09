@@ -15,13 +15,14 @@ const (
 
 // RigidBody 刚体
 type RigidBody struct {
-	entityId       uint32       // 子弹实体id
-	avatarEntityId uint32       // 子弹发射者角色实体id
-	sceneId        uint32       // 子弹所在场景id
-	position       *alg.Vector3 // 坐标
-	velocity       *alg.Vector3 // 速度
-	drag           float32      // 阻力参数
-	mass           float32      // 质量
+	entityId          uint32       // 子弹实体id
+	avatarEntityId    uint32       // 子弹发射者角色实体id
+	hitAvatarEntityId uint32       // 子弹命中的角色实体id
+	sceneId           uint32       // 子弹所在场景id
+	position          *alg.Vector3 // 坐标
+	velocity          *alg.Vector3 // 速度
+	drag              float32      // 阻力参数
+	mass              float32      // 质量
 }
 
 // PhysicsEngine 物理引擎
@@ -42,8 +43,8 @@ func (w *World) NewPhysicsEngine(sceneBlockAoiMap map[uint32]*alg.AoiManager) {
 	}
 }
 
-func (p *PhysicsEngine) Update(now int64) []*Entity {
-	hitEntityList := make([]*Entity, 0)
+func (p *PhysicsEngine) Update(now int64) []*RigidBody {
+	hitList := make([]*RigidBody, 0)
 	dt := float32(now-p.lastUpdateTime) / 1000.0
 	for _, rigidBody := range p.rigidBodyMap {
 		aoiManager, exist := p.sceneBlockAoiMap[rigidBody.sceneId]
@@ -83,18 +84,19 @@ func (p *PhysicsEngine) Update(now int64) []*Entity {
 		rigidBody.position.Z += rigidBody.velocity.Z * dt
 		newPos := &alg.Vector3{X: rigidBody.position.X, Y: rigidBody.position.Y, Z: rigidBody.position.Z}
 		// 碰撞检测
-		entity := p.Collision(rigidBody.sceneId, rigidBody.avatarEntityId, oldPos, newPos)
-		if entity != nil {
-			hitEntityList = append(hitEntityList, entity)
+		hitAvatarEntityId := p.Collision(rigidBody.sceneId, rigidBody.avatarEntityId, oldPos, newPos)
+		if hitAvatarEntityId != 0 {
+			rigidBody.hitAvatarEntityId = hitAvatarEntityId
+			hitList = append(hitList, rigidBody)
 			p.DestroyRigidBody(rigidBody.entityId)
 		}
 		logger.Debug("[PhysicsEngineUpdate] e: %v, s: %v, p: %v, v: %v", rigidBody.entityId, rigidBody.sceneId, rigidBody.position, rigidBody.velocity)
 	}
 	p.lastUpdateTime = now
-	return hitEntityList
+	return hitList
 }
 
-func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos *alg.Vector3, newPos *alg.Vector3) *Entity {
+func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos *alg.Vector3, newPos *alg.Vector3) uint32 {
 	scene := p.world.GetSceneById(sceneId)
 	for _, entity := range scene.GetAllEntity() {
 		if entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
@@ -154,9 +156,9 @@ func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos 
 		if lineMaxY < shapeMinY || lineMinY > shapeMaxY {
 			continue
 		}
-		return entity
+		return entity.GetId()
 	}
-	return nil
+	return 0
 }
 
 func (p *PhysicsEngine) IsRigidBody(entityId uint32) bool {

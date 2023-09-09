@@ -359,71 +359,32 @@ func (g *Game) UpdatePlayerStamina(player *model.Player, staminaCost int32) {
 	g.SetPlayerStamina(player, stamina)
 }
 
-// DrownBackHandler 玩家溺水返回安全点
-func (g *Game) DrownBackHandler(player *model.Player) {
-	// 玩家暂停跳过
-	if player.Pause {
-		return
-	}
-	// 溺水返回时间为0代表不进行返回
-	if player.StaminaInfo.DrownBackDelay == 0 {
-		return
-	}
-
-	// TODO 耐力未完成的内容：
-	// 一直溺水回到距离最近的位置 ?
-	// 溺水队伍扣血
-	// 队伍都没血了显示死亡界面
-	// 角色技能影响重击耐力消耗 雷神开大后修改重击耐力为20 达达利亚 一斗
-	// 食物影响消耗的耐力 还有 角色天赋也会影响
-
-	// 先传送玩家再设置角色存活否则同时设置会传送前显示角色实体
-	if player.StaminaInfo.DrownBackDelay > 20 && player.SceneLoadState == model.SceneEnterDone {
-		// 设置角色存活
-		g.RevivePlayerAvatar(player)
-		// 重置溺水返回时间
-		player.StaminaInfo.DrownBackDelay = 0
-	} else if player.StaminaInfo.DrownBackDelay == 20 {
-		// TODO 队伍扣血
-		maxStamina := player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA]
-		// 设置玩家耐力为一半
-		g.SetPlayerStamina(player, maxStamina/2)
-		// 如果玩家的位置比锚点距离近则优先使用玩家位置
-		pos := &model.Vector{
-			X: player.SafePos.X,
-			Y: player.SafePos.Y,
-			Z: player.SafePos.Z,
-		}
-		// 传送玩家至安全位置
-		g.TeleportPlayer(
-			player,
-			proto.EnterReason_ENTER_REASON_REVIVAL,
-			player.SceneId,
-			pos,
-			new(model.Vector),
-			0,
-			0,
-		)
-	}
-	// 防止重置后又被修改
-	if player.StaminaInfo.DrownBackDelay != 0 {
-		player.StaminaInfo.DrownBackDelay++
-	}
-}
-
 // HandleDrown 处理玩家溺水
 func (g *Game) HandleDrown(player *model.Player, stamina uint32) {
-	// 溺水需要耐力等于0 返回延时不等于0代表已处理过溺水正在等待返回
-	if stamina != 0 || player.StaminaInfo.DrownBackDelay != 0 {
+	// 溺水需要耐力等于0
+	if stamina != 0 {
 		return
 	}
 	// 确保玩家正在游泳
 	if player.StaminaInfo.State == proto.MotionState_MOTION_SWIM_MOVE || player.StaminaInfo.State == proto.MotionState_MOTION_SWIM_DASH {
 		logger.Debug("player drown, curStamina: %v, state: %v", stamina, player.StaminaInfo.State)
 		// 设置角色为死亡
-		g.KillPlayerAvatar(player, proto.PlayerDieType_PLAYER_DIE_DRAWN)
-		// 溺水返回安全点 计时开始
-		player.StaminaInfo.DrownBackDelay = 1
+		world := WORLD_MANAGER.GetWorldById(player.WorldId)
+		if world == nil {
+			return
+		}
+		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+			dbAvatar := player.GetDbAvatar()
+			avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+			if !exist {
+				logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+				continue
+			}
+			if avatar.LifeState != constant.LIFE_STATE_ALIVE {
+				continue
+			}
+			g.KillPlayerAvatar(player, worldAvatar.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_DRAWN)
+		}
 	}
 }
 

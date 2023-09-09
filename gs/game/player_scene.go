@@ -263,6 +263,21 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendMsg(cmd.DungeonDataNotify, player.PlayerId, player.ClientSeq, &proto.DungeonDataNotify{})
 	}
 
+	if player.SceneEnterReason == uint32(proto.EnterReason_ENTER_REASON_REVIVAL) {
+		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+			dbAvatar := player.GetDbAvatar()
+			avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+			if !exist {
+				logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+				continue
+			}
+			if avatar.LifeState != constant.LIFE_STATE_DEAD {
+				continue
+			}
+			g.RevivePlayerAvatar(player, worldAvatar.GetAvatarId())
+		}
+	}
+
 	SceneInitFinishRsp := &proto.SceneInitFinishRsp{
 		EnterSceneToken: req.EnterSceneToken,
 	}
@@ -429,6 +444,37 @@ func (g *Game) SceneEntityDrownReq(player *model.Player, payloadMsg pb.Message) 
 	g.SendMsg(cmd.SceneEntityDrownRsp, player.PlayerId, player.ClientSeq, sceneEntityDrownRsp)
 }
 
+func (g *Game) EntityForceSyncReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.EntityForceSyncReq)
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+
+	motionInfo := req.MotionInfo
+	if motionInfo == nil {
+		return
+	}
+	g.handleEntityMove(player, world, scene, req.EntityId, &model.Vector{
+		X: float64(motionInfo.Pos.X),
+		Y: float64(motionInfo.Pos.Y),
+		Z: float64(motionInfo.Pos.Z),
+	}, &model.Vector{
+		X: float64(motionInfo.Rot.X),
+		Y: float64(motionInfo.Rot.Y),
+		Z: float64(motionInfo.Rot.Z),
+	}, true, nil)
+
+	rsp := &proto.EntityForceSyncRsp{
+		SceneTime:  req.SceneTime,
+		EntityId:   req.EntityId,
+		FailMotion: motionInfo,
+	}
+	g.SendMsg(cmd.EntityForceSyncRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
 /************************************************** 游戏功能 **************************************************/
 
 // AddSceneEntityNotifyToPlayer 添加的场景实体同步给玩家
@@ -549,70 +595,79 @@ func (g *Game) EntityFightPropUpdateNotifyBroadcast(scene *Scene, entity *Entity
 	g.SendToSceneA(scene, cmd.EntityFightPropUpdateNotify, 0, ntf)
 }
 
-// KillPlayerAvatar 杀死玩家活跃角色实体
-func (g *Game) KillPlayerAvatar(player *model.Player, dieType proto.PlayerDieType) {
+// KillPlayerAvatar 杀死玩家角色实体
+func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType proto.PlayerDieType) {
+	dbAvatar := player.GetDbAvatar()
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("get db avatar is nil, avatarId: %v", avatarId)
+		return
+	}
+	avatar.LifeState = constant.LIFE_STATE_DEAD
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 0
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
-	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	worldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
-	scene := world.GetSceneById(player.SceneId)
-	avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
-
-	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[activeAvatarId]
-	if !exist {
-		logger.Error("get active avatar is nil, avatarId: %v", activeAvatarId)
+	worldAvatar := world.GetPlayerWorldAvatar(player, avatarId)
+	if worldAvatar == nil {
 		return
 	}
+	scene := world.GetSceneById(player.SceneId)
+	entity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
 
-	avatarEntity.lifeState = constant.LIFE_STATE_DEAD
-
-	ntf := &proto.AvatarLifeStateChangeNotify{
-		LifeState:       uint32(avatarEntity.lifeState),
-		AttackTag:       "",
-		DieType:         dieType,
-		ServerBuffList:  nil,
-		MoveReliableSeq: avatarEntity.lastMoveReliableSeq,
-		SourceEntityId:  0,
-		AvatarGuid:      avatar.Guid,
+	activeAvatarId := world.GetPlayerActiveAvatarId(player)
+	if avatarId == activeAvatarId {
+		g.KillEntity(player, scene, entity.GetId(), dieType)
+	} else {
+		ntf := &proto.AvatarLifeStateChangeNotify{
+			AvatarGuid:      avatar.Guid,
+			LifeState:       uint32(avatar.LifeState),
+			DieType:         dieType,
+			MoveReliableSeq: entity.GetLastMoveReliableSeq(),
+		}
+		g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
 	}
-	g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
 }
 
 // RevivePlayerAvatar 复活玩家活跃角色实体
-func (g *Game) RevivePlayerAvatar(player *model.Player) {
+func (g *Game) RevivePlayerAvatar(player *model.Player, avatarId uint32) {
+	dbAvatar := player.GetDbAvatar()
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("get db avatar is nil, avatarId: %v", avatarId)
+		return
+	}
+	avatar.LifeState = constant.LIFE_STATE_ALIVE
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 100
+
+	g.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
+		AvatarGuid:   avatar.Guid,
+		FightPropMap: avatar.FightPropMap,
+	})
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
-	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	worldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
-	scene := world.GetSceneById(player.SceneId)
-	avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
-
-	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[activeAvatarId]
-	if !exist {
-		logger.Error("get active avatar is nil, avatarId: %v", activeAvatarId)
+	worldAvatar := world.GetPlayerWorldAvatar(player, avatarId)
+	if worldAvatar == nil {
 		return
 	}
-
-	avatar.LifeState = constant.LIFE_STATE_ALIVE
-	// 设置血量
-	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 110
-	g.EntityFightPropUpdateNotifyBroadcast(scene, avatarEntity)
-
-	avatarEntity.lifeState = constant.LIFE_STATE_REVIVE
+	scene := world.GetSceneById(player.SceneId)
+	entity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
 
 	ntf := &proto.AvatarLifeStateChangeNotify{
 		AvatarGuid:      avatar.Guid,
-		LifeState:       uint32(avatarEntity.lifeState),
+		LifeState:       uint32(avatar.LifeState),
 		DieType:         proto.PlayerDieType_PLAYER_DIE_NONE,
-		MoveReliableSeq: avatarEntity.lastMoveReliableSeq,
+		MoveReliableSeq: 0,
 	}
 	g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
+
+	entity.lifeState = constant.LIFE_STATE_ALIVE
+	entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 100
 }
 
 // KillEntity 杀死实体
@@ -621,14 +676,10 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	if entity == nil {
 		return
 	}
-	if entity.GetEntityType() == constant.ENTITY_TYPE_MONSTER {
-		// 设置血量
-		entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 0
-		g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
-		// 随机掉落
-		g.monsterDrop(player, entity)
-	}
+	// 设置血量
+	entity.lastDieType = int32(dieType)
 	entity.lifeState = constant.LIFE_STATE_DEAD
+	entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 0
 	ntf := &proto.LifeStateChangeNotify{
 		EntityId:        entity.GetId(),
 		LifeState:       uint32(entity.GetLifeState()),
@@ -636,8 +687,14 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 		MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 	}
 	g.SendToSceneA(scene, cmd.LifeStateChangeNotify, 0, ntf)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, false, 0)
+
+	if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+		return
+	}
+
 	// 删除实体
+	g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, false, 0)
 	scene.DestroyEntity(entity.GetId())
 	group := scene.GetGroupById(entity.GetGroupId())
 	if group == nil {
@@ -653,9 +710,10 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 
 	group.DestroyEntity(entity.GetId())
 
-	// 触发器检测
 	switch entity.GetEntityType() {
 	case constant.ENTITY_TYPE_MONSTER:
+		// 随机掉落
+		g.monsterDrop(player, entity)
 		// 怪物死亡触发器检测
 		g.MonsterDieTriggerCheck(player, group)
 	case constant.ENTITY_TYPE_GADGET:
@@ -1174,7 +1232,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType
 		TargetUid:              player.PlayerId,
 		EnterSceneToken:        enterSceneToken,
 		WorldLevel:             player.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
-		EnterReason:            uint32(proto.EnterReason_ENTER_REASON_LOGIN),
+		EnterReason:            player.SceneEnterReason,
 		IsFirstLoginEnterScene: true,
 		WorldType:              1,
 		SceneTagIdList:         make([]uint32, 0),
@@ -1195,31 +1253,28 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType
 func (g *Game) PacketPlayerEnterSceneNotifyTp(
 	player *model.Player,
 	enterType proto.EnterType,
-	enterReason proto.EnterReason,
 	prevSceneId uint32,
 	prevPos *model.Vector,
 	dungeonId uint32,
 	dungeonPointId uint32,
 ) *proto.PlayerEnterSceneNotify {
-	return g.PacketPlayerEnterSceneNotifyCore(player, player, enterType, enterReason, prevSceneId, prevPos, dungeonId, dungeonPointId)
+	return g.PacketPlayerEnterSceneNotifyCore(player, player, enterType, prevSceneId, prevPos, dungeonId, dungeonPointId)
 }
 
 func (g *Game) PacketPlayerEnterSceneNotifyMp(
 	player *model.Player,
 	targetPlayer *model.Player,
 	enterType proto.EnterType,
-	enterReason proto.EnterReason,
 	prevSceneId uint32,
 	prevPos *model.Vector,
 ) *proto.PlayerEnterSceneNotify {
-	return g.PacketPlayerEnterSceneNotifyCore(player, targetPlayer, enterType, enterReason, prevSceneId, prevPos, 0, 0)
+	return g.PacketPlayerEnterSceneNotifyCore(player, targetPlayer, enterType, prevSceneId, prevPos, 0, 0)
 }
 
 func (g *Game) PacketPlayerEnterSceneNotifyCore(
 	player *model.Player,
 	targetPlayer *model.Player,
 	enterType proto.EnterType,
-	enterReason proto.EnterReason,
 	prevSceneId uint32,
 	prevPos *model.Vector,
 	dungeonId uint32,
@@ -1251,7 +1306,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		TargetUid:       targetPlayer.PlayerId,
 		EnterSceneToken: enterSceneToken,
 		WorldLevel:      targetPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
-		EnterReason:     uint32(enterReason),
+		EnterReason:     player.SceneEnterReason,
 		WorldType:       1,
 		DungeonId:       dungeonId,
 		SceneTagIdList:  make([]uint32, 0),

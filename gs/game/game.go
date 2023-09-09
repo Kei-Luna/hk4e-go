@@ -143,10 +143,25 @@ func (g *Game) run() {
 }
 
 func (g *Game) gameMainLoopD() {
-	for times := 1; times <= 10000; times++ {
-		logger.Warn("start game main loop, times: %v", times)
+	times := 1
+	panicCounter := 0
+	lastPanicTime := time.Now().UnixNano()
+	for {
+		logger.Warn("game main loop start, times: %v", times)
 		g.gameMainLoop()
-		logger.Warn("game main loop stop")
+		logger.Warn("game main loop stop, times: %v", times)
+		times++
+		panicCounter++
+		if panicCounter > 10 {
+			now := time.Now().UnixNano()
+			if now-lastPanicTime > int64(time.Second) {
+				panicCounter = 0
+				lastPanicTime = now
+			} else {
+				logger.Error("!!! GAME MAIN LOOP STOP !!!")
+				break
+			}
+		}
 	}
 }
 

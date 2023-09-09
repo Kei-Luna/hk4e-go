@@ -11,6 +11,31 @@ import (
 
 // 玩家游戏内GM命令格式解析模块
 
+// 以后不妨考虑改成米哈游版本的GM命令格式
+
+func (c *CommandManager) GotoCommand(cmd *CommandMessage) {
+	split := strings.Split(cmd.Text, " ")
+	if len(split) != 4 {
+		return
+	}
+	if split[0] != "goto" {
+		return
+	}
+	x, err := strconv.ParseFloat(split[1], 64)
+	if err != nil {
+		return
+	}
+	y, err := strconv.ParseFloat(split[2], 64)
+	if err != nil {
+		return
+	}
+	z, err := strconv.ParseFloat(split[3], 64)
+	if err != nil {
+		return
+	}
+	c.gmCmd.GMTeleportPlayer(cmd.Executor.PlayerId, cmd.Executor.SceneId, x, y, z)
+}
+
 // HelpCommand 帮助命令
 func (c *CommandManager) HelpCommand(cmd *CommandMessage) {
 	c.SendMessage(cmd.Executor,
@@ -26,11 +51,7 @@ func (c *CommandManager) HelpCommand(cmd *CommandMessage) {
 // tp [--u <uid>] [--s <sceneId>] {--t <targetUid> --x <posX> | --y <posY> | --z <posZ>}
 func (c *CommandManager) TeleportCommand(cmd *CommandMessage) {
 	// 执行者如果不是玩家则必须输入UID
-	player, ok := cmd.Executor.(*model.Player)
-	if !ok && cmd.Args["u"] == "" {
-		c.SendMessage(cmd.Executor, "你不是玩家请指定UID。")
-		return
-	}
+	player := cmd.Executor
 
 	// 判断是否填写必备参数
 	// 目前传送的必备参数是任意包含一个就行
@@ -178,12 +199,7 @@ func (c *CommandManager) TeleportCommand(cmd *CommandMessage) {
 // GiveCommand 给予物品命令
 // give [--u <userId>] [--c <count>] --i <id/item/weapon/reliquary/avatar/costume/flycloak/all>
 func (c *CommandManager) GiveCommand(cmd *CommandMessage) {
-	// 执行者如果不是玩家则必须输入UID
-	player, ok := cmd.Executor.(*model.Player)
-	if !ok && cmd.Args["u"] == "" {
-		c.SendMessage(cmd.Executor, "你不是玩家请指定UID。")
-		return
-	}
+	player := cmd.Executor
 
 	// 判断是否填写必备参数
 	if cmd.Args["i"] == "" {
@@ -330,7 +346,7 @@ func (c *CommandManager) GiveCommand(cmd *CommandMessage) {
 
 // GcgCommand Gcg测试命令
 func (c *CommandManager) GcgCommand(cmd *CommandMessage) {
-	player := cmd.Executor.(*model.Player)
+	player := cmd.Executor
 	GAME.GCGStartChallenge(player)
 	c.SendMessage(cmd.Executor, "收到命令")
 }
@@ -338,12 +354,7 @@ func (c *CommandManager) GcgCommand(cmd *CommandMessage) {
 // QuestCommand 任务控制命令
 // quest [--u <userId>] [--q <questId>] --i <add/finish/finishall>
 func (c *CommandManager) QuestCommand(cmd *CommandMessage) {
-	// 执行者如果不是玩家则必须输入UID
-	player, ok := cmd.Executor.(*model.Player)
-	if !ok && cmd.Args["u"] == "" {
-		c.SendMessage(cmd.Executor, "你不是玩家请指定UID。")
-		return
-	}
+	player := cmd.Executor
 
 	// 判断是否填写必备参数
 	if cmd.Args["i"] == "" {
@@ -424,14 +435,14 @@ func (c *CommandManager) QuestCommand(cmd *CommandMessage) {
 
 // UnlockAllPointCommand 解锁所有锚点命令
 func (c *CommandManager) UnlockAllPointCommand(cmd *CommandMessage) {
-	player := cmd.Executor.(*model.Player)
+	player := cmd.Executor
 	c.gmCmd.GMUnlockAllPoint(player.PlayerId, player.SceneId)
 	c.SendMessage(cmd.Executor, "已解锁玩家 UID：%v, 场景：%v，所有锚点。", player.PlayerId, player.SceneId)
 }
 
 // XLuaDebugCommand 主动开启客户端XLUA调试命令
 func (c *CommandManager) XLuaDebugCommand(cmd *CommandMessage) {
-	player := cmd.Executor.(*model.Player)
+	player := cmd.Executor
 	player.XLuaDebug = true
 	c.SendMessage(cmd.Executor, "XLua Debug Enable")
 }

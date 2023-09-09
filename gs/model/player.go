@@ -68,6 +68,7 @@ type Player struct {
 	Pause                     bool                                     `bson:"-" msgpack:"-"` // 暂停状态
 	SceneJump                 bool                                     `bson:"-" msgpack:"-"` // 是否场景切换
 	SceneLoadState            int                                      `bson:"-" msgpack:"-"` // 场景加载状态
+	SceneEnterReason          uint32                                   `bson:"-" msgpack:"-"` // 场景进入原因
 	CoopApplyMap              map[uint32]int64                         `bson:"-" msgpack:"-"` // 敲门申请的玩家uid及时间
 	StaminaInfo               *StaminaInfo                             `bson:"-" msgpack:"-"` // 耐力在线数据
 	VehicleInfo               *VehicleInfo                             `bson:"-" msgpack:"-"` // 载具在线数据

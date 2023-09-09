@@ -17,55 +17,13 @@ import (
 func (g *Game) ChangeAvatarReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChangeAvatarReq)
 	targetAvatarGuid := req.Guid
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
 	targetAvatar, ok := player.GameObjectGuidMap[targetAvatarGuid].(*model.Avatar)
 	if !ok {
 		logger.Error("target avatar error, avatarGuid: %v", targetAvatarGuid)
 		return
 	}
-	targetAvatarId := targetAvatar.AvatarId
-	oldAvatarId := world.GetPlayerActiveAvatarId(player)
-	if targetAvatarId == oldAvatarId {
-		logger.Error("can not change to the same avatar, uid: %v, oldAvatarId: %v, targetAvatarId: %v", player.PlayerId, oldAvatarId, targetAvatarId)
-		return
-	}
-	newAvatarIndex := world.GetPlayerAvatarIndexByAvatarId(player, targetAvatarId)
-	if newAvatarIndex == -1 {
-		logger.Error("can not find the target avatar in team, uid: %v, targetAvatarId: %v", player.PlayerId, targetAvatarId)
-		return
-	}
-	if !world.GetMultiplayer() {
-		dbTeam := player.GetDbTeam()
-		dbTeam.CurrAvatarIndex = uint8(newAvatarIndex)
-	}
-	world.SetPlayerAvatarIndex(player, newAvatarIndex)
-	oldAvatarEntityId := world.GetPlayerWorldAvatarEntityId(player, oldAvatarId)
-	oldAvatarEntity := scene.GetEntity(oldAvatarEntityId)
-	if oldAvatarEntity == nil {
-		logger.Error("can not find old avatar entity, entity id: %v", oldAvatarEntityId)
-		return
-	}
-	oldAvatarEntity.SetMoveState(uint16(proto.MotionState_MOTION_STANDBY))
 
-	sceneEntityDisappearNotify := &proto.SceneEntityDisappearNotify{
-		DisappearType: proto.VisionType_VISION_REPLACE,
-		EntityList:    []uint32{oldAvatarEntity.GetId()},
-	}
-	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify)
-
-	newAvatarId := world.GetPlayerActiveAvatarId(player)
-	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, newAvatarId)
-	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
-		AppearType: proto.VisionType_VISION_REPLACE,
-		Param:      oldAvatarEntity.GetId(),
-		EntityList: []*proto.SceneEntityInfo{newAvatarEntity},
-	}
-	g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, player.ClientSeq, sceneEntityAppearNotify)
+	g.ChangeAvatar(player, targetAvatar.AvatarId)
 
 	changeAvatarRsp := &proto.ChangeAvatarRsp{
 		CurGuid: targetAvatarGuid,
@@ -231,7 +189,130 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	g.SendMsg(cmd.ChangeMpTeamAvatarRsp, player.PlayerId, player.ClientSeq, changeMpTeamAvatarRsp)
 }
 
+func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.AvatarDieAnimationEndReq)
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	entity := scene.GetEntity(uint32(req.DieGuid))
+
+	if entity.GetLastDieType() == int32(proto.PlayerDieType_PLAYER_DIE_DRAWN) {
+		maxStamina := player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA]
+		// 设置玩家耐力为一半
+		g.SetPlayerStamina(player, maxStamina/2)
+		// 传送玩家至安全位置
+		g.TeleportPlayer(
+			player,
+			proto.EnterReason_ENTER_REASON_REVIVAL,
+			player.SceneId,
+			&model.Vector{
+				X: player.SafePos.X,
+				Y: player.SafePos.Y,
+				Z: player.SafePos.Z,
+			},
+			new(model.Vector),
+			0,
+			0,
+		)
+	} else {
+		targetAvatarId := uint32(0)
+		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+			dbAvatar := player.GetDbAvatar()
+			avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+			if !exist {
+				logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+				continue
+			}
+			if avatar.LifeState != constant.LIFE_STATE_ALIVE {
+				continue
+			}
+			targetAvatarId = worldAvatar.GetAvatarId()
+		}
+		if targetAvatarId == 0 {
+			g.SendMsg(cmd.WorldPlayerDieNotify, player.PlayerId, player.ClientSeq, &proto.WorldPlayerDieNotify{
+				DieType: proto.PlayerDieType(entity.GetLastDieType()),
+			})
+		} else {
+			g.ChangeAvatar(player, targetAvatarId)
+		}
+	}
+
+	rsp := &proto.AvatarDieAnimationEndRsp{
+		SkillId: req.SkillId,
+		DieGuid: req.DieGuid,
+	}
+	g.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.WorldPlayerReviveReq)
+	_ = req
+	g.TeleportPlayer(
+		player,
+		proto.EnterReason_ENTER_REASON_REVIVAL,
+		player.SceneId,
+		&model.Vector{
+			X: player.SafePos.X,
+			Y: player.SafePos.Y,
+			Z: player.SafePos.Z,
+		},
+		new(model.Vector),
+		0,
+		0,
+	)
+	g.SendMsg(cmd.WorldPlayerReviveRsp, player.PlayerId, player.ClientSeq, new(proto.WorldPlayerReviveRsp))
+}
+
 /************************************************** 游戏功能 **************************************************/
+
+func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	oldAvatarId := world.GetPlayerActiveAvatarId(player)
+	if targetAvatarId == oldAvatarId {
+		logger.Error("can not change to the same avatar, uid: %v, oldAvatarId: %v, targetAvatarId: %v", player.PlayerId, oldAvatarId, targetAvatarId)
+		return
+	}
+	newAvatarIndex := world.GetPlayerAvatarIndexByAvatarId(player, targetAvatarId)
+	if newAvatarIndex == -1 {
+		logger.Error("can not find the target avatar in team, uid: %v, targetAvatarId: %v", player.PlayerId, targetAvatarId)
+		return
+	}
+	if !world.GetMultiplayer() {
+		dbTeam := player.GetDbTeam()
+		dbTeam.CurrAvatarIndex = uint8(newAvatarIndex)
+	}
+	world.SetPlayerAvatarIndex(player, newAvatarIndex)
+	oldAvatarEntityId := world.GetPlayerWorldAvatarEntityId(player, oldAvatarId)
+	oldAvatarEntity := scene.GetEntity(oldAvatarEntityId)
+	if oldAvatarEntity == nil {
+		logger.Error("can not find old avatar entity, entity id: %v", oldAvatarEntityId)
+		return
+	}
+	oldAvatarEntity.SetMoveState(uint16(proto.MotionState_MOTION_STANDBY))
+
+	sceneEntityDisappearNotify := &proto.SceneEntityDisappearNotify{
+		DisappearType: proto.VisionType_VISION_REPLACE,
+		EntityList:    []uint32{oldAvatarEntity.GetId()},
+	}
+	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify)
+
+	newAvatarId := world.GetPlayerActiveAvatarId(player)
+	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, newAvatarId)
+	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
+		AppearType: proto.VisionType_VISION_REPLACE,
+		Param:      oldAvatarEntity.GetId(),
+		EntityList: []*proto.SceneEntityInfo{newAvatarEntity},
+	}
+	g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, player.ClientSeq, sceneEntityAppearNotify)
+}
 
 /************************************************** 打包封装 **************************************************/
 

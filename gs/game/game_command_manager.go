@@ -24,17 +24,21 @@ const (
 // CommandFunc 命令执行函数
 type CommandFunc func(*CommandMessage)
 
+const (
+	PlayerChatGM = iota // 玩家聊天GM
+	SystemFuncGM        // 系统函数GM
+)
+
 // CommandMessage 命令消息
 // 给下层执行命令时提供数据
 type CommandMessage struct {
+	GMType int // GM类型
 	// 玩家聊天GM
-	// executor 玩家为 model.Player 类型
-	// GM等为 string 类型
-	Executor any               // 执行者
+	Executor *model.Player     // 执行者
 	Text     string            // 命令原始文本
 	Name     string            // 命令前缀
 	Args     map[string]string // 命令参数
-	// 系统GM
+	// 系统函数GM
 	FuncName  string   // 函数名
 	ParamList []string // 函数参数列表
 }
@@ -75,6 +79,7 @@ func (c *CommandManager) InitRouter() {
 	c.commandPermMap = make(map[string]CommandPerm)
 	{
 		// 权限等级 0: 普通玩家
+		c.RegisterRouter(CommandPermNormal, c.GotoCommand, "goto")
 		c.RegisterRouter(CommandPermNormal, c.HelpCommand, "help", "帮助")
 		c.RegisterRouter(CommandPermNormal, c.TeleportCommand, "teleport", "tp", "传送")
 		c.RegisterRouter(CommandPermNormal, c.GiveCommand, "give", "item", "物品", "给予")
@@ -125,7 +130,7 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 		return
 	}
 	// 输入的命令将在主协程中处理
-	c.commandTextInput <- &CommandMessage{Executor: player, Text: text}
+	c.commandTextInput <- &CommandMessage{GMType: PlayerChatGM, Executor: player, Text: text}
 }
 
 func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
@@ -234,54 +239,62 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 // HandleCommand 处理命令
 // 主协程接收到命令消息后执行
 func (c *CommandManager) HandleCommand(cmd *CommandMessage) bool {
-	// 系统GM 直接执行GM函数
-	if cmd.FuncName != "" {
+	switch cmd.GMType {
+	case PlayerChatGM:
+		// TODO 米哈游版本传送命令
+		if strings.Contains(cmd.Text, "goto") {
+			cmd.Name = "goto"
+			c.ExecCommand(cmd)
+			return true
+		}
+
+		executor := cmd.Executor
+
+		// 分割出命令的每个参数
+		// 不区分命令的大小写 统一转为小写
+		cmdSplit := strings.Split(strings.ToLower(cmd.Text), " --")
+
+		// 分割出来啥也没有可能是个空的字符串
+		// 此时将会返回的命令名和命令参数都为空
+		if len(cmdSplit) == 0 {
+			return false
+		}
+
+		// 命令参数 初始化
+		cmd.Args = make(map[string]string, len(cmdSplit)-1)
+
+		// 首个参数必是命令名
+		cmd.Name = cmdSplit[0]
+		// 命令名后当然是命令的参数喽
+		argSplit := cmdSplit[1:]
+
+		// 我们要将命令的参数转换为键值对
+		// 每个参数之间会有个空格分割
+		for _, s := range argSplit {
+			cmdArg := strings.Split(s, " ")
+
+			// 分割出来的参数只有一个那肯定不是键值对
+			if len(cmdArg) < 2 {
+				c.SendMessage(executor, "格式错误，用法: %v --[参数名] [参数]。", cmd.Name)
+				return false
+			}
+
+			argKey := cmdArg[0]   // 参数的键
+			argValue := cmdArg[1] // 参数的值
+
+			// 记录命令的参数
+			cmd.Args[argKey] = argValue
+		}
+
+		// 执行命令
+		c.ExecCommand(cmd)
+		return true
+	case SystemFuncGM:
 		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", cmd.FuncName, cmd.ParamList)
 		// 反射调用command_gm.go中的函数并反射解析传入参数类型
 		return c.CallGMCmd(cmd.FuncName, cmd.ParamList)
 	}
-
-	executor := cmd.Executor
-
-	// 分割出命令的每个参数
-	// 不区分命令的大小写 统一转为小写
-	cmdSplit := strings.Split(strings.ToLower(cmd.Text), " --")
-
-	// 分割出来啥也没有可能是个空的字符串
-	// 此时将会返回的命令名和命令参数都为空
-	if len(cmdSplit) == 0 {
-		return false
-	}
-
-	// 命令参数 初始化
-	cmd.Args = make(map[string]string, len(cmdSplit)-1)
-
-	// 首个参数必是命令名
-	cmd.Name = cmdSplit[0]
-	// 命令名后当然是命令的参数喽
-	argSplit := cmdSplit[1:]
-
-	// 我们要将命令的参数转换为键值对
-	// 每个参数之间会有个空格分割
-	for _, s := range argSplit {
-		cmdArg := strings.Split(s, " ")
-
-		// 分割出来的参数只有一个那肯定不是键值对
-		if len(cmdArg) < 2 {
-			c.SendMessage(executor, "格式错误，用法: %v --[参数名] [参数]。", cmd.Name)
-			return false
-		}
-
-		argKey := cmdArg[0]   // 参数的键
-		argValue := cmdArg[1] // 参数的值
-
-		// 记录命令的参数
-		cmd.Args[argKey] = argValue
-	}
-
-	// 执行命令
-	c.ExecCommand(cmd)
-	return true
+	return false
 }
 
 // GetFriendList 获取包含系统的玩家好友列表
@@ -321,7 +334,7 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 	}
 
 	// 判断玩家的权限是否符合要求
-	player, ok := executor.(*model.Player)
+	player := executor
 	if ok && player.CmdPerm < uint8(cmdPerm) {
 		logger.Debug("exec command permission denied, uid: %v, CmdPerm: %v", player.PlayerId, player.CmdPerm)
 		c.SendMessage(player, "权限不足，该命令需要%v级权限。\n你目前的权限等级：%v", cmdPerm, player.CmdPerm)
@@ -332,20 +345,8 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 }
 
 // SendMessage 发送消息
-func (c *CommandManager) SendMessage(executor any, msg string, param ...any) {
-	// 根据相应的类型发送消息
-	switch executor.(type) {
-	case *model.Player:
-		// 玩家类型
-		player := executor.(*model.Player)
-		GAME.SendPrivateChat(c.system, player.PlayerId, fmt.Sprintf(msg, param...))
-	// case string:
-	// GM接口等
-	// str := executor.(string)
-	default:
-		// 无效的类型报错
-		logger.Error("command executor type error, type: %T", executor)
-	}
+func (c *CommandManager) SendMessage(player *model.Player, msg string, param ...any) {
+	GAME.SendPrivateChat(c.system, player.PlayerId, fmt.Sprintf(msg, param...))
 }
 
 // GetExecutorId 获取执行者Id

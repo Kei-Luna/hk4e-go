@@ -69,7 +69,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	// 进入场景
 	player.SceneJump = true
 	player.SceneLoadState = model.SceneNone
-
+	player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_LOGIN)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
 
 	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
@@ -129,6 +129,7 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 			// 进入场景
 			player.SceneJump = true
 			player.SceneLoadState = model.SceneNone
+			player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_LOGIN)
 			g.SendMsg(cmd.PlayerEnterSceneNotify, userId, clientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
 		}
 	} else {

@@ -44,7 +44,7 @@ func (g *Game) ClientRttNotify(userId uint32, clientRtt uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	logger.Debug("client rtt notify, uid: %v, rtt: %v", userId, clientRtt)
+	// logger.Debug("client rtt notify, uid: %v, rtt: %v", userId, clientRtt)
 	player.ClientRTT = clientRtt
 }
 
@@ -57,8 +57,8 @@ func (g *Game) ClientTimeNotify(userId uint32, clientTime uint32) {
 	player.ClientTime = clientTime
 	now := uint32(time.Now().Unix())
 	// 客户端与服务器时间相差太过严重
-	if math.Abs(float64(now-player.ClientTime)) > 60.0 {
-		logger.Error("abs of client time and server time above 60s, uid: %v", userId)
+	if math.Abs(float64(now-player.ClientTime)) > 600.0 {
+		logger.Debug("abs of client time and server time above 600s, uid: %v", userId)
 	}
 	player.LastKeepaliveTime = now
 }
@@ -240,21 +240,32 @@ func (g *Game) PlayerTimeNotify(world *World) {
 func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GmTalkReq)
 	logger.Info("GmTalkReq: %v", req.Msg)
-	commandText := strings.ReplaceAll(req.Msg, " ", "")
-	beginIndex := strings.Index(commandText, "(")
-	endIndex := strings.Index(commandText, ")")
-	if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
-		return
-	}
-	funcName := commandText[:beginIndex]
-	paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
-	ok := COMMAND_MANAGER.HandleCommand(&CommandMessage{FuncName: funcName, ParamList: paramList})
-	if ok {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
+	commandTextInput := COMMAND_MANAGER.GetCommandTextInput()
+	if strings.Contains(req.Msg, "@@") {
+		commandText := req.Msg
+		commandText = strings.ReplaceAll(commandText, "@@", "")
+		commandText = strings.ReplaceAll(commandText, " ", "")
+		beginIndex := strings.Index(commandText, "(")
+		endIndex := strings.Index(commandText, ")")
+		if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
+			g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
+			return
+		}
+		funcName := commandText[:beginIndex]
+		paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
+		commandTextInput <- &CommandMessage{
+			GMType:    SystemFuncGM,
+			FuncName:  funcName,
+			ParamList: paramList,
+		}
 	} else {
-		g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行失败", Msg: req.Msg})
+		commandTextInput <- &CommandMessage{
+			GMType:   PlayerChatGM,
+			Executor: player,
+			Text:     req.Msg,
+		}
 	}
+	g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
 }
 
 func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {

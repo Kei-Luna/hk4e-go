@@ -580,7 +580,8 @@ func (g *Game) TeleportPlayer(
 		logger.Debug("player goto scene, scene: %v, pos: %v", player.SceneId, player.Pos)
 		enterType = proto.EnterType_ENTER_GOTO
 	}
-	playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyTp(player, enterType, enterReason, oldSceneId, oldPos, dungeonId, dungeonPointId)
+	player.SceneEnterReason = uint32(enterReason)
+	playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyTp(player, enterType, oldSceneId, oldPos, dungeonId, dungeonPointId)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, playerEnterSceneNotify)
 }
 

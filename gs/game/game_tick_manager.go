@@ -249,7 +249,6 @@ func (t *TickManager) onTick200MilliSecond(now int64) {
 				// 耐力消耗
 				GAME.SustainStaminaHandler(player)
 				GAME.VehicleRestoreStaminaHandler(player)
-				GAME.DrownBackHandler(player)
 			}
 		}
 	}
@@ -264,9 +263,18 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 			}
 		}
 		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		hitEntityList := bulletPhysicsEngine.Update(now)
-		for _, entity := range hitEntityList {
-			GAME.ServerEvtBeingHitInfo(world.owner, entity.GetId(), entity.GetId(), 100.0)
+		hitList := bulletPhysicsEngine.Update(now)
+		for _, rigidBody := range hitList {
+			scene := world.GetSceneById(rigidBody.sceneId)
+			defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
+			defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
+			GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
+				AttackResult: &proto.AttackResult{
+					AttackerId: rigidBody.avatarEntityId,
+					DefenseId:  rigidBody.hitAvatarEntityId,
+					Damage:     100,
+				},
+			})
 		}
 	}
 }

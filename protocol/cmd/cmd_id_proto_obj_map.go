@@ -144,10 +144,14 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GadgetInteractRsp, func() any { return new(proto.GadgetInteractRsp) })                           // 物件交互响应
 	c.regMsg(GadgetStateNotify, func() any { return new(proto.GadgetStateNotify) })                           // 物件状态更新通知
 	c.regMsg(WorldChestOpenNotify, func() any { return new(proto.WorldChestOpenNotify) })                     // 宝箱开启通知
+	c.regMsg(EntityForceSyncReq, func() any { return new(proto.EntityForceSyncReq) })                         // 场景实体强制同步请求 客户端强制同步
+	c.regMsg(EntityForceSyncRsp, func() any { return new(proto.EntityForceSyncRsp) })                         // 场景实体强制同步响应
 
 	// 战斗与同步
 	c.regMsg(AvatarFightPropNotify, func() any { return new(proto.AvatarFightPropNotify) })                         // 角色战斗属性通知
+	c.regMsg(AvatarFightPropUpdateNotify, func() any { return new(proto.AvatarFightPropUpdateNotify) })             // 角色战斗属性更新通知
 	c.regMsg(EntityFightPropUpdateNotify, func() any { return new(proto.EntityFightPropUpdateNotify) })             // 实体战斗属性更新通知
+	c.regMsg(EntityFightPropChangeReasonNotify, func() any { return new(proto.EntityFightPropChangeReasonNotify) }) // 实体战斗属性变更原因通知
 	c.regMsg(CombatInvocationsNotify, func() any { return new(proto.CombatInvocationsNotify) })                     // 客户端combat通知 服务器转发
 	c.regMsg(AbilityInvocationsNotify, func() any { return new(proto.AbilityInvocationsNotify) })                   // 客户端ability通知 服务器转发
 	c.regMsg(ClientAbilityInitFinishNotify, func() any { return new(proto.ClientAbilityInitFinishNotify) })         // 客户端ability初始化完成通知 服务器转发
@@ -184,6 +188,11 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(SyncTeamEntityNotify, func() any { return new(proto.SyncTeamEntityNotify) })                   // 同步队伍实体通知
 	c.regMsg(DelTeamEntityNotify, func() any { return new(proto.DelTeamEntityNotify) })                     // 删除队伍实体通知
 	c.regMsg(SyncScenePlayTeamEntityNotify, func() any { return new(proto.SyncScenePlayTeamEntityNotify) }) // 同步场景玩家队伍实体通知
+	c.regMsg(AvatarDieAnimationEndReq, func() any { return new(proto.AvatarDieAnimationEndReq) })           // 角色死亡动画结束请求 切人或玩家死亡
+	c.regMsg(AvatarDieAnimationEndRsp, func() any { return new(proto.AvatarDieAnimationEndRsp) })           // 角色死亡动画结束响应
+	c.regMsg(WorldPlayerDieNotify, func() any { return new(proto.WorldPlayerDieNotify) })                   // 玩家死亡通知
+	c.regMsg(WorldPlayerReviveReq, func() any { return new(proto.WorldPlayerReviveReq) })                   // 玩家复活请求
+	c.regMsg(WorldPlayerReviveRsp, func() any { return new(proto.WorldPlayerReviveRsp) })                   // 玩家复活响应
 
 	// 多人世界
 	c.regMsg(PlayerApplyEnterMpReq, func() any { return new(proto.PlayerApplyEnterMpReq) })                   // 世界敲门请求
@@ -283,6 +292,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(StoreItemChangeNotify, func() any { return new(proto.StoreItemChangeNotify) })   // 背包道具变动通知
 	c.regMsg(ItemAddHintNotify, func() any { return new(proto.ItemAddHintNotify) })           // 道具增加提示通知
 	c.regMsg(StoreItemDelNotify, func() any { return new(proto.StoreItemDelNotify) })         // 背包道具删除通知
+	c.regMsg(UseItemReq, func() any { return new(proto.UseItemReq) })                         // 道具使用请求
+	c.regMsg(UseItemRsp, func() any { return new(proto.UseItemRsp) })                         // 道具使用响应
 
 	// 装备
 	c.regMsg(WearEquipReq, func() any { return new(proto.WearEquipReq) })                                       // 装备穿戴请求
@@ -385,6 +396,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })
 	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })
 	c.regMsg(ServerLogNotify, func() any { return new(proto.ServerLogNotify) })
+	c.regMsg(MarkEntityInMinMapNotify, func() any { return new(proto.MarkEntityInMinMapNotify) })
+	c.regMsg(UnmarkEntityInMinMapNotify, func() any { return new(proto.UnmarkEntityInMinMapNotify) })
 }
 
 func (c *CmdProtoMap) regMsg(cmdId uint16, protoObjNewFunc func() any) {

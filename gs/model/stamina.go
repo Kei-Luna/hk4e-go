@@ -11,7 +11,6 @@ type StaminaInfo struct {
 	RestoreDelay        uint8             // 玩家耐力回复延时
 	LastSkillTime       int64             // 最后释放技能的时间
 	LastCostStaminaTime int64             // 最后执行技能耐力消耗的时间
-	DrownBackDelay      uint8             // 溺水返回安全点延时
 }
 
 func NewStaminaInfo() *StaminaInfo {

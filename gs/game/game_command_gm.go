@@ -300,8 +300,8 @@ func (g *GMCmd) XLuaDebug(userId uint32, luacBase64 string) {
 	})
 }
 
-func (g *GMCmd) PlayAudio() {
-	PlayAudio()
+func (g *GMCmd) PlayAudio(v bool) {
+	go PlayAudio()
 }
 
 func (g *GMCmd) UpdateFrame(rgb bool) {

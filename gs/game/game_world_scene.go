@@ -423,9 +423,10 @@ func (s *Suite) GetAllEntity() map[uint32]*Entity {
 
 // Entity 场景实体数据结构
 type Entity struct {
-	id                  uint32        // 实体id
-	scene               *Scene        // 实体归属上级场景的访问指针
-	lifeState           uint16        // 存活状态
+	id                  uint32 // 实体id
+	scene               *Scene // 实体归属上级场景的访问指针
+	lifeState           uint16 // 存活状态
+	lastDieType         int32
 	pos                 *model.Vector // 位置
 	rot                 *model.Vector // 朝向
 	moveState           uint16        // 运动状态
@@ -452,6 +453,10 @@ func (e *Entity) GetScene() *Scene {
 
 func (e *Entity) GetLifeState() uint16 {
 	return e.lifeState
+}
+
+func (e *Entity) GetLastDieType() int32 {
+	return e.lastDieType
 }
 
 func (e *Entity) GetPos() *model.Vector {

@@ -67,21 +67,6 @@ func (g *Game) UnionCmdNotify(player *model.Player, payloadMsg pb.Message) {
 	player.AbilityInvokeHandler.Clear()
 }
 
-func (g *Game) MassiveEntityElementOpBatchNotify(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.MassiveEntityElementOpBatchNotify)
-	if player.SceneLoadState != model.SceneEnterDone {
-		return
-	}
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
-	req.OpIdx = scene.GetMeeoIndex()
-	scene.SetMeeoIndex(scene.GetMeeoIndex() + 1)
-	g.SendToSceneA(scene, cmd.MassiveEntityElementOpBatchNotify, player.ClientSeq, req)
-}
-
 func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.CombatInvocationsNotify)
 	if player.SceneLoadState != model.SceneEnterDone {
@@ -101,41 +86,8 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 				logger.Error("parse EvtBeingHitInfo error: %v", err)
 				break
 			}
-			logger.Debug("EvtBeingHitInfo: %+v, ForwardType: %v", evtBeingHitInfo, entry.ForwardType)
-			attackResult := evtBeingHitInfo.AttackResult
-			if attackResult == nil {
-				logger.Error("attackResult is nil")
-				break
-			}
-			target := scene.GetEntity(attackResult.DefenseId)
-			if target == nil {
-				logger.Error("could not found target, defense id: %v", attackResult.DefenseId)
-				break
-			}
-			fightProp := target.GetFightProp()
-			currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
-			currHp -= attackResult.Damage
-			if currHp < 0 {
-				currHp = 0
-			}
-			fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
-			g.EntityFightPropUpdateNotifyBroadcast(scene, target)
-			switch target.GetEntityType() {
-			case constant.ENTITY_TYPE_AVATAR:
-			case constant.ENTITY_TYPE_MONSTER:
-				if currHp == 0 {
-					g.KillEntity(player, scene, target.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
-				}
-			case constant.ENTITY_TYPE_GADGET:
-				gadgetEntity := target.GetGadgetEntity()
-				gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
-				if gadgetDataConfig == nil {
-					logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
-					break
-				}
-				logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerId)
-				g.handleGadgetEntityBeHitLow(player, target, attackResult.ElementType)
-			}
+			// logger.Debug("EvtBeingHitInfo: %+v, ForwardType: %v", evtBeingHitInfo, entry.ForwardType)
+			g.handleEvtBeingHit(player, scene, evtBeingHitInfo)
 		case proto.CombatTypeArgument_ENTITY_MOVE:
 			entityMoveInfo := new(proto.EntityMoveInfo)
 			err := pb.Unmarshal(entry.CombatData, entityMoveInfo)
@@ -145,65 +97,18 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 			}
 			// logger.Debug("EntityMoveInfo: %+v, ForwardType: %v", entityMoveInfo, entry.ForwardType)
 			motionInfo := entityMoveInfo.MotionInfo
-			if motionInfo.Pos == nil || motionInfo.Rot == nil {
+			if motionInfo == nil || motionInfo.Pos == nil || motionInfo.Rot == nil {
 				break
 			}
-			sceneEntity := scene.GetEntity(entityMoveInfo.EntityId)
-			if sceneEntity == nil {
-				break
-			}
-			if sceneEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-				// 玩家实体在移动
-				g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos,
-					&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
-					sceneEntity.GetId(),
-				)
-				if WORLD_MANAGER.IsBigWorld(world) {
-					g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
-						&model.Vector{X: float64(motionInfo.Pos.X), Y: float64(motionInfo.Pos.Y), Z: float64(motionInfo.Pos.Z)},
-					)
-				}
-				// 更新玩家的位置信息
-				player.Pos.X, player.Pos.Y, player.Pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
-				player.Rot.X, player.Rot.Y, player.Rot.Z = float64(motionInfo.Rot.X), float64(motionInfo.Rot.Y), float64(motionInfo.Rot.Z)
-				// 玩家安全位置更新
-				switch motionInfo.State {
-				case proto.MotionState_MOTION_DANGER_RUN,
-					proto.MotionState_MOTION_RUN,
-					proto.MotionState_MOTION_DANGER_STANDBY_MOVE,
-					proto.MotionState_MOTION_DANGER_STANDBY,
-					proto.MotionState_MOTION_LADDER_TO_STANDBY,
-					proto.MotionState_MOTION_STANDBY_MOVE,
-					proto.MotionState_MOTION_STANDBY,
-					proto.MotionState_MOTION_DANGER_WALK,
-					proto.MotionState_MOTION_WALK,
-					proto.MotionState_MOTION_DASH:
-					// 仅在陆地时更新玩家安全位置
-					player.SafePos.X, player.SafePos.Y, player.SafePos.Z = player.Pos.X, player.Pos.Y, player.Pos.Z
-				}
-				// 处理耐力消耗
-				g.ImmediateStamina(player, motionInfo.State)
-			} else {
-				// 其他实体在移动
-				// 更新场景实体的位置信息
-				pos := sceneEntity.GetPos()
-				pos.X, pos.Y, pos.Z = float64(motionInfo.Pos.X), float64(motionInfo.Pos.Y), float64(motionInfo.Pos.Z)
-				rot := sceneEntity.GetRot()
-				rot.X, rot.Y, rot.Z = float64(motionInfo.Rot.X), float64(motionInfo.Rot.Y), float64(motionInfo.Rot.Z)
-				if sceneEntity.GetEntityType() == constant.ENTITY_TYPE_GADGET {
-					// 载具耐力消耗
-					gadgetEntity := sceneEntity.GetGadgetEntity()
-					if gadgetEntity.GetGadgetVehicleEntity() != nil {
-						// 处理耐力消耗
-						g.ImmediateStamina(player, motionInfo.State)
-						// 处理载具销毁请求
-						g.VehicleDestroyMotion(player, sceneEntity, motionInfo.State)
-					}
-				}
-			}
-			sceneEntity.SetMoveState(uint16(motionInfo.State))
-			sceneEntity.SetLastMoveSceneTimeMs(entityMoveInfo.SceneTime)
-			sceneEntity.SetLastMoveReliableSeq(entityMoveInfo.ReliableSeq)
+			g.handleEntityMove(player, world, scene, entityMoveInfo.EntityId, &model.Vector{
+				X: float64(motionInfo.Pos.X),
+				Y: float64(motionInfo.Pos.Y),
+				Z: float64(motionInfo.Pos.Z),
+			}, &model.Vector{
+				X: float64(motionInfo.Rot.X),
+				Y: float64(motionInfo.Rot.Y),
+				Z: float64(motionInfo.Rot.Z),
+			}, false, entityMoveInfo)
 			// 众里寻他千百度 蓦然回首 那人却在灯火阑珊处
 			if motionInfo.State == proto.MotionState_MOTION_NOTIFY || motionInfo.State == proto.MotionState_MOTION_FIGHT {
 				// 只要转发了这两个包的其中之一 客户端的动画就会被打断
@@ -227,6 +132,117 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 			// logger.Debug("EvtAnimatorStateChangedInfo: %+v, ForwardType: %v", evtAnimatorStateChangedInfo, entry.ForwardType)
 		}
 		player.CombatInvokeHandler.AddEntry(entry.ForwardType, entry)
+	}
+}
+
+func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *proto.EvtBeingHitInfo) {
+	attackResult := hitInfo.AttackResult
+	if attackResult == nil {
+		logger.Error("attackResult is nil")
+		return
+	}
+	target := scene.GetEntity(attackResult.DefenseId)
+	if target == nil {
+		logger.Error("could not found target, defense id: %v", attackResult.DefenseId)
+		return
+	}
+	fightProp := target.GetFightProp()
+	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+	currHp -= attackResult.Damage
+	deltaHp := -attackResult.Damage
+	if currHp < 0 {
+		deltaHp -= currHp
+		currHp = 0
+	}
+	fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
+	g.EntityFightPropUpdateNotifyBroadcast(scene, target)
+	switch target.GetEntityType() {
+	case constant.ENTITY_TYPE_AVATAR:
+		g.SendMsg(cmd.EntityFightPropChangeReasonNotify, player.PlayerId, player.ClientSeq, &proto.EntityFightPropChangeReasonNotify{
+			PropDelta:      deltaHp,
+			ChangeHpReason: proto.ChangHpReason_CHANGE_HP_SUB_GM,
+			EntityId:       target.GetId(),
+			PropType:       constant.FIGHT_PROP_CUR_HP,
+		})
+		if currHp == 0 {
+			avatarEntity := target.GetAvatarEntity()
+			g.KillPlayerAvatar(player, avatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
+		}
+	case constant.ENTITY_TYPE_MONSTER:
+		if currHp == 0 {
+			g.KillEntity(player, scene, target.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+		}
+	case constant.ENTITY_TYPE_GADGET:
+		gadgetEntity := target.GetGadgetEntity()
+		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
+		if gadgetDataConfig == nil {
+			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
+			break
+		}
+		logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerId)
+		g.handleGadgetEntityBeHitLow(player, target, attackResult.ElementType)
+	}
+}
+
+func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene, entityId uint32, pos, rot *model.Vector, force bool, moveInfo *proto.EntityMoveInfo) {
+	entity := scene.GetEntity(entityId)
+	if entity == nil {
+		return
+	}
+	if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+		// 玩家实体在移动
+		g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos,
+			&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+			entity.GetId(),
+		)
+		if WORLD_MANAGER.IsBigWorld(world) {
+			g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
+				&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+			)
+		}
+		// 更新玩家的位置信息
+		player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
+		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
+	}
+	// 更新场景实体的位置信息
+	entityPos := entity.GetPos()
+	entityPos.X, entityPos.Y, entityPos.Z = pos.X, pos.Y, pos.Z
+	entityRot := entity.GetRot()
+	entityRot.X, entityRot.Y, entityRot.Z = rot.X, rot.Y, rot.Z
+	if !force {
+		motionInfo := moveInfo.MotionInfo
+		switch entity.GetEntityType() {
+		case constant.ENTITY_TYPE_AVATAR:
+			// 玩家安全位置更新
+			switch motionInfo.State {
+			case proto.MotionState_MOTION_DANGER_RUN,
+				proto.MotionState_MOTION_RUN,
+				proto.MotionState_MOTION_DANGER_STANDBY_MOVE,
+				proto.MotionState_MOTION_DANGER_STANDBY,
+				proto.MotionState_MOTION_LADDER_TO_STANDBY,
+				proto.MotionState_MOTION_STANDBY_MOVE,
+				proto.MotionState_MOTION_STANDBY,
+				proto.MotionState_MOTION_DANGER_WALK,
+				proto.MotionState_MOTION_WALK,
+				proto.MotionState_MOTION_DASH:
+				// 仅在陆地时更新玩家安全位置
+				player.SafePos.X, player.SafePos.Y, player.SafePos.Z = player.Pos.X, player.Pos.Y, player.Pos.Z
+			}
+			// 处理耐力消耗
+			g.ImmediateStamina(player, motionInfo.State)
+		case constant.ENTITY_TYPE_GADGET:
+			// 载具耐力消耗
+			gadgetEntity := entity.GetGadgetEntity()
+			if gadgetEntity.GetGadgetVehicleEntity() != nil {
+				// 处理耐力消耗
+				g.ImmediateStamina(player, motionInfo.State)
+				// 处理载具销毁请求
+				g.VehicleDestroyMotion(player, entity, motionInfo.State)
+			}
+		}
+		entity.SetMoveState(uint16(motionInfo.State))
+		entity.SetLastMoveSceneTimeMs(moveInfo.SceneTime)
+		entity.SetLastMoveReliableSeq(moveInfo.ReliableSeq)
 	}
 }
 
@@ -550,6 +566,21 @@ func (g *Game) ClientAbilityChangeNotify(player *model.Player, payloadMsg pb.Mes
 	}
 }
 
+func (g *Game) MassiveEntityElementOpBatchNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.MassiveEntityElementOpBatchNotify)
+	if player.SceneLoadState != model.SceneEnterDone {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	req.OpIdx = scene.GetMeeoIndex()
+	scene.SetMeeoIndex(scene.GetMeeoIndex() + 1)
+	g.SendToSceneA(scene, cmd.MassiveEntityElementOpBatchNotify, player.ClientSeq, req)
+}
+
 func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EvtDoSkillSuccNotify)
 	if player.SceneLoadState != model.SceneEnterDone {
@@ -790,31 +821,6 @@ func (g *Game) EntityAiSyncNotify(player *model.Player, payloadMsg pb.Message) {
 		})
 	}
 	g.SendMsg(cmd.EntityAiSyncNotify, player.PlayerId, player.ClientSeq, entityAiSyncNotify)
-}
-
-func (g *Game) ServerEvtBeingHitInfo(player *model.Player, atkEntityId uint32, defEntityId uint32, dmg float32) {
-	evtBeingHitInfo := &proto.EvtBeingHitInfo{
-		AttackResult: &proto.AttackResult{
-			AttackerId:  atkEntityId,
-			DefenseId:   defEntityId,
-			Damage:      dmg,
-			ElementType: constant.ELEMENT_TYPE_FIRE,
-		},
-	}
-	combatData, err := pb.Marshal(evtBeingHitInfo)
-	if err != nil {
-		logger.Error("marshal EvtBeingHitInfo error: %v", err)
-		return
-	}
-	GAME.CombatInvocationsNotify(player, &proto.CombatInvocationsNotify{
-		InvokeList: []*proto.CombatInvokeEntry{{
-			CombatData:   combatData,
-			ForwardType:  proto.ForwardType_FORWARD_ONLY_SERVER,
-			ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
-		}},
-	})
-	GAME.UnionCmdNotify(player, &proto.UnionCmdNotify{})
-
 }
 
 // TODO 一些很low的解决方案 我本来是不想写的 有多low？要多low有多low！

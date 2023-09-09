@@ -154,6 +154,7 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 		player.SceneJump = true
 		player.SceneId = hostPlayer.SceneId
 		player.SceneLoadState = model.SceneNone
+		player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_TEAM_JOIN)
 		player.Pos.X, player.Pos.Y, player.Pos.Z = hostPlayer.Pos.X, hostPlayer.Pos.Y, hostPlayer.Pos.Z
 		player.Rot.X, player.Rot.Y, player.Rot.Z = hostPlayer.Rot.X, hostPlayer.Rot.Y, hostPlayer.Rot.Z
 		g.WorldAddPlayer(hostWorld, player)
@@ -162,7 +163,6 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 			player,
 			hostPlayer,
 			proto.EnterType_ENTER_OTHER,
-			proto.EnterReason_ENTER_REASON_TEAM_JOIN,
 			0,
 			new(model.Vector),
 		)
@@ -333,12 +333,12 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 
 	hostPlayer.SceneJump = true
 	hostPlayer.SceneLoadState = model.SceneNone
+	hostPlayer.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_HOST_FROM_SINGLE_TO_MP)
 
 	hostPlayerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
 		hostPlayer,
 		hostPlayer,
 		proto.EnterType_ENTER_GOTO,
-		proto.EnterReason_ENTER_REASON_HOST_FROM_SINGLE_TO_MP,
 		hostPlayer.SceneId,
 		hostPlayer.Pos,
 	)
