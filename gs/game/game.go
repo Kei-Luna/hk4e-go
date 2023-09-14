@@ -88,7 +88,9 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	r.isStop = false
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
-	COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerId, 3)
+	if !r.IsMainGs() {
+		COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerId, 3)
+	}
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
 	r.run()
 	return r

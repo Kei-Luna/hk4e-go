@@ -66,7 +66,6 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		peerList:             make([]*model.Player, 0),
 		bigWorldAoi:          nil,
 	}
-	world.NewPhysicsEngine(w.sceneBlockAoiMap)
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world
 	if w.IsBigWorld(world) {
@@ -100,6 +99,9 @@ func (w *WorldManager) GetAiWorld() *World {
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
+	if w.IsBigWorld(w.aiWorld) {
+		w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
+	}
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
@@ -223,10 +225,15 @@ type World struct {
 	peerList             []*model.Player               // 玩家编号列表
 	bigWorldAoi          *alg.AoiManager               // 大世界的aoi管理器
 	bulletPhysicsEngine  *PhysicsEngine                // 蓄力箭子弹物理引擎
+	pubg                 *Pubg
 }
 
 func (w *World) GetBulletPhysicsEngine() *PhysicsEngine {
 	return w.bulletPhysicsEngine
+}
+
+func (w *World) GetPubg() *Pubg {
+	return w.pubg
 }
 
 func (w *World) GetId() uint32 {

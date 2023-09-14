@@ -40,9 +40,9 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 
 func (c *CmdProtoMap) registerMessage() {
 	// 登录
-	c.regMsg(DoSetPlayerBornDataNotify, func() any { return new(proto.DoSetPlayerBornDataNotify) })       // 注册账号通知 新号播放开场动画
-	c.regMsg(SetPlayerBornDataReq, func() any { return new(proto.SetPlayerBornDataReq) })                 // 注册账号请求
-	c.regMsg(SetPlayerBornDataRsp, func() any { return new(proto.SetPlayerBornDataRsp) })                 // 注册账号响应
+	c.regMsg(DoSetPlayerBornDataNotify, func() any { return new(proto.DoSetPlayerBornDataNotify) })       // 出生数据设置通知 新号播放开场动画
+	c.regMsg(SetPlayerBornDataReq, func() any { return new(proto.SetPlayerBornDataReq) })                 // 出生数据设置请求
+	c.regMsg(SetPlayerBornDataRsp, func() any { return new(proto.SetPlayerBornDataRsp) })                 // 出生数据设置响应
 	c.regMsg(GetPlayerTokenReq, func() any { return new(proto.GetPlayerTokenReq) })                       // 获取玩家token请求 第一个登录包
 	c.regMsg(GetPlayerTokenRsp, func() any { return new(proto.GetPlayerTokenRsp) })                       // 获取玩家token响应
 	c.regMsg(PlayerLoginReq, func() any { return new(proto.PlayerLoginReq) })                             // 玩家登录请求 第二个登录包
@@ -68,6 +68,9 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(ServerAnnounceRevokeNotify, func() any { return new(proto.ServerAnnounceRevokeNotify) }) // 服务器公告撤销通知
 	c.regMsg(TowerAllDataReq, func() any { return new(proto.TowerAllDataReq) })                       // 深渊数据请求
 	c.regMsg(TowerAllDataRsp, func() any { return new(proto.TowerAllDataRsp) })                       // 深渊数据响应
+	c.regMsg(GmTalkReq, func() any { return new(proto.GmTalkReq) })                                   // GM命令执行请求
+	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })                                   // GM命令执行响应
+	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })                             // GM命令执行通知
 
 	// 场景
 	c.regMsg(PlayerSetPauseReq, func() any { return new(proto.PlayerSetPauseReq) })                           // 玩家暂停请求
@@ -89,6 +92,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(ScenePointUnlockNotify, func() any { return new(proto.ScenePointUnlockNotify) })                 // 场景传送点解锁通知
 	c.regMsg(MarkMapReq, func() any { return new(proto.MarkMapReq) })                                         // 标记地图请求
 	c.regMsg(MarkMapRsp, func() any { return new(proto.MarkMapRsp) })                                         // 标记地图响应
+	c.regMsg(AllMarkPointNotify, func() any { return new(proto.AllMarkPointNotify) })                         // 全部地图标记通知
 	c.regMsg(QueryPathReq, func() any { return new(proto.QueryPathReq) })                                     // 寻路请求
 	c.regMsg(QueryPathRsp, func() any { return new(proto.QueryPathRsp) })                                     // 寻路响应
 	c.regMsg(GetScenePointReq, func() any { return new(proto.GetScenePointReq) })                             // 获取场景传送点请求
@@ -392,9 +396,6 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(NavMeshStatsNotify, func() any { return new(proto.NavMeshStatsNotify) })
 	c.regMsg(GMShowObstacleReq, func() any { return new(proto.GMShowObstacleReq) })
 	c.regMsg(GMShowObstacleRsp, func() any { return new(proto.GMShowObstacleRsp) })
-	c.regMsg(GmTalkReq, func() any { return new(proto.GmTalkReq) })
-	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })
-	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })
 	c.regMsg(ServerLogNotify, func() any { return new(proto.ServerLogNotify) })
 	c.regMsg(MarkEntityInMinMapNotify, func() any { return new(proto.MarkEntityInMinMapNotify) })
 	c.regMsg(UnmarkEntityInMinMapNotify, func() any { return new(proto.UnmarkEntityInMinMapNotify) })

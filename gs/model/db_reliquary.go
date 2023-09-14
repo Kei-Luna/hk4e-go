@@ -35,7 +35,7 @@ func (r *DbReliquary) GetReliquaryMapLen() int {
 	return len(r.ReliquaryMap)
 }
 
-func (r *DbReliquary) InitAllReliquary(player *Player) {
+func (r *DbReliquary) InitDbReliquary(player *Player) {
 	for _, reliquary := range r.ReliquaryMap {
 		r.InitReliquary(player, reliquary)
 	}

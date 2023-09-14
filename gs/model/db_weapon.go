@@ -35,7 +35,7 @@ func (w *DbWeapon) GetWeaponMapLen() int {
 	return len(w.WeaponMap)
 }
 
-func (w *DbWeapon) InitAllWeapon(player *Player) {
+func (w *DbWeapon) InitDbWeapon(player *Player) {
 	for _, weapon := range w.WeaponMap {
 		w.InitWeapon(player, weapon)
 	}

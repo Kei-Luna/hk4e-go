@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -136,17 +137,27 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 }
 
 func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *proto.EvtBeingHitInfo) {
+	world := scene.GetWorld()
 	attackResult := hitInfo.AttackResult
 	if attackResult == nil {
 		logger.Error("attackResult is nil")
 		return
 	}
-	target := scene.GetEntity(attackResult.DefenseId)
-	if target == nil {
-		logger.Error("could not found target, defense id: %v", attackResult.DefenseId)
+	defEntity := scene.GetEntity(attackResult.DefenseId)
+	if defEntity == nil {
+		logger.Error("not found def entity, DefenseId: %v", attackResult.DefenseId)
 		return
 	}
-	fightProp := target.GetFightProp()
+	if WORLD_MANAGER.IsBigWorld(world) {
+		if world.GetPubg() == nil {
+			return
+		}
+		if defEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR &&
+			defEntity.GetAvatarEntity().GetUid() == world.GetOwner().PlayerId {
+			return
+		}
+	}
+	fightProp := defEntity.GetFightProp()
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
 	currHp -= attackResult.Damage
 	deltaHp := -attackResult.Damage
@@ -155,32 +166,68 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		currHp = 0
 	}
 	fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
-	g.EntityFightPropUpdateNotifyBroadcast(scene, target)
-	switch target.GetEntityType() {
+	g.EntityFightPropUpdateNotifyBroadcast(scene, defEntity)
+	switch defEntity.GetEntityType() {
 	case constant.ENTITY_TYPE_AVATAR:
 		g.SendMsg(cmd.EntityFightPropChangeReasonNotify, player.PlayerId, player.ClientSeq, &proto.EntityFightPropChangeReasonNotify{
 			PropDelta:      deltaHp,
 			ChangeHpReason: proto.ChangHpReason_CHANGE_HP_SUB_GM,
-			EntityId:       target.GetId(),
+			EntityId:       defEntity.GetId(),
 			PropType:       constant.FIGHT_PROP_CUR_HP,
 		})
 		if currHp == 0 {
-			avatarEntity := target.GetAvatarEntity()
-			g.KillPlayerAvatar(player, avatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
+			defAvatarEntity := defEntity.GetAvatarEntity()
+			g.KillPlayerAvatar(player, defAvatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
+			if WORLD_MANAGER.IsBigWorld(world) {
+				info := ""
+				defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetUid())
+				if defPlayer == nil {
+					return
+				}
+				atkEntity := scene.GetEntity(attackResult.AttackerId)
+				if atkEntity != nil && atkEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+					atkAvatarEntity := atkEntity.GetAvatarEntity()
+					atkPlayer := USER_MANAGER.GetOnlineUser(atkAvatarEntity.GetUid())
+					if atkPlayer == nil {
+						return
+					}
+					info = fmt.Sprintf("『%v』击败了『%v』，", atkPlayer.NickName, defPlayer.NickName)
+				} else {
+					info = fmt.Sprintf("『%v』死亡了，", defPlayer.NickName)
+				}
+				alivePlayerNum := 0
+				for _, scenePlayer := range scene.GetAllPlayer() {
+					if scenePlayer.PlayerId == world.GetOwner().PlayerId {
+						continue
+					}
+					avatarEntityId := world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer))
+					entity := scene.GetEntity(avatarEntityId)
+					if entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] <= 0.0 {
+						continue
+					}
+					alivePlayerNum++
+				}
+				info += fmt.Sprintf("剩余%v位存活玩家。", alivePlayerNum)
+				g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+				defPlayer.PubgRank += uint32(100 - alivePlayerNum)
+				if alivePlayerNum <= 1 {
+					TICK_MANAGER.CreateUserTimer(world.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
+				}
+			}
 		}
 	case constant.ENTITY_TYPE_MONSTER:
 		if currHp == 0 {
-			g.KillEntity(player, scene, target.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+			g.KillEntity(player, scene, defEntity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		}
 	case constant.ENTITY_TYPE_GADGET:
-		gadgetEntity := target.GetGadgetEntity()
+		gadgetEntity := defEntity.GetGadgetEntity()
 		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
 		if gadgetDataConfig == nil {
 			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
 			break
 		}
-		logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, target.GetId(), player.PlayerId)
-		g.handleGadgetEntityBeHitLow(player, target, attackResult.ElementType)
+		logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, defEntity.GetId(), player.PlayerId)
+		g.handleGadgetEntityBeHitLow(player, defEntity, attackResult.ElementType)
 	}
 }
 
@@ -247,6 +294,9 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 }
 
 func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, entityId uint32) {
+	if WORLD_MANAGER.IsBigWorld(world) {
+		return
+	}
 	// 服务器处理玩家移动场景区块aoi事件频率限制
 	now := uint64(time.Now().UnixMilli())
 	if now-player.LastSceneBlockAoiMoveTime < 200 {
@@ -672,14 +722,16 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	if world == nil {
 		return
 	}
-	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-	if bulletPhysicsEngine.IsRigidBody(req.EntityId) {
-		logger.Debug("[FPS] EvtBulletHitNotify: %+v", req)
-		bulletPhysicsEngine.DestroyRigidBody(req.EntityId)
-		_ = req.HitPoint
-	}
 	scene := world.GetSceneById(player.SceneId)
 	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, req)
+	if WORLD_MANAGER.IsBigWorld(world) {
+		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+		if bulletPhysicsEngine.IsRigidBody(req.EntityId) {
+			logger.Debug("[FPS] EvtBulletHitNotify: %+v", req)
+			bulletPhysicsEngine.DestroyRigidBody(req.EntityId)
+			_ = req.HitPoint
+		}
+	}
 }
 
 func (g *Game) EvtBulletMoveNotify(player *model.Player, payloadMsg pb.Message) {
@@ -706,34 +758,6 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	if world == nil {
 		return
 	}
-	// 甘雨冰属性蓄力箭
-	if req.ConfigId == 41037009 && world.GetMultiplayer() {
-		logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", req)
-		pitchAngleRaw := float64(req.InitEulerAngles.X)
-		pitchAngle := 0.0
-		if pitchAngleRaw < 90.0 {
-			pitchAngle = -pitchAngleRaw
-		} else if pitchAngleRaw > 270.0 {
-			pitchAngle = 360.0 - pitchAngleRaw
-		} else {
-			logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
-			return
-		}
-		vy := math.Sin(pitchAngle/360.0*2*math.Pi) * 50.0
-		vxz := math.Cos(pitchAngle/360.0*2*math.Pi) * 50.0
-		yawAngle := float64(req.InitEulerAngles.Y)
-		vx := math.Sin(yawAngle/360.0*2*math.Pi) * vxz
-		vz := math.Cos(yawAngle/360.0*2*math.Pi) * vxz
-		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		bulletPhysicsEngine.CreateRigidBody(
-			req.EntityId,
-			world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
-			player.SceneId,
-			req.InitPos.X, req.InitPos.Y, req.InitPos.Z,
-			float32(vx), float32(vy), float32(vz),
-		)
-	}
 	scene := world.GetSceneById(player.SceneId)
 	if req.InitPos == nil {
 		return
@@ -748,6 +772,36 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 		Z: float64(req.InitEulerAngles.Z),
 	}, req.EntityId, req.ConfigId, req.CampId, req.CampType, req.OwnerEntityId, req.TargetEntityId, req.PropOwnerEntityId)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{req.EntityId}, true, true)
+	if WORLD_MANAGER.IsBigWorld(world) {
+		// 甘雨冰属性蓄力箭
+		if req.ConfigId == 41037009 && world.GetMultiplayer() {
+			logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", req)
+			pitchAngleRaw := float64(req.InitEulerAngles.X)
+			pitchAngle := 0.0
+			if pitchAngleRaw < 90.0 {
+				pitchAngle = -pitchAngleRaw
+			} else if pitchAngleRaw > 270.0 {
+				pitchAngle = 360.0 - pitchAngleRaw
+			} else {
+				logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
+				return
+			}
+			vy := math.Sin(pitchAngle/360.0*2*math.Pi) * 50.0
+			vxz := math.Cos(pitchAngle/360.0*2*math.Pi) * 50.0
+			yawAngle := float64(req.InitEulerAngles.Y)
+			vx := math.Sin(yawAngle/360.0*2*math.Pi) * vxz
+			vz := math.Cos(yawAngle/360.0*2*math.Pi) * vxz
+			bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+			activeAvatarId := world.GetPlayerActiveAvatarId(player)
+			bulletPhysicsEngine.CreateRigidBody(
+				req.EntityId,
+				world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
+				player.SceneId,
+				req.InitPos.X, req.InitPos.Y, req.InitPos.Z,
+				float32(vx), float32(vy), float32(vz),
+			)
+		}
+	}
 }
 
 func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Message) {

@@ -250,6 +250,11 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.WorldPlayerReviveReq)
 	_ = req
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if WORLD_MANAGER.IsBigWorld(world) {
+		GAME.ReLoginPlayer(player.PlayerId, true)
+		return
+	}
 	g.TeleportPlayer(
 		player,
 		proto.EnterReason_ENTER_REASON_REVIVAL,

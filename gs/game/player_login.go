@@ -90,14 +90,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 
 	// 初始化
 	player.InitOnlineData()
-	dbAvatar := player.GetDbAvatar()
-	dbAvatar.InitAllAvatar(player)
-	dbReliquary := player.GetDbReliquary()
-	dbReliquary.InitAllReliquary(player)
-	dbWeapon := player.GetDbWeapon()
-	dbWeapon.InitAllWeapon(player)
-	dbItem := player.GetDbItem()
-	dbItem.InitAllItem(player)
 
 	// 确保玩家位置安全
 	player.Pos.X = player.SafePos.X
@@ -166,9 +158,9 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player := new(model.Player)
 	player.PlayerId = userId
-	player.NickName = ""
+	player.NickName = "旅行者"
 	player.Signature = ""
-	player.HeadImage = 0
+	player.HeadImage = 10000007
 	player.Birthday = []uint8{0, 0}
 	player.NameCard = 210001
 	player.NameCardList = make([]uint32, 0)
@@ -248,5 +240,6 @@ func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player
 	g.SendMsg(cmd.OpenStateUpdateNotify, userId, clientSeq, g.PacketOpenStateUpdateNotify())
 	g.SendMsg(cmd.QuestListNotify, userId, clientSeq, g.PacketQuestListNotify(player))
 	g.SendMsg(cmd.FinishedParentQuestNotify, userId, clientSeq, g.PacketFinishedParentQuestNotify(player))
+	g.SendMsg(cmd.AllMarkPointNotify, player.PlayerId, player.ClientSeq, &proto.AllMarkPointNotify{MarkList: g.PacketMapMarkPointList(player)})
 	// g.GCGLogin(player) // 发送GCG登录相关的通知包
 }

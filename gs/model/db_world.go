@@ -11,6 +11,13 @@ type DbSceneGroup struct {
 	GadgetStateMap map[uint32]uint8
 }
 
+type MapMark struct {
+	SceneId   uint32
+	Pos       *Vector
+	PointType uint32
+	Name      string
+}
+
 type DbScene struct {
 	SceneId        uint32
 	UnlockPointMap map[uint32]bool
@@ -19,7 +26,8 @@ type DbScene struct {
 }
 
 type DbWorld struct {
-	SceneMap map[uint32]*DbScene
+	SceneMap    map[uint32]*DbScene
+	MapMarkList []*MapMark
 }
 
 func (p *Player) GetDbWorld() *DbWorld {
@@ -31,7 +39,8 @@ func (p *Player) GetDbWorld() *DbWorld {
 
 func NewDbWorld() *DbWorld {
 	r := &DbWorld{
-		SceneMap: make(map[uint32]*DbScene),
+		SceneMap:    make(map[uint32]*DbScene),
+		MapMarkList: make([]*MapMark, 0),
 	}
 	return r
 }

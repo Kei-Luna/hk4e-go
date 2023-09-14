@@ -2,6 +2,7 @@ package game
 
 import (
 	"strconv"
+	"strings"
 
 	"hk4e/common/constant"
 	"hk4e/gdconf"
@@ -138,28 +139,87 @@ func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.MarkMapReq)
-	if req.Op == proto.MarkMapReq_ADD {
-		logger.Debug("player mark type: %v", req.Mark.PointType)
-		// 地图标点传送
-		if req.Mark.PointType == proto.MapMarkPointType_NPC {
-			posYInt, err := strconv.ParseInt(req.Mark.Name, 10, 64)
-			if err != nil {
-				logger.Error("parse pos y error: %v", err)
-				posYInt = 300
-			}
-			// 传送玩家
-			g.TeleportPlayer(
-				player,
-				proto.EnterReason_ENTER_REASON_GM,
-				req.Mark.SceneId,
-				&model.Vector{X: float64(req.Mark.Pos.X), Y: float64(posYInt), Z: float64(req.Mark.Pos.Z)},
-				new(model.Vector),
-				0,
-				0,
-			)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	if WORLD_MANAGER.IsBigWorld(world) {
+		pubg := world.GetPubg()
+		if pubg != nil {
+			GAME.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: pubg.GetAreaPointList()})
+			return
 		}
 	}
-	g.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{})
+	// 地图标点传送
+	if req.Op == proto.MarkMapReq_ADD && req.Mark.PointType == proto.MapMarkPointType_NPC && strings.Contains(req.Mark.Name, "@@") {
+		posYStr := strings.ReplaceAll(req.Mark.Name, "@@", "")
+		posY, err := strconv.Atoi(posYStr)
+		if err != nil {
+			logger.Error("parse pos y error: %v", err)
+			posY = 300
+		}
+		g.TeleportPlayer(
+			player,
+			proto.EnterReason_ENTER_REASON_GM,
+			req.Mark.SceneId,
+			&model.Vector{X: float64(req.Mark.Pos.X), Y: float64(posY), Z: float64(req.Mark.Pos.Z)},
+			new(model.Vector),
+			0,
+			0,
+		)
+		g.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: g.PacketMapMarkPointList(player)})
+		return
+	}
+	dbWorld := player.GetDbWorld()
+	switch req.Op {
+	case proto.MarkMapReq_ADD:
+		mark := &model.MapMark{
+			SceneId: req.Mark.SceneId,
+			Pos: &model.Vector{
+				X: float64(req.Mark.Pos.X),
+				Y: float64(req.Mark.Pos.Y),
+				Z: float64(req.Mark.Pos.Z),
+			},
+			PointType: uint32(req.Mark.PointType),
+			Name:      req.Mark.Name,
+		}
+		dbWorld.MapMarkList = append(dbWorld.MapMarkList, mark)
+	case proto.MarkMapReq_DEL:
+		newMapMarkList := make([]*model.MapMark, 0, len(dbWorld.MapMarkList))
+		for _, mapMark := range dbWorld.MapMarkList {
+			if mapMark.SceneId == req.Mark.SceneId &&
+				int32(mapMark.Pos.X) == int32(req.Mark.Pos.X) &&
+				int32(mapMark.Pos.Y) == int32(req.Mark.Pos.Y) &&
+				int32(mapMark.Pos.Z) == int32(req.Mark.Pos.Z) {
+				continue
+			}
+			newMapMarkList = append(newMapMarkList, mapMark)
+		}
+		dbWorld.MapMarkList = newMapMarkList
+	case proto.MarkMapReq_MOD:
+		newMapMarkList := make([]*model.MapMark, 0, len(dbWorld.MapMarkList))
+		for _, mapMark := range dbWorld.MapMarkList {
+			if mapMark.SceneId == req.Old.SceneId &&
+				int32(mapMark.Pos.X) == int32(req.Old.Pos.X) &&
+				int32(mapMark.Pos.Y) == int32(req.Old.Pos.Y) &&
+				int32(mapMark.Pos.Z) == int32(req.Old.Pos.Z) {
+				mapMark = &model.MapMark{
+					SceneId: req.Mark.SceneId,
+					Pos: &model.Vector{
+						X: float64(req.Mark.Pos.X),
+						Y: float64(req.Mark.Pos.Y),
+						Z: float64(req.Mark.Pos.Z),
+					},
+					PointType: uint32(req.Mark.PointType),
+					Name:      req.Mark.Name,
+				}
+			}
+			newMapMarkList = append(newMapMarkList, mapMark)
+		}
+		dbWorld.MapMarkList = newMapMarkList
+	case proto.MarkMapReq_GET:
+	}
+	g.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: g.PacketMapMarkPointList(player)})
 }
 
 func (g *Game) GetSceneAreaReq(player *model.Player, payloadMsg pb.Message) {
@@ -586,3 +646,21 @@ func (g *Game) TeleportPlayer(
 }
 
 /************************************************** 打包封装 **************************************************/
+
+func (g *Game) PacketMapMarkPointList(player *model.Player) []*proto.MapMarkPoint {
+	pbMarkList := make([]*proto.MapMarkPoint, 0)
+	dbWorld := player.GetDbWorld()
+	for _, mapMark := range dbWorld.MapMarkList {
+		pbMarkList = append(pbMarkList, &proto.MapMarkPoint{
+			SceneId: mapMark.SceneId,
+			Name:    mapMark.Name,
+			Pos: &proto.Vector{
+				X: float32(mapMark.Pos.X),
+				Y: float32(mapMark.Pos.Y),
+				Z: float32(mapMark.Pos.Z),
+			},
+			PointType: proto.MapMarkPointType(mapMark.PointType),
+		})
+	}
+	return pbMarkList
+}

@@ -47,6 +47,7 @@ type Player struct {
 	SafePos         *Vector            // 在陆地时的坐标
 	Pos             *Vector            // 坐标
 	Rot             *Vector            // 朝向
+	PubgRank        uint32             // 大逃杀模式积分
 	DbItem          *DbItem            // 道具
 	DbWeapon        *DbWeapon          // 武器
 	DbReliquary     *DbReliquary       // 圣遗物
@@ -100,6 +101,15 @@ func (p *Player) InitOnlineData() {
 	p.CombatInvokeHandler = NewInvokeHandler[proto.CombatInvokeEntry]()
 	p.AbilityInvokeHandler = NewInvokeHandler[proto.AbilityInvokeEntry]()
 	p.GCGInfo = NewGCGInfo() // 临时测试用数据
+
+	dbAvatar := p.GetDbAvatar()
+	dbAvatar.InitDbAvatar(p)
+	dbReliquary := p.GetDbReliquary()
+	dbReliquary.InitDbReliquary(p)
+	dbWeapon := p.GetDbWeapon()
+	dbWeapon.InitDbWeapon(p)
+	dbItem := p.GetDbItem()
+	dbItem.InitDbItem(p)
 }
 
 // 多人世界网络同步包转发器

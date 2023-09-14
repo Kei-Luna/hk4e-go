@@ -19,7 +19,7 @@ type Item struct {
 	Guid   uint64 `bson:"-" msgpack:"-"`
 }
 
-func (i *DbItem) InitAllItem(player *Player) {
+func (i *DbItem) InitDbItem(player *Player) {
 	for itemId, item := range i.ItemMap {
 		item.Guid = player.GetNextGameObjectGuid()
 		player.GameObjectGuidMap[item.Guid] = GameObject(item)

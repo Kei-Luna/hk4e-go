@@ -59,30 +59,32 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 			delEntityIdList = append(delEntityIdList, entityId)
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
-		// 卸载旧位置附近的group
-		for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
-			if !world.GetMultiplayer() {
-				// 单人世界直接卸载group
-				g.RemoveSceneGroup(player, oldScene, groupConfig)
-			} else {
-				// 多人世界group附近没有任何玩家则卸载
-				remove := true
-				for _, otherPlayer := range oldScene.GetAllPlayer() {
-					dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
-					if dx < 0 {
-						dx *= -1
-					}
-					dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
-					if dy < 0 {
-						dy *= -1
-					}
-					if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
-						remove = false
-						break
-					}
-				}
-				if remove {
+		if !WORLD_MANAGER.IsBigWorld(world) {
+			// 卸载旧位置附近的group
+			for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
+				if !world.GetMultiplayer() {
+					// 单人世界直接卸载group
 					g.RemoveSceneGroup(player, oldScene, groupConfig)
+				} else {
+					// 多人世界group附近没有任何玩家则卸载
+					remove := true
+					for _, otherPlayer := range oldScene.GetAllPlayer() {
+						dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
+						if dx < 0 {
+							dx *= -1
+						}
+						dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
+						if dy < 0 {
+							dy *= -1
+						}
+						if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
+							remove = false
+							break
+						}
+					}
+					if remove {
+						g.RemoveSceneGroup(player, oldScene, groupConfig)
+					}
 				}
 			}
 		}
@@ -313,13 +315,15 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	g.AddSceneEntityNotify(player, visionType, []uint32{activeWorldAvatar.GetAvatarEntityId()}, true, false)
 
-	// 加载附近的group
-	for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
-		g.AddSceneGroup(player, scene, groupConfig)
-	}
-	for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
-		groupConfig := gdconf.GetSceneGroup(triggerDataConfig.GroupId)
-		g.AddSceneGroup(player, scene, groupConfig)
+	if !WORLD_MANAGER.IsBigWorld(world) {
+		// 加载附近的group
+		for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
+			g.AddSceneGroup(player, scene, groupConfig)
+		}
+		for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
+			groupConfig := gdconf.GetSceneGroup(triggerDataConfig.GroupId)
+			g.AddSceneGroup(player, scene, groupConfig)
+		}
 	}
 	// 同步客户端视野内的场景实体
 	visionEntityMap := g.GetVisionEntity(scene, player.Pos)
@@ -628,6 +632,9 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 			MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 		}
 		g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
+	}
+	if WORLD_MANAGER.IsBigWorld(world) {
+		TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionPubgDieExit, 10)
 	}
 }
 

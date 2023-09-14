@@ -48,7 +48,7 @@ type Avatar struct {
 	FightPropMap      map[uint32]float32   `bson:"-" msgpack:"-"`
 }
 
-func (a *DbAvatar) InitAllAvatar(player *Player) {
+func (a *DbAvatar) InitDbAvatar(player *Player) {
 	for _, avatar := range a.AvatarMap {
 		a.InitAvatar(player, avatar)
 	}

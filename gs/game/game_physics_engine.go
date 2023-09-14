@@ -3,7 +3,6 @@ package game
 import (
 	"math"
 
-	"hk4e/common/constant"
 	"hk4e/pkg/alg"
 	"hk4e/pkg/logger"
 )
@@ -98,15 +97,10 @@ func (p *PhysicsEngine) Update(now int64) []*RigidBody {
 
 func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos *alg.Vector3, newPos *alg.Vector3) uint32 {
 	scene := p.world.GetSceneById(sceneId)
-	for _, entity := range scene.GetAllEntity() {
-		if entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
-			continue
-		}
-		avatarEntity := entity.GetAvatarEntity()
-		player := USER_MANAGER.GetOnlineUser(avatarEntity.GetUid())
-		if avatarEntity.GetAvatarId() != p.world.GetPlayerActiveAvatarId(player) {
-			continue
-		}
+	world := scene.GetWorld()
+	for _, player := range scene.GetAllPlayer() {
+		entityId := world.GetPlayerWorldAvatarEntityId(player, world.GetPlayerActiveAvatarId(player))
+		entity := scene.GetEntity(entityId)
 		if entity.GetId() == avatarEntityId {
 			continue
 		}
