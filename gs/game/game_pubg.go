@@ -35,7 +35,7 @@ type Pubg struct {
 	areaPointList         []*proto.MapMarkPoint // 客户端区域地图坐标列表
 }
 
-func (w *World) NewPubg() {
+func (w *World) StartPubg() {
 	w.pubg = &Pubg{
 		world:                 w,
 		blueAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
@@ -48,6 +48,13 @@ func (w *World) NewPubg() {
 		areaReduceZSpeed:      0.0,
 		areaPointList:         make([]*proto.MapMarkPoint, 0),
 	}
+	w.pubg.RefreshArea()
+	w.chatMsgList = make([]*proto.ChatInfo, 0)
+}
+
+func (w *World) StopPubg() {
+	w.pubg = nil
+	TICK_MANAGER.CreateUserTimer(w.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
 }
 
 func (p *Pubg) GetAreaPointList() []*proto.MapMarkPoint {
@@ -74,7 +81,7 @@ func (p *Pubg) IsInBlueArea(pos *model.Vector) bool {
 func (p *Pubg) RefreshArea() {
 	info := ""
 	if p.phase == PUBG_PHASE_START {
-		info = fmt.Sprintf("安全区已出现，当前%v位存活玩家。", len(p.GetAlivePlayerList()))
+		info = fmt.Sprintf("安全区已生成，当前%v位存活玩家。", len(p.GetAlivePlayerList()))
 		p.blueAreaCenterPos = &model.Vector{X: 500.0, Y: 0.0, Z: -500.0}
 		p.blueAreaRadius = 2000.0
 		p.safeAreaCenterPos = &model.Vector{X: 0.0, Y: 0.0, Z: 0.0}

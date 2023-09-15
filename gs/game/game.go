@@ -85,14 +85,11 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 		sign = BigWorldAiSign
 	}
 	r.ai = r.CreateRobot(uid, name, sign)
-	r.isStop = false
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
-	if !r.IsMainGs() {
-		COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(r.ai.PlayerId, 3)
-	}
 	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
 	r.run()
+	r.isStop = false
 	return r
 }
 
@@ -137,6 +134,17 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
 		EnterSceneToken: world.GetEnterSceneToken(),
 	})
+	if uid == BigWorldAiUid {
+		g.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
+			MotionInfo: &proto.MotionInfo{
+				Pos: &proto.Vector{X: 500.0, Y: 900.0, Z: -500.0},
+				Rot: new(proto.Vector),
+			},
+			EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
+		})
+	} else {
+		COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(uid, 3)
+	}
 	return robot
 }
 

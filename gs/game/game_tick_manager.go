@@ -174,7 +174,6 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 			}
 			GAME.ReLoginPlayer(worldPlayer.PlayerId, true)
 		}
-		world.pubg = nil
 	}
 }
 
@@ -252,15 +251,11 @@ func (t *TickManager) onDayChange(now int64) {
 
 func (t *TickManager) onHourChange(now int64) {
 	logger.Info("on hour change, time: %v", now)
-	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		if WORLD_MANAGER.IsBigWorld(world) {
-			if world.GetPubg() != nil {
-				continue
-			}
-			world.NewPubg()
-			pubg := world.GetPubg()
-			pubg.RefreshArea()
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		if world.GetPubg() != nil {
+			return
 		}
+		world.StartPubg()
 	}
 }
 
@@ -283,24 +278,18 @@ func (t *TickManager) onTick10Second(now int64) {
 
 func (t *TickManager) onTick5Second(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		if WORLD_MANAGER.IsAiWorld(world) {
-			if WORLD_MANAGER.IsBigWorld(world) && world.GetPubg() != nil {
-				continue
-			}
-
-			for applyUid := range world.owner.CoopApplyMap {
-				GAME.PlayerDealEnterWorld(world.owner, applyUid, true)
-			}
-		}
 		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
-			if WORLD_MANAGER.IsBigWorld(world) {
-				continue
-			}
-
 			// 多人世界其他玩家的坐标位置广播
 			GAME.WorldPlayerLocationNotify(world)
 			GAME.ScenePlayerLocationNotify(world)
 		}
+	}
+	aiWorld := WORLD_MANAGER.GetAiWorld()
+	if WORLD_MANAGER.IsBigWorld(aiWorld) && aiWorld.GetPubg() != nil {
+		return
+	}
+	for applyUid := range aiWorld.GetOwner().CoopApplyMap {
+		GAME.PlayerDealEnterWorld(aiWorld.GetOwner(), applyUid, true)
 	}
 }
 
@@ -310,48 +299,38 @@ func (t *TickManager) onTickSecond(now int64) {
 			// 世界里所有玩家的网络延迟广播
 			GAME.WorldPlayerRTTNotify(world)
 		}
-
-		if WORLD_MANAGER.IsBigWorld(world) {
-			pubg := world.GetPubg()
-			if pubg == nil {
-				continue
-			}
-			pubg.UpdateArea()
-			scene := world.GetSceneById(world.GetOwner().SceneId)
-			for _, scenePlayer := range scene.GetAllPlayer() {
-				if scenePlayer.PlayerId == world.GetOwner().PlayerId {
-					continue
-				}
-				avatarEntityId := world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer))
-				entity := scene.GetEntity(avatarEntityId)
-				if entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] <= 0.0 {
-					continue
-				}
-				if !pubg.IsInBlueArea(scenePlayer.Pos) {
-					scene := world.GetSceneById(scenePlayer.SceneId)
-					GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
-						AttackResult: &proto.AttackResult{
-							AttackerId: 0,
-							DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
-							Damage:     10,
-						},
-					})
-				}
-			}
-			alivePlayerList := pubg.GetAlivePlayerList()
-			if len(alivePlayerList) <= 1 {
-				if len(alivePlayerList) == 1 {
-					info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
-					GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-				}
-				TICK_MANAGER.CreateUserTimer(world.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
-			}
-		}
 	}
 	// // GCG游戏Tick
 	// for _, game := range GCG_MANAGER.gameMap {
 	// 	game.onTick()
 	// }
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		pubg := world.GetPubg()
+		if pubg == nil {
+			return
+		}
+		pubg.UpdateArea()
+		scene := world.GetSceneById(world.GetOwner().SceneId)
+		for _, scenePlayer := range scene.GetAllPlayer() {
+			if !pubg.IsInBlueArea(scenePlayer.Pos) {
+				GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
+					AttackResult: &proto.AttackResult{
+						AttackerId: 0,
+						DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
+						Damage:     10,
+					},
+				})
+			}
+		}
+		alivePlayerList := pubg.GetAlivePlayerList()
+		if len(alivePlayerList) <= 1 {
+			if len(alivePlayerList) == 1 {
+				info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
+				GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+			}
+			world.StopPubg()
+		}
+	}
 }
 
 func (t *TickManager) onTick200MilliSecond(now int64) {
@@ -374,22 +353,21 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				GAME.RestoreCountStaminaHandler(player)
 			}
 		}
-
-		if WORLD_MANAGER.IsBigWorld(world) {
-			bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-			hitList := bulletPhysicsEngine.Update(now)
-			for _, rigidBody := range hitList {
-				scene := world.GetSceneById(rigidBody.sceneId)
-				defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
-				defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
-				GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
-					AttackResult: &proto.AttackResult{
-						AttackerId: rigidBody.avatarEntityId,
-						DefenseId:  rigidBody.hitAvatarEntityId,
-						Damage:     100,
-					},
-				})
-			}
+	}
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+		hitList := bulletPhysicsEngine.Update(now)
+		for _, rigidBody := range hitList {
+			scene := world.GetSceneById(rigidBody.sceneId)
+			defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
+			defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
+			GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
+				AttackResult: &proto.AttackResult{
+					AttackerId: rigidBody.avatarEntityId,
+					DefenseId:  rigidBody.hitAvatarEntityId,
+					Damage:     100,
+				},
+			})
 		}
 	}
 }

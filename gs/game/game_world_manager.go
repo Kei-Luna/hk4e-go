@@ -101,7 +101,6 @@ func (w *WorldManager) GetAiWorld() *World {
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
-
 	if w.IsBigWorld(w.aiWorld) {
 		w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
 	}

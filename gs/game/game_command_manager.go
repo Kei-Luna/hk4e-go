@@ -136,9 +136,11 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 	fn := c.gmCmdRefValue.MethodByName(funcName)
 	if !fn.IsValid() {
+		logger.Error("gm func not valid, func: %v", funcName)
 		return false
 	}
 	if fn.Type().NumIn() != len(paramList) {
+		logger.Error("gm func param num not match, func: %v, need: %v, give: %v", funcName, fn.Type().NumIn(), len(paramList))
 		return false
 	}
 	in := make([]reflect.Value, fn.Type().NumIn())

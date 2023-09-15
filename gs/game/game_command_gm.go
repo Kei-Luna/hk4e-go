@@ -417,3 +417,15 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 	}
 	GAME.SendMsg(cmdId, userId, 0, msg)
 }
+
+func (g *GMCmd) StartPubg(v bool) {
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		world.StartPubg()
+	}
+}
+
+func (g *GMCmd) StopPubg(v bool) {
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		world.StopPubg()
+	}
+}

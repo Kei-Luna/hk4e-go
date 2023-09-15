@@ -161,11 +161,14 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 
 	fightProp := defEntity.GetFightProp()
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+	if currHp == 0.0 {
+		return
+	}
 	currHp -= attackResult.Damage
 	deltaHp := -attackResult.Damage
-	if currHp < 0 {
+	if currHp < 0.0 {
 		deltaHp -= currHp
-		currHp = 0
+		currHp = 0.0
 	}
 	fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
 	g.EntityFightPropUpdateNotifyBroadcast(scene, defEntity)
@@ -177,7 +180,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			EntityId:       defEntity.GetId(),
 			PropType:       constant.FIGHT_PROP_CUR_HP,
 		})
-		if currHp == 0 {
+		if currHp == 0.0 {
 			defAvatarEntity := defEntity.GetAvatarEntity()
 			g.KillPlayerAvatar(player, defAvatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
 
@@ -199,7 +202,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			}
 		}
 	case constant.ENTITY_TYPE_MONSTER:
-		if currHp == 0 {
+		if currHp == 0.0 {
 			g.KillEntity(player, scene, defEntity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		}
 	case constant.ENTITY_TYPE_GADGET:

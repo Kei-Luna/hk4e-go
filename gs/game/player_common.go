@@ -152,6 +152,12 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 				},
 			},
 		}
+
+		if WORLD_MANAGER.IsBigWorld(world) {
+			playerWorldLocationInfo.PlayerLoc.Pos = new(proto.Vector)
+			playerWorldLocationInfo.PlayerLoc.Rot = new(proto.Vector)
+		}
+
 		worldPlayerLocationNotify.PlayerWorldLocList = append(worldPlayerLocationNotify.PlayerWorldLocList, playerWorldLocationInfo)
 	}
 	g.SendToWorldA(world, cmd.WorldPlayerLocationNotify, 0, worldPlayerLocationNotify)
@@ -179,6 +185,12 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 					Z: float32(scenePlayer.Rot.Z),
 				},
 			}
+
+			if WORLD_MANAGER.IsBigWorld(world) {
+				playerLocationInfo.Pos = new(proto.Vector)
+				playerLocationInfo.Rot = new(proto.Vector)
+			}
+
 			scenePlayerLocationNotify.PlayerLocList = append(scenePlayerLocationNotify.PlayerLocList, playerLocationInfo)
 			// 载具位置
 			for _, entityId := range scenePlayer.VehicleInfo.CreateEntityIdMap {
