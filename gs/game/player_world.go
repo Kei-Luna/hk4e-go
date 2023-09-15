@@ -143,6 +143,7 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 	if world == nil {
 		return
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		pubg := world.GetPubg()
 		if pubg != nil {
@@ -150,6 +151,7 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 			return
 		}
 	}
+
 	// 地图标点传送
 	if req.Op == proto.MarkMapReq_ADD && req.Mark.PointType == proto.MapMarkPointType_NPC && strings.Contains(req.Mark.Name, "@@") {
 		posYStr := strings.ReplaceAll(req.Mark.Name, "@@", "")
@@ -594,10 +596,12 @@ func (g *Game) TeleportPlayer(
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) && sceneId != 3 {
 		logger.Error("big world scene not support now, sceneId: %v, uid: %v", sceneId, player.PlayerId)
 		return
 	}
+
 	newSceneId := sceneId
 	oldSceneId := player.SceneId
 	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}

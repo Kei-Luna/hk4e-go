@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"time"
 
 	"hk4e/common/constant"
@@ -35,6 +36,7 @@ type TickManager struct {
 	globalTick      *time.Ticker
 	globalTickCount uint64
 	userTickMap     map[uint32]*UserTick
+	tm              time.Time
 }
 
 func NewTickManager() (r *TickManager) {
@@ -42,6 +44,7 @@ func NewTickManager() (r *TickManager) {
 	r.globalTick = time.NewTicker(time.Millisecond * ServerTickTime)
 	r.globalTickCount = 0
 	r.userTickMap = make(map[uint32]*UserTick)
+	r.tm = time.Now()
 	logger.Info("game server tick start at: %v", time.Now().UnixMilli())
 	return r
 }
@@ -159,6 +162,7 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 		logger.Debug("UserTimerActionPubgDieExit")
 		GAME.ReLoginPlayer(player.PlayerId, true)
 	case UserTimerActionPubgEnd:
+		logger.Debug("UserTimerActionPubgEnd")
 		world := WORLD_MANAGER.GetWorldById(player.WorldId)
 		if world == nil {
 			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
@@ -178,7 +182,8 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 
 func (t *TickManager) OnGameServerTick() {
 	t.globalTickCount++
-	now := time.Now().UnixMilli()
+	tm := time.Now()
+	now := tm.UnixMilli()
 	if t.globalTickCount%(50/ServerTickTime) == 0 {
 		t.onTick50MilliSecond(now)
 	}
@@ -225,34 +230,46 @@ func (t *TickManager) OnGameServerTick() {
 			t.userTimerHandle(userId, timer.action, timer.data)
 		}
 	}
+	if tm.Hour() != t.tm.Hour() {
+		t.onHourChange(now)
+	}
+	if tm.Day() != t.tm.Day() {
+		t.onDayChange(now)
+	}
+	if tm.Month() != t.tm.Month() {
+		t.onMonthChange(now)
+	}
+	t.tm = tm
+}
+
+func (t *TickManager) onMonthChange(now int64) {
+	logger.Info("on month change, time: %v", now)
+}
+
+func (t *TickManager) onDayChange(now int64) {
+	logger.Info("on day change, time: %v", now)
+}
+
+func (t *TickManager) onHourChange(now int64) {
+	logger.Info("on hour change, time: %v", now)
+	for _, world := range WORLD_MANAGER.GetAllWorld() {
+		if WORLD_MANAGER.IsBigWorld(world) {
+			if world.GetPubg() != nil {
+				continue
+			}
+			world.NewPubg()
+			pubg := world.GetPubg()
+			pubg.RefreshArea()
+		}
+	}
 }
 
 func (t *TickManager) onTickHour(now int64) {
 	logger.Info("on tick hour, time: %v", now)
-	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		if WORLD_MANAGER.IsBigWorld(world) {
-			if world.GetPubg() != nil {
-				continue
-			}
-			world.NewPubg()
-			pubg := world.GetPubg()
-			pubg.RefreshArea()
-		}
-	}
 }
 
 func (t *TickManager) onTickMinute(now int64) {
 	gdconf.LuaStateLruRemove()
-	for _, world := range WORLD_MANAGER.GetAllWorld() {
-		if WORLD_MANAGER.IsBigWorld(world) {
-			if world.GetPubg() != nil {
-				continue
-			}
-			world.NewPubg()
-			pubg := world.GetPubg()
-			pubg.RefreshArea()
-		}
-	}
 }
 
 func (t *TickManager) onTick10Second(now int64) {
@@ -267,14 +284,19 @@ func (t *TickManager) onTick10Second(now int64) {
 func (t *TickManager) onTick5Second(now int64) {
 	for _, world := range WORLD_MANAGER.GetAllWorld() {
 		if WORLD_MANAGER.IsAiWorld(world) {
-			if world.GetPubg() != nil {
+			if WORLD_MANAGER.IsBigWorld(world) && world.GetPubg() != nil {
 				continue
 			}
+
 			for applyUid := range world.owner.CoopApplyMap {
 				GAME.PlayerDealEnterWorld(world.owner, applyUid, true)
 			}
 		}
-		if !WORLD_MANAGER.IsBigWorld(world) && world.GetOwner().SceneLoadState == model.SceneEnterDone {
+		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
+			if WORLD_MANAGER.IsBigWorld(world) {
+				continue
+			}
+
 			// 多人世界其他玩家的坐标位置广播
 			GAME.WorldPlayerLocationNotify(world)
 			GAME.ScenePlayerLocationNotify(world)
@@ -288,6 +310,7 @@ func (t *TickManager) onTickSecond(now int64) {
 			// 世界里所有玩家的网络延迟广播
 			GAME.WorldPlayerRTTNotify(world)
 		}
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			pubg := world.GetPubg()
 			if pubg == nil {
@@ -314,6 +337,14 @@ func (t *TickManager) onTickSecond(now int64) {
 						},
 					})
 				}
+			}
+			alivePlayerList := pubg.GetAlivePlayerList()
+			if len(alivePlayerList) <= 1 {
+				if len(alivePlayerList) == 1 {
+					info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
+					GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+				}
+				TICK_MANAGER.CreateUserTimer(world.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
 			}
 		}
 	}
@@ -343,6 +374,7 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				GAME.RestoreCountStaminaHandler(player)
 			}
 		}
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			bulletPhysicsEngine := world.GetBulletPhysicsEngine()
 			hitList := bulletPhysicsEngine.Update(now)

@@ -148,6 +148,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		logger.Error("not found def entity, DefenseId: %v", attackResult.DefenseId)
 		return
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		if world.GetPubg() == nil {
 			return
@@ -157,6 +158,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			return
 		}
 	}
+
 	fightProp := defEntity.GetFightProp()
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
 	currHp -= attackResult.Damage
@@ -178,8 +180,8 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		if currHp == 0 {
 			defAvatarEntity := defEntity.GetAvatarEntity()
 			g.KillPlayerAvatar(player, defAvatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
+
 			if WORLD_MANAGER.IsBigWorld(world) {
-				info := ""
 				defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetUid())
 				if defPlayer == nil {
 					return
@@ -191,27 +193,8 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 					if atkPlayer == nil {
 						return
 					}
-					info = fmt.Sprintf("『%v』击败了『%v』，", atkPlayer.NickName, defPlayer.NickName)
-				} else {
-					info = fmt.Sprintf("『%v』死亡了，", defPlayer.NickName)
-				}
-				alivePlayerNum := 0
-				for _, scenePlayer := range scene.GetAllPlayer() {
-					if scenePlayer.PlayerId == world.GetOwner().PlayerId {
-						continue
-					}
-					avatarEntityId := world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer))
-					entity := scene.GetEntity(avatarEntityId)
-					if entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] <= 0.0 {
-						continue
-					}
-					alivePlayerNum++
-				}
-				info += fmt.Sprintf("剩余%v位存活玩家。", alivePlayerNum)
-				g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-				defPlayer.PubgRank += uint32(100 - alivePlayerNum)
-				if alivePlayerNum <= 1 {
-					TICK_MANAGER.CreateUserTimer(world.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
+					info := fmt.Sprintf("『%v』击败了『%v』。", atkPlayer.NickName, defPlayer.NickName)
+					g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 				}
 			}
 		}
@@ -242,11 +225,13 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 			&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
 			entity.GetId(),
 		)
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
 				&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
 			)
 		}
+
 		// 更新玩家的位置信息
 		player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
 		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
@@ -297,6 +282,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	if WORLD_MANAGER.IsBigWorld(world) {
 		return
 	}
+
 	// 服务器处理玩家移动场景区块aoi事件频率限制
 	now := uint64(time.Now().UnixMilli())
 	if now-player.LastSceneBlockAoiMoveTime < 200 {
@@ -366,11 +352,13 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		if exist {
 			continue
 		}
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
 		}
+
 		// 旧有新没有的实体即为消失的
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
@@ -380,11 +368,13 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		if exist {
 			continue
 		}
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
 		}
+
 		// 新有旧没有的实体即为出现的
 		addEntityIdList = append(addEntityIdList, entityId)
 	}
@@ -724,6 +714,7 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	}
 	scene := world.GetSceneById(player.SceneId)
 	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, req)
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
 		if bulletPhysicsEngine.IsRigidBody(req.EntityId) {
@@ -772,6 +763,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 		Z: float64(req.InitEulerAngles.Z),
 	}, req.EntityId, req.ConfigId, req.CampId, req.CampType, req.OwnerEntityId, req.TargetEntityId, req.PropOwnerEntityId)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{req.EntityId}, true, true)
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		// 甘雨冰属性蓄力箭
 		if req.ConfigId == 41037009 && world.GetMultiplayer() {

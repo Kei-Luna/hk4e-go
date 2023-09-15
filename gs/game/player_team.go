@@ -1,6 +1,8 @@
 package game
 
 import (
+	"fmt"
+
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -197,8 +199,20 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	entity := scene.GetEntity(uint32(req.DieGuid))
 
+	if WORLD_MANAGER.IsBigWorld(world) {
+		pubg := world.GetPubg()
+		if pubg != nil {
+			alivePlayerNum := len(pubg.GetAlivePlayerList())
+			info := fmt.Sprintf("『%v』死亡了，剩余%v位存活玩家。", player.NickName, alivePlayerNum)
+			g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+			player.PubgRank += uint32(100 - alivePlayerNum)
+			g.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: req.SkillId, DieGuid: req.DieGuid})
+			return
+		}
+	}
+
+	entity := scene.GetEntity(uint32(req.DieGuid))
 	if entity.GetLastDieType() == int32(proto.PlayerDieType_PLAYER_DIE_DRAWN) {
 		maxStamina := player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA]
 		// 设置玩家耐力为一半
@@ -240,21 +254,19 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 		}
 	}
 
-	rsp := &proto.AvatarDieAnimationEndRsp{
-		SkillId: req.SkillId,
-		DieGuid: req.DieGuid,
-	}
-	g.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, rsp)
+	g.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: req.SkillId, DieGuid: req.DieGuid})
 }
 
 func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.WorldPlayerReviveReq)
 	_ = req
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		GAME.ReLoginPlayer(player.PlayerId, true)
 		return
 	}
+
 	g.TeleportPlayer(
 		player,
 		proto.EnterReason_ENTER_REASON_REVIVAL,
@@ -330,6 +342,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 		if WORLD_MANAGER.IsBigWorld(world) && worldAvatar.uid != player.PlayerId {
 			continue
 		}
+
 		worldPlayer := USER_MANAGER.GetOnlineUser(worldAvatar.GetUid())
 		if worldPlayer == nil {
 			logger.Error("player is nil, uid: %v", worldAvatar.GetUid())

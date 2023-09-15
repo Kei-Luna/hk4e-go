@@ -68,13 +68,15 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 	}
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world
+
 	if w.IsBigWorld(world) {
 		aoiManager := alg.NewAoiManager()
 		aoiManager.SetAoiRange(-8000, 4000, -200, 1000, -5500, 6500)
-		aoiManager.Init3DRectAoiManager(1200, 12, 1200, true)
+		aoiManager.Init3DRectAoiManager(120, 12, 120, true)
 		world.bigWorldAoi = aoiManager
 		logger.Info("big world aoi init finish")
 	}
+
 	return world
 }
 
@@ -99,6 +101,7 @@ func (w *WorldManager) GetAiWorld() *World {
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
+
 	if w.IsBigWorld(w.aiWorld) {
 		w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
 	}

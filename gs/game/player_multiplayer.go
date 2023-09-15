@@ -367,7 +367,7 @@ func (g *Game) PlayerLeaveWorld(player *model.Player) bool {
 }
 
 func (g *Game) WorldAddPlayer(world *World, player *model.Player) {
-	if !WORLD_MANAGER.IsBigWorld(world) && world.GetWorldPlayerNum() >= 4 {
+	if world.GetWorldPlayerNum() >= 4 && !WORLD_MANAGER.IsBigWorld(world) {
 		return
 	}
 	_, exist := world.GetAllPlayer()[player.PlayerId]
@@ -422,10 +422,12 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 	}
 
 	world.RemovePlayer(player)
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		bigWorldAoi := world.GetBigWorldAoi()
 		bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	}
+
 	player.WorldId = 0
 	if world.GetOwner().PlayerId == player.PlayerId {
 		// 房主离开销毁世界

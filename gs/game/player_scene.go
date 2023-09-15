@@ -59,6 +59,7 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 			delEntityIdList = append(delEntityIdList, entityId)
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+
 		if !WORLD_MANAGER.IsBigWorld(world) {
 			// 卸载旧位置附近的group
 			for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
@@ -325,6 +326,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 			g.AddSceneGroup(player, scene, groupConfig)
 		}
 	}
+
 	// 同步客户端视野内的场景实体
 	visionEntityMap := g.GetVisionEntity(scene, player.Pos)
 	entityIdList := make([]uint32, 0)
@@ -332,11 +334,13 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		if entityId == activeWorldAvatar.GetAvatarEntityId() {
 			continue
 		}
+
 		if WORLD_MANAGER.IsBigWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
 		}
+
 		entityIdList = append(entityIdList, entityId)
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
@@ -345,6 +349,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		vehicleEntityIdList := g.CreateSceneVehicle(scene)
 		g.AddSceneEntityNotify(player, visionType, vehicleEntityIdList, false, false)
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		bigWorldAoi := world.GetBigWorldAoi()
 		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
@@ -633,6 +638,7 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 		}
 		g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) {
 		TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionPubgDieExit, 10)
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"hk4e/common/constant"
 	"hk4e/gs/model"
 	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
@@ -12,11 +13,13 @@ import (
 
 const (
 	PUBG_PHASE_START = 0
+	PUBG_PHASE_II    = 2
 	PUBG_PHASE_END   = 16
 )
 
 const (
-	PUBG_PHASE_INV_TIME = 180.0
+	PUBG_PHASE_INV_TIME         = 180.0
+	PUBG_FIRST_AREA_REDUCE_TIME = 600.0
 )
 
 type Pubg struct {
@@ -71,20 +74,20 @@ func (p *Pubg) IsInBlueArea(pos *model.Vector) bool {
 func (p *Pubg) RefreshArea() {
 	info := ""
 	if p.phase == PUBG_PHASE_START {
-		info = "安全区已出现"
+		info = fmt.Sprintf("安全区已出现，当前%v位存活玩家。", len(p.GetAlivePlayerList()))
 		p.blueAreaCenterPos = &model.Vector{X: 500.0, Y: 0.0, Z: -500.0}
 		p.blueAreaRadius = 2000.0
 		p.safeAreaCenterPos = &model.Vector{X: 0.0, Y: 0.0, Z: 0.0}
 		p.safeAreaRadius = 0.0
 		TICK_MANAGER.CreateUserTimer(p.world.GetOwner().PlayerId, UserTimerActionPubgUpdateArea, PUBG_PHASE_INV_TIME)
 	} else if p.phase == PUBG_PHASE_END {
-		info = "安全区已消失"
+		info = "安全区已消失。"
 		p.blueAreaRadius = 0.0
 		p.safeAreaRadius = 0.0
 	} else {
 		switch p.phase % 3 {
 		case 1:
-			info = fmt.Sprintf("新的安全区已出现，进度%.1f%%", float64(p.phase)/PUBG_PHASE_END*100.0)
+			info = fmt.Sprintf("新的安全区已出现，进度%.1f%%。", float64(p.phase)/PUBG_PHASE_END*100.0)
 			p.safeAreaCenterPos = &model.Vector{
 				X: p.blueAreaCenterPos.X + random.GetRandomFloat64(-(p.blueAreaRadius*0.7/2.0), p.blueAreaRadius*0.7/2.0),
 				Y: 0.0,
@@ -92,15 +95,23 @@ func (p *Pubg) RefreshArea() {
 			}
 			p.safeAreaRadius = p.blueAreaRadius / 2.0
 			p.areaReduceRadiusSpeed = 0.0
+			TICK_MANAGER.CreateUserTimer(p.world.GetOwner().PlayerId, UserTimerActionPubgUpdateArea, PUBG_PHASE_INV_TIME)
 		case 2:
-			info = fmt.Sprintf("安全区正在缩小，进度%.1f%%", float64(p.phase)/PUBG_PHASE_END*100.0)
-			p.areaReduceRadiusSpeed = (p.blueAreaRadius - p.safeAreaRadius) / PUBG_PHASE_INV_TIME
-			p.areaReduceXSpeed = (p.safeAreaCenterPos.X - p.blueAreaCenterPos.X) / PUBG_PHASE_INV_TIME
-			p.areaReduceZSpeed = (p.safeAreaCenterPos.Z - p.blueAreaCenterPos.Z) / PUBG_PHASE_INV_TIME
+			info = fmt.Sprintf("安全区正在缩小，进度%.1f%%。", float64(p.phase)/PUBG_PHASE_END*100.0)
+			invTime := 0.0
+			if p.phase == PUBG_PHASE_II {
+				invTime = PUBG_FIRST_AREA_REDUCE_TIME
+			} else {
+				invTime = PUBG_PHASE_INV_TIME
+			}
+			p.areaReduceRadiusSpeed = (p.blueAreaRadius - p.safeAreaRadius) / invTime
+			p.areaReduceXSpeed = (p.safeAreaCenterPos.X - p.blueAreaCenterPos.X) / invTime
+			p.areaReduceZSpeed = (p.safeAreaCenterPos.Z - p.blueAreaCenterPos.Z) / invTime
+			TICK_MANAGER.CreateUserTimer(p.world.GetOwner().PlayerId, UserTimerActionPubgUpdateArea, uint32(invTime))
 		case 0:
-			info = fmt.Sprintf("安全区缩小完毕，进度%.1f%%", float64(p.phase)/PUBG_PHASE_END*100.0)
+			info = fmt.Sprintf("安全区缩小完毕，进度%.1f%%。", float64(p.phase)/PUBG_PHASE_END*100.0)
+			TICK_MANAGER.CreateUserTimer(p.world.GetOwner().PlayerId, UserTimerActionPubgUpdateArea, PUBG_PHASE_INV_TIME)
 		}
-		TICK_MANAGER.CreateUserTimer(p.world.GetOwner().PlayerId, UserTimerActionPubgUpdateArea, PUBG_PHASE_INV_TIME)
 	}
 	p.SyncMapMarkArea()
 	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
@@ -135,4 +146,21 @@ func (p *Pubg) SyncMapMarkArea() {
 	for _, player := range p.world.GetAllPlayer() {
 		GAME.SendMsg(cmd.AllMarkPointNotify, player.PlayerId, player.ClientSeq, &proto.AllMarkPointNotify{MarkList: p.areaPointList})
 	}
+}
+
+func (p *Pubg) GetAlivePlayerList() []*model.Player {
+	scene := p.world.GetSceneById(p.world.GetOwner().SceneId)
+	alivePlayerList := make([]*model.Player, 0)
+	for _, scenePlayer := range scene.GetAllPlayer() {
+		if scenePlayer.PlayerId == p.world.GetOwner().PlayerId {
+			continue
+		}
+		avatarEntityId := p.world.GetPlayerWorldAvatarEntityId(scenePlayer, p.world.GetPlayerActiveAvatarId(scenePlayer))
+		entity := scene.GetEntity(avatarEntityId)
+		if entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] <= 0.0 {
+			continue
+		}
+		alivePlayerList = append(alivePlayerList, scenePlayer)
+	}
+	return alivePlayerList
 }

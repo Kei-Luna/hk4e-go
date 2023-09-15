@@ -45,9 +45,11 @@ func (g *Game) GetPlayerSocialDetailReq(player *model.Player, payloadMsg pb.Mess
 	if world == nil {
 		return
 	}
+
 	if WORLD_MANAGER.IsBigWorld(world) {
-		socialDetail.FinishAchievementNum = player.PubgRank
+		socialDetail.FinishAchievementNum = targetPlayer.PubgRank
 	}
+
 	getPlayerSocialDetailRsp := &proto.GetPlayerSocialDetailRsp{
 		DetailData: socialDetail,
 	}
