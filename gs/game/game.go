@@ -260,7 +260,7 @@ func (g *Game) gameMainLoop() {
 			LOCAL_EVENT_MANAGER.LocalEventHandle(localEvent)
 			end := time.Now().UnixNano()
 			localEventCost += end - start
-		case command := <-COMMAND_MANAGER.GetCommandTextInput():
+		case command := <-COMMAND_MANAGER.GetCommandMessageInput():
 			// 处理GM命令
 			start := time.Now().UnixNano()
 			COMMAND_MANAGER.HandleCommand(command)

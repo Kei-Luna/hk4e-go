@@ -241,5 +241,5 @@ func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player
 	g.SendMsg(cmd.QuestListNotify, userId, clientSeq, g.PacketQuestListNotify(player))
 	g.SendMsg(cmd.FinishedParentQuestNotify, userId, clientSeq, g.PacketFinishedParentQuestNotify(player))
 	g.SendMsg(cmd.AllMarkPointNotify, player.PlayerId, player.ClientSeq, &proto.AllMarkPointNotify{MarkList: g.PacketMapMarkPointList(player)})
-	// g.GCGLogin(player) // 发送GCG登录相关的通知包
+	g.GCGLogin(player) // 发送GCG登录相关的通知包
 }

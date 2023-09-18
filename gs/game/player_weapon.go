@@ -451,6 +451,7 @@ func (g *Game) CalcWeaponUpgradeReturnItemsReq(player *model.Player, payloadMsg 
 
 /************************************************** 游戏功能 **************************************************/
 
+// GetAllWeaponDataConfig 获取所有武器数据配置表
 func (g *Game) GetAllWeaponDataConfig() map[int32]*gdconf.ItemData {
 	allWeaponDataConfig := make(map[int32]*gdconf.ItemData)
 	for itemId, itemData := range gdconf.GetItemDataMap() {
@@ -462,6 +463,7 @@ func (g *Game) GetAllWeaponDataConfig() map[int32]*gdconf.ItemData {
 	return allWeaponDataConfig
 }
 
+// AddPlayerWeapon 给予玩家武器
 func (g *Game) AddPlayerWeapon(userId uint32, itemId uint32) uint64 {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -484,6 +486,7 @@ func (g *Game) AddPlayerWeapon(userId uint32, itemId uint32) uint64 {
 	return weaponId
 }
 
+// CostPlayerWeapon 消耗玩家武器
 func (g *Game) CostPlayerWeapon(userId uint32, weaponIdList []uint64) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {

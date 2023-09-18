@@ -349,6 +349,7 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 
 /************************************************** 游戏功能 **************************************************/
 
+// GetAllAvatarDataConfig 获取所有角色数据配置表
 func (g *Game) GetAllAvatarDataConfig() map[int32]*gdconf.AvatarData {
 	allAvatarDataConfig := make(map[int32]*gdconf.AvatarData)
 	for avatarId, avatarData := range gdconf.GetAvatarDataMap() {
@@ -365,6 +366,7 @@ func (g *Game) GetAllAvatarDataConfig() map[int32]*gdconf.AvatarData {
 	return allAvatarDataConfig
 }
 
+// AddPlayerAvatar 给予玩家角色
 func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -488,6 +490,7 @@ func (g *Game) UpgradePlayerAvatar(player *model.Player, avatar *model.Avatar, e
 	g.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
 }
 
+// UpdatePlayerAvatarFightProp 更新玩家角色战斗属性
 func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -512,6 +515,7 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 
 /************************************************** 打包封装 **************************************************/
 
+// PacketAvatarInfo 转换角色信息
 func (g *Game) PacketAvatarInfo(avatar *model.Avatar) *proto.AvatarInfo {
 	pbAvatar := &proto.AvatarInfo{
 		IsFocus:  false,
@@ -603,6 +607,7 @@ func (g *Game) PacketAvatarPropNotify(avatar *model.Avatar) *proto.AvatarPropNot
 	return avatarPropNotify
 }
 
+// PacketAvatarDataNotify 角色数据通知
 func (g *Game) PacketAvatarDataNotify(player *model.Player) *proto.AvatarDataNotify {
 	dbAvatar := player.GetDbAvatar()
 	dbTeam := player.GetDbTeam()

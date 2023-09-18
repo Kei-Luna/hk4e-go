@@ -252,7 +252,8 @@ func (g *Game) PlayerTimeNotify(world *World) {
 func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GmTalkReq)
 	logger.Info("GmTalkReq: %v", req.Msg)
-	commandTextInput := COMMAND_MANAGER.GetCommandTextInput()
+
+	commandMessageInput := COMMAND_MANAGER.GetCommandMessageInput()
 	if strings.Contains(req.Msg, "@@") {
 		commandText := req.Msg
 		commandText = strings.ReplaceAll(commandText, "@@", "")
@@ -265,14 +266,14 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		funcName := commandText[:beginIndex]
 		paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
-		commandTextInput <- &CommandMessage{
+		commandMessageInput <- &CommandMessage{
 			GMType:    SystemFuncGM,
 			FuncName:  funcName,
 			ParamList: paramList,
 		}
 	} else {
-		commandTextInput <- &CommandMessage{
-			GMType:   PlayerChatGM,
+		commandMessageInput <- &CommandMessage{
+			GMType:   DevClientGM,
 			Executor: player,
 			Text:     req.Msg,
 		}

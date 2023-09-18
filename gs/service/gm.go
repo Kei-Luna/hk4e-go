@@ -14,7 +14,7 @@ type GMService struct {
 }
 
 func (s *GMService) Cmd(ctx context.Context, req *api.CmdRequest) (*api.CmdReply, error) {
-	commandTextInput := game.COMMAND_MANAGER.GetCommandTextInput()
+	commandTextInput := game.COMMAND_MANAGER.GetCommandMessageInput()
 	commandTextInput <- &game.CommandMessage{
 		GMType:    game.SystemFuncGM,
 		FuncName:  req.FuncName,

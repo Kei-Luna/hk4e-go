@@ -22,50 +22,236 @@ const (
 )
 
 // CommandFunc 命令执行函数
-type CommandFunc func(*CommandMessage)
+type CommandFunc func(content *CommandContent)
 
 const (
 	PlayerChatGM = iota // 玩家聊天GM
 	SystemFuncGM        // 系统函数GM
+	DevClientGM         // 开发客户端GM
 )
 
 // CommandMessage 命令消息
 // 给下层执行命令时提供数据
 type CommandMessage struct {
 	GMType int // GM类型
-	// 玩家聊天GM
-	Executor *model.Player     // 执行者
-	Text     string            // 命令原始文本
-	Name     string            // 命令前缀
-	Args     map[string]string // 命令参数
+	// 玩家聊天GM以及开发客户端GM
+	Executor *model.Player // 执行者
+	Text     string        // 命令文本
 	// 系统函数GM
 	FuncName  string   // 函数名
 	ParamList []string // 函数参数列表
 }
 
+// ContentParamResult 命令内容参数返回
+type ContentParamResult uint8
+
+const (
+	ContentParamResultInit    ContentParamResult = iota
+	ContentParamResultFailed                     // 失败
+	ContentParamResultSuccess                    // 成功
+)
+
+// CommandContent 命令内容
+type CommandContent struct {
+	Executor     *model.Player      // 执行者
+	AssignPlayer *model.Player      // 指定玩家
+	Name         string             // 玩家输入的命令名
+	ParamList    []string           // 玩家输入的参数列表
+	Controller   *CommandController // 命令控制器
+	// 执行时数据
+	paramIndex  uint8              // 当前执行到的参数索引
+	paramResult ContentParamResult // 当前参数执行结果
+	elseFunc    func()             // 参数错误处理函数
+}
+
+// SendMessage 发送消息
+func (c *CommandContent) SendMessage(player *model.Player, msg string, param ...any) {
+	GAME.SendPrivateChat(COMMAND_MANAGER.system, player.PlayerId, fmt.Sprintf(msg, param...))
+}
+
+// SendColorMessage 发送颜色消息
+func (c *CommandContent) SendColorMessage(player *model.Player, color, text string, param ...any) {
+	c.SendMessage(player, "<color=%v>%v</color>", color, fmt.Sprintf(text, param...))
+}
+
+// SendSuccMessage 发送成功颜色消息
+func (c *CommandContent) SendSuccMessage(player *model.Player, text string, param ...any) {
+	c.SendColorMessage(player, "#CCFFCC", text, param...)
+}
+
+// SendFailMessage 发送失败颜色消息
+func (c *CommandContent) SendFailMessage(player *model.Player, text string, param ...any) {
+	c.SendColorMessage(player, "#FF9999", text, param...)
+}
+
+// getNextParam 获取下一个参数
+func (c *CommandContent) getNextParam(typeStr string) (param any, ok bool) {
+	// 索引变更
+	c.paramIndex++
+	// 确保参数长度足够 -1是因为第一次的时候也是获取下一个参数
+	if len(c.ParamList) <= int(c.paramIndex)-1 {
+		return
+	}
+	// 获取字符串参数
+	paramStr := c.ParamList[c.paramIndex-1]
+	// 转换参数类型
+	switch typeStr {
+	case "int":
+		val, err := strconv.ParseInt(paramStr, 10, 64)
+		if err != nil {
+			return
+		}
+		return int(val), true
+	case "uint":
+		val, err := strconv.ParseUint(paramStr, 10, 64)
+		if err != nil {
+			return
+		}
+		return uint(val), true
+	case "int8":
+		val, err := strconv.ParseInt(paramStr, 10, 8)
+		if err != nil {
+			return
+		}
+		return int8(val), true
+	case "uint8":
+		val, err := strconv.ParseUint(paramStr, 10, 8)
+		if err != nil {
+			return
+		}
+		return uint8(val), true
+	case "int16":
+		val, err := strconv.ParseInt(paramStr, 10, 16)
+		if err != nil {
+			return
+		}
+		return int16(val), true
+	case "uint16":
+		val, err := strconv.ParseUint(paramStr, 10, 16)
+		if err != nil {
+			return
+		}
+		return uint16(val), true
+	case "int32":
+		val, err := strconv.ParseInt(paramStr, 10, 32)
+		if err != nil {
+			return
+		}
+		return int32(val), true
+	case "uint32":
+		val, err := strconv.ParseUint(paramStr, 10, 32)
+		if err != nil {
+			return
+		}
+		return uint32(val), true
+	case "int64":
+		val, err := strconv.ParseInt(paramStr, 10, 64)
+		if err != nil {
+			return
+		}
+		return val, true
+	case "uint64":
+		val, err := strconv.ParseUint(paramStr, 10, 64)
+		if err != nil {
+			return
+		}
+		return val, true
+	case "float32":
+		val, err := strconv.ParseFloat(paramStr, 32)
+		if err != nil {
+			return
+		}
+		return float32(val), true
+	case "float64":
+		val, err := strconv.ParseFloat(paramStr, 64)
+		if err != nil {
+			return
+		}
+		return val, true
+	case "bool":
+		val, err := strconv.ParseBool(paramStr)
+		if err != nil {
+			return
+		}
+		return val, true
+	case "string":
+		return paramStr, true
+	default:
+		return
+	}
+}
+
+// Dynamic 动态参数执行
+func (c *CommandContent) Dynamic(typeStr string, dynamicFunc func(param any) bool) *CommandContent {
+	// 上个参数执行错误则跳出
+	if c.paramResult == ContentParamResultFailed {
+		return c
+	}
+	// 拥有下个参数则继续执行
+	nowParam, ok := c.getNextParam(typeStr)
+	if ok && dynamicFunc(nowParam) {
+		c.paramResult = ContentParamResultSuccess
+	} else {
+		c.paramResult = ContentParamResultFailed
+	}
+	return c
+}
+
+// Option 可选参数执行
+func (c *CommandContent) Option(typeStr string, ifDynamicFunc func(param any) bool) *CommandContent {
+	// 上个参数执行错误则跳出
+	if c.paramResult == ContentParamResultFailed {
+		return c
+	}
+	// 条件成立则执行
+	if len(c.ParamList) > int(c.paramIndex) {
+		return c.Dynamic(typeStr, ifDynamicFunc)
+	}
+	return c
+}
+
+// Execute 执行命令实际业务并返回结果
+func (c *CommandContent) Execute(thenFunc func() bool) {
+	// 上个参数执行错误则跳出
+	if c.paramResult == ContentParamResultFailed {
+		return
+	}
+	if thenFunc() {
+		c.paramResult = ContentParamResultSuccess
+	} else {
+		c.paramResult = ContentParamResultFailed
+	}
+}
+
+// SetElse 设置参数执行错误处理
+func (c *CommandContent) SetElse(elseFunc func()) *CommandContent {
+	c.elseFunc = elseFunc
+	return c
+}
+
 // CommandManager 命令管理器
 type CommandManager struct {
-	system            *model.Player          // GM指令聊天消息机器人
-	commandFuncRouter map[string]CommandFunc // 记录命令处理函数
-	commandPermMap    map[string]CommandPerm // 记录命令对应的权限
-	commandTextInput  chan *CommandMessage   // 传输要处理的命令文本
-	gmCmd             *GMCmd
-	gmCmdRefValue     reflect.Value
+	system                *model.Player                 // GM指令聊天消息机器人
+	commandControllerList []*CommandController          // 命令控制器注册列表
+	commandControllerMap  map[string]*CommandController // 记录命令控制器
+	commandMessageInput   chan *CommandMessage          // 传输要处理的命令消息
+	gmCmd                 *GMCmd
+	gmCmdRefValue         reflect.Value
 }
 
 // NewCommandManager 新建命令管理器
 func NewCommandManager() *CommandManager {
 	r := new(CommandManager)
 	// 初始化
-	r.commandTextInput = make(chan *CommandMessage, 1000)
-	r.InitRouter() // 初始化路由
+	r.commandMessageInput = make(chan *CommandMessage, 1000)
+	r.InitController() // 初始化控制器
 	r.gmCmd = new(GMCmd)
 	r.gmCmdRefValue = reflect.ValueOf(r.gmCmd)
 	return r
 }
 
-func (c *CommandManager) GetCommandTextInput() chan *CommandMessage {
-	return c.commandTextInput
+func (c *CommandManager) GetCommandMessageInput() chan *CommandMessage {
+	return c.commandMessageInput
 }
 
 // SetSystem 设置GM指令聊天消息机器人
@@ -73,52 +259,32 @@ func (c *CommandManager) SetSystem(system *model.Player) {
 	c.system = system
 }
 
-// InitRouter 初始化命令路由
-func (c *CommandManager) InitRouter() {
-	c.commandFuncRouter = make(map[string]CommandFunc)
-	c.commandPermMap = make(map[string]CommandPerm)
-	{
-		// 权限等级 0: 普通玩家
-		c.RegisterRouter(CommandPermNormal, c.GotoCommand, "goto")
-		c.RegisterRouter(CommandPermNormal, c.HelpCommand, "help", "帮助")
-		c.RegisterRouter(CommandPermNormal, c.TeleportCommand, "teleport", "tp", "传送")
-		c.RegisterRouter(CommandPermNormal, c.GiveCommand, "give", "item", "物品", "给予")
-		c.RegisterRouter(CommandPermNormal, c.QuestCommand, "quest", "任务")
-		c.RegisterRouter(CommandPermNormal, c.UnlockAllPointCommand, "unlock", "解锁")
-		// c.RegisterRouter(CommandPermNormal, c.GcgCommand, "gcg")
-		c.RegisterRouter(CommandPermNormal, c.XLuaDebugCommand, "xluadebug")
-	}
-	// GM命令
-	{
-		// 权限等级 1: GM 1级
-	}
+// InitController 初始化命令控制器
+func (c *CommandManager) InitController() {
+	// 初始化命令控制器列表
+	c.InitControllerList()
+	// 注册所有的命令控制器
+	c.RegisterAllController()
 }
 
-// RegisterRouter 注册命令路由
-func (c *CommandManager) RegisterRouter(cmdPerm CommandPerm, cmdFunc CommandFunc, cmdName ...string) {
-	// 支持一个命令拥有多个别名
-	for _, s := range cmdName {
-		// 命令名统一转为小写
-		s = strings.ToLower(s)
-		// 如果命令已注册则报错 后者覆盖前者
-		if c.IsCommand(s) {
-			logger.Error("register command repeat, name: %v", s)
+// RegisterAllController 注册所有命令控制器
+func (c *CommandManager) RegisterAllController() {
+	c.commandControllerMap = make(map[string]*CommandController)
+
+	for _, controller := range c.commandControllerList {
+		// 支持一个命令拥有多个别名
+		for _, name := range controller.AliasList {
+			// 命令名统一转为小写
+			name = strings.ToLower(name)
+			// 如果命令已注册则报错 后者覆盖前者
+			_, ok := c.commandControllerMap[name]
+			if ok {
+				logger.Error("register command repeat, name: %v", name)
+			}
+			// 记录命令
+			c.commandControllerMap[name] = controller
 		}
-		// 记录命令
-		c.commandFuncRouter[s] = cmdFunc
-		c.commandPermMap[s] = cmdPerm
 	}
-}
-
-// IsCommand 命令是否已被注册
-func (c *CommandManager) IsCommand(cmdName string) bool {
-	_, cmdFuncOK := c.commandFuncRouter[cmdName]
-	_, cmdPermOK := c.commandPermMap[cmdName]
-	// 判断命令函数和命令权限是否已注册
-	if cmdFuncOK && cmdPermOK {
-		return true
-	}
-	return false
 }
 
 // PlayerInputCommand 玩家输入要处理的命令
@@ -130,9 +296,14 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 		return
 	}
 	// 输入的命令将在主协程中处理
-	c.commandTextInput <- &CommandMessage{GMType: PlayerChatGM, Executor: player, Text: text}
+	c.commandMessageInput <- &CommandMessage{
+		GMType:   PlayerChatGM,
+		Executor: player,
+		Text:     text,
+	}
 }
 
+// CallGMCmd 调用GM命令
 func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 	fn := c.gmCmdRefValue.MethodByName(funcName)
 	if !fn.IsValid() {
@@ -240,131 +411,82 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 
 // HandleCommand 处理命令
 // 主协程接收到命令消息后执行
-func (c *CommandManager) HandleCommand(cmd *CommandMessage) bool {
+func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
 	switch cmd.GMType {
-	case PlayerChatGM:
-		// TODO 米哈游版本传送命令
-		if strings.Contains(cmd.Text, "goto") {
-			cmd.Name = "goto"
-			c.ExecCommand(cmd)
-			return true
-		}
-
-		executor := cmd.Executor
-
-		// 分割出命令的每个参数
-		// 不区分命令的大小写 统一转为小写
-		cmdSplit := strings.Split(strings.ToLower(cmd.Text), " --")
-
-		// 分割出来啥也没有可能是个空的字符串
-		// 此时将会返回的命令名和命令参数都为空
-		if len(cmdSplit) == 0 {
-			return false
-		}
-
-		// 命令参数 初始化
-		cmd.Args = make(map[string]string, len(cmdSplit)-1)
-
-		// 首个参数必是命令名
-		cmd.Name = cmdSplit[0]
-		// 命令名后当然是命令的参数喽
-		argSplit := cmdSplit[1:]
-
-		// 我们要将命令的参数转换为键值对
-		// 每个参数之间会有个空格分割
-		for _, s := range argSplit {
-			cmdArg := strings.Split(s, " ")
-
-			// 分割出来的参数只有一个那肯定不是键值对
-			if len(cmdArg) < 2 {
-				c.SendMessage(executor, "格式错误，用法: %v --[参数名] [参数]。", cmd.Name)
-				return false
-			}
-
-			argKey := cmdArg[0]   // 参数的键
-			argValue := cmdArg[1] // 参数的值
-
-			// 记录命令的参数
-			cmd.Args[argKey] = argValue
-		}
-
+	case PlayerChatGM, DevClientGM:
 		// 执行命令
 		c.ExecCommand(cmd)
-		return true
 	case SystemFuncGM:
 		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", cmd.FuncName, cmd.ParamList)
 		// 反射调用command_gm.go中的函数并反射解析传入参数类型
-		return c.CallGMCmd(cmd.FuncName, cmd.ParamList)
+		c.CallGMCmd(cmd.FuncName, cmd.ParamList)
 	}
-	return false
-}
-
-// GetFriendList 获取包含系统的玩家好友列表
-func (c *CommandManager) GetFriendList(friendList map[uint32]bool) map[uint32]bool {
-	// 可能还有更好的方法实现这功能
-	// 但我想不出来awa
-
-	// 临时好友列表
-	tempFriendList := make(map[uint32]bool, len(friendList))
-	// 复制玩家的好友列表
-	for userId, b := range friendList {
-		tempFriendList[userId] = b
-	}
-	// 添加系统
-	tempFriendList[c.system.PlayerId] = true
-
-	return tempFriendList
 }
 
 // ExecCommand 执行命令
 func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
-	executor := cmd.Executor
+	// 命令内容
+	content := new(CommandContent)
+	content.Executor = cmd.Executor
+	// 默认指定玩家为执行者
+	content.AssignPlayer = cmd.Executor
+
+	// 分割出命令的每个参数
+	cmdSplit := strings.Split(cmd.Text, " ")
+	// 分割出来啥也没有可能是个空的字符串
+	// 此时将会返回的命令名和命令参数都为空
+	if len(cmdSplit) == 0 {
+		content.SendFailMessage(content.Executor, "命令错误：命令名为空。")
+		return
+	}
+	// 有些命令没有参数 也要适配
+	var paramList []string
+	if len(cmdSplit) >= 2 {
+		paramList = cmdSplit[1:]
+	}
+	// 不区分命令名的大小写 统一转为小写
+	content.Name = strings.ToLower(cmdSplit[0]) // 首个参数必是命令名
+	content.ParamList = paramList               // 命令名后当然是命令的参数喽
 
 	// 判断命令是否注册
-	cmdFunc, ok := c.commandFuncRouter[cmd.Name]
+	controller, ok := c.commandControllerMap[content.Name]
 	if !ok {
 		// 玩家可能会执行一些没有的命令仅做调试输出
-		c.SendMessage(executor, "命令不存在，输入 help 查看帮助。")
+		content.SendFailMessage(content.Executor, "命令不存在，输入 help 查看帮助。")
 		return
 	}
-	// 判断命令权限是否注册
-	cmdPerm, ok := c.commandPermMap[cmd.Name]
-	if !ok {
-		// 一般命令权限都会注册 没注册则报error错误
-		logger.Error("command exec permission not exist, name: %v", cmd.Name)
-		return
-	}
-
+	// 设置控制器
+	content.Controller = controller
 	// 判断玩家的权限是否符合要求
-	player := executor
-	if ok && player.CmdPerm < uint8(cmdPerm) {
-		logger.Debug("exec command permission denied, uid: %v, CmdPerm: %v", player.PlayerId, player.CmdPerm)
-		c.SendMessage(player, "权限不足，该命令需要%v级权限。\n你目前的权限等级：%v", cmdPerm, player.CmdPerm)
+	player := content.Executor
+	if ok && player.CmdPerm < uint8(controller.Perm) {
+		content.SendFailMessage(content.Executor, "权限不足，该命令需要%v级权限。\n你目前的权限等级：%v", controller.Perm, player.CmdPerm)
 		return
 	}
-
-	cmdFunc(cmd) // 执行命令
-}
-
-// SendMessage 发送消息
-func (c *CommandManager) SendMessage(player *model.Player, msg string, param ...any) {
-	GAME.SendPrivateChat(c.system, player.PlayerId, fmt.Sprintf(msg, param...))
-}
-
-// GetExecutorId 获取执行者Id
-func (c *CommandManager) GetExecutorId(executor any) uint32 {
-	// 根据相应的类型获取Id
-	switch executor.(type) {
-	case *model.Player:
-		// 玩家类型
-		player := executor.(*model.Player)
-		return player.PlayerId
-	// case string:
-	// GM接口等
-	// return 123
-	default:
-		// 无效的类型报错
-		logger.Error("command executor type error, type: %T", executor)
+	// 命令指定uid
+	if player.CommandAssignUid != 0 {
+		// 判断指定玩家是否在线
+		target := USER_MANAGER.GetOnlineUser(player.CommandAssignUid)
+		// 目标玩家属于非本地玩家
+		if target == nil {
+			content.SendFailMessage(content.Executor, "命令执行失败，指定玩家离线或不在当前服务器。")
+			return
+		}
+		content.AssignPlayer = target
 	}
-	return 0
+	// 执行命令
+	controller.Func(content)
+	// 命令执行过程中没有问题就跳出
+	if content.paramResult == ContentParamResultSuccess {
+		return
+	}
+	// 命令参数错误处理
+	if content.elseFunc == nil {
+		// 默认的错误处理
+		text := strings.ReplaceAll(controller.Usage, "{alias}", content.Name)
+		content.SendFailMessage(content.Executor, "参数或格式错误，正确用法：\n\n<color=white>%v</color>", text)
+	} else {
+		// 自定义的错误处理
+		content.elseFunc()
+	}
 }

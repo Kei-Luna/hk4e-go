@@ -158,15 +158,12 @@ func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Messag
 		FriendList: make([]*proto.FriendBrief, 0),
 	}
 
-	// 获取包含系统的临时好友列表
-	// 用于实现好友列表内的系统且不更改原先的内容
-	tempFriendList := COMMAND_MANAGER.GetFriendList(player.FriendList)
-	for uid := range tempFriendList {
-
+	// 添加好友到列表
+	addFriendListFunc := func(uid uint32) {
 		friendPlayer, online, _ := USER_MANAGER.LoadGlobalPlayer(uid)
 		if friendPlayer == nil {
 			logger.Error("target player is nil, uid: %v", player.PlayerId)
-			continue
+			return
 		}
 		var onlineState proto.FriendOnlineState = 0
 		if online {
@@ -191,6 +188,13 @@ func (g *Game) GetPlayerFriendListReq(player *model.Player, payloadMsg pb.Messag
 		}
 		getPlayerFriendListRsp.FriendList = append(getPlayerFriendListRsp.FriendList, friendBrief)
 	}
+	for uid := range player.FriendList {
+		addFriendListFunc(uid)
+	}
+	// 命令管理器还需添加机器人的好友
+	// 这样做是为了不修改用户好友列表的数据
+	addFriendListFunc(COMMAND_MANAGER.system.PlayerId)
+
 	g.SendMsg(cmd.GetPlayerFriendListRsp, player.PlayerId, player.ClientSeq, getPlayerFriendListRsp)
 }
 

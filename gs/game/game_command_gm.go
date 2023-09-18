@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/base64"
-
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -51,11 +50,34 @@ func (g *GMCmd) GMAddItem(userId, itemId, itemCount uint32) {
 }
 
 // GMAddWeapon 给予玩家武器
-func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32) {
+func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, refinement uint8) {
 	// 武器数量
 	for i := uint32(0); i < itemCount; i++ {
 		// 给予武器
-		GAME.AddPlayerWeapon(userId, itemId)
+		weaponId := GAME.AddPlayerWeapon(userId, itemId)
+		// 获取玩家
+		player := USER_MANAGER.GetOnlineUser(userId)
+		if player == nil {
+			logger.Error("player is nil, uid: %v", userId)
+			return
+		}
+		// 获取武器
+		weapon := player.GetDbWeapon().GetWeapon(weaponId)
+		if weapon == nil {
+			logger.Error("weapon is nil, weaponId: %v", weaponId)
+			return
+		}
+		// 设置武器的突破等级
+		maxLevel := 90
+		maxPromote := 6
+		weapon.Promote = level / (uint8(maxLevel / maxPromote))
+		// 设置武器等级
+		weapon.Level = level
+		weapon.Exp = 0
+		// 设置武器精炼
+		weapon.Refinement = refinement
+		// 更新武器的物品数据
+		GAME.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, GAME.PacketStoreItemChangeNotifyByWeapon(weapon))
 	}
 }
 
@@ -69,11 +91,32 @@ func (g *GMCmd) GMAddReliquary(userId, itemId, itemCount uint32) {
 }
 
 // GMAddAvatar 给予玩家角色
-func (g *GMCmd) GMAddAvatar(userId, avatarId uint32) {
+func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level uint8) {
 	// 添加角色
 	GAME.AddPlayerAvatar(userId, avatarId)
-	// TODO 设置角色 等以后做到角色升级之类的再说
-	// avatar := player.AvatarMap[avatarId]
+	// 获取玩家
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 获取角色
+	avatar, ok := player.GetDbAvatar().AvatarMap[avatarId]
+	if !ok {
+		logger.Error("avatar not exist, avatarId: %v", avatarId)
+		return
+	}
+	// 设置角色的突破等级
+	maxLevel := 90
+	maxPromote := 6
+	avatar.Promote = level / (uint8(maxLevel / maxPromote))
+	// 设置角色的等级
+	avatar.Level = level
+	avatar.Exp = 0
+	// 角色更新面板
+	GAME.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
+	// 角色属性表更新通知
+	GAME.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, GAME.PacketAvatarPropNotify(avatar))
 }
 
 // GMAddCostume 给予玩家时装
@@ -102,9 +145,9 @@ func (g *GMCmd) GMAddAllItem(userId, itemCount uint32) {
 }
 
 // GMAddAllWeapon 给予玩家所有武器
-func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32) {
+func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32, level, refinement uint8) {
 	for itemId := range GAME.GetAllWeaponDataConfig() {
-		g.GMAddWeapon(userId, uint32(itemId), itemCount)
+		g.GMAddWeapon(userId, uint32(itemId), itemCount, level, refinement)
 	}
 }
 
@@ -117,9 +160,9 @@ func (g *GMCmd) GMAddAllReliquary(userId, itemCount uint32) {
 }
 
 // GMAddAllAvatar 给予玩家所有角色
-func (g *GMCmd) GMAddAllAvatar(userId uint32) {
+func (g *GMCmd) GMAddAllAvatar(userId uint32, level uint8) {
 	for avatarId := range GAME.GetAllAvatarDataConfig() {
-		g.GMAddAvatar(userId, uint32(avatarId))
+		g.GMAddAvatar(userId, uint32(avatarId), level)
 	}
 }
 
@@ -138,16 +181,16 @@ func (g *GMCmd) GMAddAllFlycloak(userId uint32) {
 }
 
 // GMAddAll 给予玩家所有内容
-func (g *GMCmd) GMAddAll(userId, itemCount uint32) {
+func (g *GMCmd) GMAddAll(userId uint32) {
 	GAME.LogoutPlayer(userId)
 	// 给予玩家所有物品
-	g.GMAddAllItem(userId, itemCount)
+	g.GMAddAllItem(userId, 9999)
 	// 给予玩家所有武器
-	g.GMAddAllWeapon(userId, itemCount)
+	g.GMAddAllWeapon(userId, 5, 90, 5)
 	// 给予玩家所有圣遗物
-	g.GMAddAllReliquary(userId, itemCount)
+	g.GMAddAllReliquary(userId, 5)
 	// 给予玩家所有角色
-	g.GMAddAllAvatar(userId)
+	g.GMAddAllAvatar(userId, 90)
 	// 给予玩家所有时装
 	g.GMAddAllCostume(userId)
 	// 给予玩家所有风之翼

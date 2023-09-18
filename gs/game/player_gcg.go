@@ -20,40 +20,40 @@ func (g *Game) GCGLogin(player *model.Player) {
 	// GCG目前可能有点问题先不发送
 	// 以后再慢慢搞
 
-	// // GCG基础信息
-	// g.SendMsg(cmd.GCGBasicDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGBasicDataNotify(player))
-	// // GCG等级挑战解锁
-	// g.SendMsg(cmd.GCGLevelChallengeNotify, player.PlayerId, player.ClientSeq, g.PacketGCGLevelChallengeNotify(player))
-	// // GCG禁止的卡牌
-	// g.SendMsg(cmd.GCGDSBanCardNotify, player.PlayerId, player.ClientSeq, g.PacketGCGDSBanCardNotify(player))
-	// // GCG解锁或拥有的内容
-	// g.SendMsg(cmd.GCGDSDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGDSDataNotify(player))
-	// // GCG酒馆挑战数据
-	// g.SendMsg(cmd.GCGTCTavernChallengeDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTCTavernChallengeDataNotify(player))
+	// GCG基础信息
+	g.SendMsg(cmd.GCGBasicDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGBasicDataNotify(player))
+	// GCG等级挑战解锁
+	g.SendMsg(cmd.GCGLevelChallengeNotify, player.PlayerId, player.ClientSeq, g.PacketGCGLevelChallengeNotify(player))
+	// GCG禁止的卡牌
+	g.SendMsg(cmd.GCGDSBanCardNotify, player.PlayerId, player.ClientSeq, g.PacketGCGDSBanCardNotify(player))
+	// GCG解锁或拥有的内容
+	g.SendMsg(cmd.GCGDSDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGDSDataNotify(player))
+	// GCG酒馆挑战数据
+	g.SendMsg(cmd.GCGTCTavernChallengeDataNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTCTavernChallengeDataNotify(player))
 }
 
 // GCGTavernInit GCG酒馆初始化
 func (g *Game) GCGTavernInit(player *model.Player) {
-	// if player.SceneId == 1076 {
-	// 	// GCG酒馆信息通知
-	// 	g.SendMsg(cmd.GCGTCTavernInfoNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTCTavernInfoNotify(player))
-	// 	// GCG酒馆NPC信息通知
-	// 	g.SendMsg(cmd.GCGTavernNpcInfoNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTavernNpcInfoNotify(player))
-	// }
+	if player.SceneId == 1076 {
+		// GCG酒馆信息通知
+		g.SendMsg(cmd.GCGTCTavernInfoNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTCTavernInfoNotify(player))
+		// GCG酒馆NPC信息通知
+		g.SendMsg(cmd.GCGTavernNpcInfoNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTavernNpcInfoNotify(player))
+	}
 }
 
 // GCGStartChallenge GCG开始挑战
 func (g *Game) GCGStartChallenge(player *model.Player) {
 	// GCG开始游戏通知
-	// gcgStartChallengeByCheckRewardRsp := &proto.GCGStartChallengeByCheckRewardRsp{
-	//	ExceededItemTypeList: make([]uint32, 0, 0),
-	//	LevelId:              0,
-	//	ExceededItemList:     make([]uint32, 0, 0),
-	//	LevelType:            proto.GCGLevelType_GCG_LEVEL_TYPE_GUIDE_GROUP,
-	//	ConfigId:             7066505,
-	//	Retcode:              0,
-	// }
-	// g.SendMsg(cmd.GCGStartChallengeByCheckRewardRsp, player.PlayerId, player.ClientSeq, gcgStartChallengeByCheckRewardRsp)
+	gcgStartChallengeByCheckRewardRsp := &proto.GCGStartChallengeByCheckRewardRsp{
+		ExceededItemTypeList: make([]uint32, 0),
+		LevelId:              0,
+		ExceededItemList:     make([]uint32, 0),
+		LevelType:            proto.GCGLevelType_GCG_LEVEL_GUIDE_GROUP,
+		ConfigId:             7066505,
+		Retcode:              0,
+	}
+	g.SendMsg(cmd.GCGStartChallengeByCheckRewardRsp, player.PlayerId, player.ClientSeq, gcgStartChallengeByCheckRewardRsp)
 
 	// 创建GCG游戏
 	game := GCG_MANAGER.CreateGame(30101, []*model.Player{player})

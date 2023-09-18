@@ -50,6 +50,10 @@ func (g *Game) JoinPlayerSceneReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.JoinPlayerSceneRsp, player.PlayerId, player.ClientSeq, joinPlayerSceneRsp)
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
 	g.WorldRemovePlayer(world, player)
 
 	g.SendMsg(cmd.LeaveWorldNotify, player.PlayerId, player.ClientSeq, new(proto.LeaveWorldNotify))
@@ -78,6 +82,10 @@ func (g *Game) JoinPlayerSceneReq(player *model.Player, payloadMsg pb.Message) {
 func (g *Game) PlayerGetForceQuitBanInfoReq(player *model.Player, payloadMsg pb.Message) {
 	ok := true
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
 	for _, worldPlayer := range world.GetAllPlayer() {
 		if worldPlayer.SceneLoadState != model.SceneEnterDone {
 			ok = false
@@ -116,6 +124,10 @@ func (g *Game) ChangeWorldToSingleModeReq(player *model.Player, payloadMsg pb.Me
 func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SceneKickPlayerReq)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
 	if player.PlayerId != world.GetOwner().PlayerId {
 		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{})
 		return
@@ -183,6 +195,10 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 		g.SendMsg(cmd.PlayerApplyEnterMpResultNotify, player.PlayerId, player.ClientSeq, playerApplyEnterMpResultNotify)
 	}
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
 	if world.GetMultiplayer() {
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
@@ -354,6 +370,10 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 
 func (g *Game) PlayerLeaveWorld(player *model.Player) bool {
 	oldWorld := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if oldWorld == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return false
+	}
 	if !oldWorld.GetMultiplayer() {
 		return false
 	}
