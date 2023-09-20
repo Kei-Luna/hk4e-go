@@ -118,6 +118,7 @@ func (r *RouteManager) initRoute() {
 	r.registerRouter(cmd.EntityForceSyncReq, GAME.EntityForceSyncReq)
 	r.registerRouter(cmd.AvatarDieAnimationEndReq, GAME.AvatarDieAnimationEndReq)
 	r.registerRouter(cmd.WorldPlayerReviveReq, GAME.WorldPlayerReviveReq)
+	r.registerRouter(cmd.UseItemReq, GAME.UseItemReq)
 }
 
 type HandlerFunc func(player *model.Player, payloadMsg pb.Message)

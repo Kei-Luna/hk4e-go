@@ -366,25 +366,27 @@ func (g *Game) HandleDrown(player *model.Player, stamina uint32) {
 		return
 	}
 	// 确保玩家正在游泳
-	if player.StaminaInfo.State == proto.MotionState_MOTION_SWIM_MOVE || player.StaminaInfo.State == proto.MotionState_MOTION_SWIM_DASH {
-		logger.Debug("player drown, curStamina: %v, state: %v", stamina, player.StaminaInfo.State)
-		// 设置角色为死亡
-		world := WORLD_MANAGER.GetWorldById(player.WorldId)
-		if world == nil {
-			return
+	if player.StaminaInfo.State != proto.MotionState_MOTION_SWIM_MOVE && player.StaminaInfo.State != proto.MotionState_MOTION_SWIM_DASH {
+		return
+	}
+	logger.Debug("player drown, curStamina: %v, state: %v", stamina, player.StaminaInfo.State)
+	// 设置角色为死亡
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+		dbAvatar := player.GetDbAvatar()
+		avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+		if !exist {
+			logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+			continue
 		}
-		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
-			dbAvatar := player.GetDbAvatar()
-			avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
-			if !exist {
-				logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
-				continue
-			}
-			if avatar.LifeState != constant.LIFE_STATE_ALIVE {
-				continue
-			}
-			g.KillPlayerAvatar(player, worldAvatar.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_DRAWN)
+		if avatar.LifeState != constant.LIFE_STATE_ALIVE {
+			continue
 		}
+		g.KillPlayerAvatar(player, worldAvatar.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_DRAWN)
 	}
 }
 

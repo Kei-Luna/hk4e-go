@@ -156,6 +156,10 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 			return
 		}
 		pubg := world.GetPubg()
+		if pubg == nil {
+			logger.Error("pubg is nil,  worldId: %v, uid: %v", player.WorldId, userId)
+			return
+		}
 		pubg.phase++
 		pubg.RefreshArea()
 	case UserTimerActionPubgDieExit:
@@ -300,10 +304,11 @@ func (t *TickManager) onTickSecond(now int64) {
 			GAME.WorldPlayerRTTNotify(world)
 		}
 	}
-	// // GCG游戏Tick
-	// for _, game := range GCG_MANAGER.gameMap {
-	// 	game.onTick()
-	// }
+	// GCG游戏Tick
+	for _, game := range GCG_MANAGER.gameMap {
+		game.onTick()
+	}
+	// PUBG游戏
 	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
 		pubg := world.GetPubg()
 		if pubg == nil {

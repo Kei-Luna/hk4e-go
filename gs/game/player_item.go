@@ -7,9 +7,67 @@ import (
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
+
+	pb "google.golang.org/protobuf/proto"
 )
 
 /************************************************** 接口请求 **************************************************/
+
+// UseItemReq 使用物品请求
+func (g *Game) UseItemReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.UseItemReq)
+	// 是否拥有物品
+	item, ok := player.GameObjectGuidMap[req.Guid].(*model.Item)
+	if !ok {
+		logger.Error("item not exist, weaponGuid: %v", req.Guid)
+		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
+		return
+	}
+	// 获取物品配置表
+	itemDataConfig := gdconf.GetItemDataById(int32(item.ItemId))
+	if itemDataConfig == nil {
+		logger.Error("item data config is nil, itemId: %v", item.ItemId)
+		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
+		return
+	}
+	// 获取角色
+	avatar, ok := player.GameObjectGuidMap[req.TargetGuid].(*model.Avatar)
+	if !ok {
+		logger.Error("avatar not exist, avatarGuid: %v", req.TargetGuid)
+		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
+		return
+	}
+	// 根据物品的材料类型做不同操作
+	switch itemDataConfig.MaterialType {
+	case constant.MATERIAL_TYPE_FOOD:
+		// 复活
+		g.RevivePlayerAvatar(player, avatar.AvatarId)
+	case constant.MATERIAL_TYPE_NOTICE_ADD_HP:
+		// 回血
+	default:
+		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
+		return
+	}
+	// 消耗物品
+	changeItemList := []*ChangeItem{
+		{
+			ItemId:      item.ItemId,
+			ChangeCount: 1,
+		},
+	}
+	if !g.CostPlayerItem(player.PlayerId, changeItemList) {
+		logger.Error("item count not enough, uid: %v", player.PlayerId)
+		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
+		return
+	}
+	useItemRsp := &proto.UseItemRsp{
+		Guid:       req.Guid,
+		TargetGuid: req.TargetGuid,
+		ItemId:     item.ItemId,
+		OptionIdx:  0,
+	}
+	g.SendMsg(cmd.UseItemRsp, player.PlayerId, player.ClientSeq, useItemRsp)
+}
 
 /************************************************** 游戏功能 **************************************************/
 
@@ -18,6 +76,7 @@ type ChangeItem struct {
 	ChangeCount uint32
 }
 
+// GetAllItemDataConfig 获取所有物品数据配置表
 func (g *Game) GetAllItemDataConfig() map[int32]*gdconf.ItemData {
 	allItemDataConfig := make(map[int32]*gdconf.ItemData)
 	for itemId, itemData := range gdconf.GetItemDataMap() {
@@ -34,6 +93,7 @@ func (g *Game) GetAllItemDataConfig() map[int32]*gdconf.ItemData {
 	return allItemDataConfig
 }
 
+// GetPlayerItemCount 获取玩家所持有的某个物品的数量
 func (g *Game) GetPlayerItemCount(userId uint32, itemId uint32) uint32 {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -127,6 +187,7 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 	return true
 }
 
+// CostPlayerItem 玩家消耗物品
 func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -204,6 +265,7 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 
 /************************************************** 打包封装 **************************************************/
 
+// PacketStoreWeightLimitNotify 背包容量限制通知
 func (g *Game) PacketStoreWeightLimitNotify() *proto.StoreWeightLimitNotify {
 	storeWeightLimitNotify := &proto.StoreWeightLimitNotify{
 		StoreType: proto.StoreType_STORE_PACK,
@@ -217,6 +279,7 @@ func (g *Game) PacketStoreWeightLimitNotify() *proto.StoreWeightLimitNotify {
 	return storeWeightLimitNotify
 }
 
+// PacketPlayerStoreNotify 玩家背包内容通知
 func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreNotify {
 	dbItem := player.GetDbItem()
 	dbWeapon := player.GetDbWeapon()

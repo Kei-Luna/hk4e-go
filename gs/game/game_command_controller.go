@@ -465,7 +465,7 @@ func UnlockCommand(c *CommandContent) {
 var GcgCommandController = &CommandController{
 	Name:        "七圣召唤测试",
 	AliasList:   []string{"gcgtest"},
-	Description: "<color=#FFFFCC>unlock</color> <color=#FFCC99>七圣召唤测试命令</color>",
+	Description: "<color=#FFFFCC>gcgtest</color> <color=#FFCC99>七圣召唤测试命令</color>",
 	Usage:       "命令格式：\n1. {alias} 测试七圣召唤",
 	Perm:        CommandPermNormal,
 	Func:        GcgCommand,
