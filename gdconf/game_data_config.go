@@ -71,6 +71,7 @@ type GameDataConfig struct {
 	GachaDropGroupDataMap   map[int32]*GachaDropGroupData           // 卡池掉落组 临时的
 	SkillStaminaDataMap     map[int32]*SkillStaminaData             // 角色技能消耗体力 临时的
 	VehicleDataMap          map[int32]*VehicleData                  // 载具
+	OpenStateDataMap        map[int32]*OpenStateData                // 开放状态
 }
 
 func InitGameDataConfig() {
@@ -174,6 +175,7 @@ func (g *GameDataConfig) load() {
 	g.loadGachaDropGroupData()   // 卡池掉落组 临时的
 	g.loadSkillStaminaData()     // 角色技能消耗体力 临时的
 	g.loadVehicleData()          // 载具
+	g.loadOpenStateData()        // 开放状态
 }
 
 // CSV相关

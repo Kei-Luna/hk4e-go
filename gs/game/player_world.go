@@ -19,6 +19,7 @@ import (
 
 /************************************************** 接口请求 **************************************************/
 
+// SceneTransToPointReq 场景传送到传送点请求
 func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SceneTransToPointReq)
 	if player.SceneLoadState != model.SceneEnterDone {
@@ -66,6 +67,7 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 	g.SendMsg(cmd.SceneTransToPointRsp, player.PlayerId, player.ClientSeq, sceneTransToPointRsp)
 }
 
+// UnlockTransPointReq 解锁传送点请求
 func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.UnlockTransPointReq)
 
@@ -98,45 +100,46 @@ func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) 
 	g.SendSucc(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{})
 }
 
+// GetScenePointReq 获取场景锚点请求
 func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetScenePointReq)
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", world.id, player.PlayerId)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(req.SceneId)
-	if dbScene == nil {
+	if owner == nil {
+		logger.Error("owner is nil, worldId: %v", world.id)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
-	getScenePointRsp := &proto.GetScenePointRsp{
-		SceneId: req.SceneId,
-	}
+	dbWorld := owner.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(req.SceneId)
+	// 区域 暂时解锁全部区域
 	areaIdMap := make(map[uint32]bool)
 	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {
 		if uint32(worldAreaData.SceneId) == req.SceneId {
 			areaIdMap[uint32(worldAreaData.AreaId1)] = true
 		}
 	}
-	areaList := make([]uint32, 0)
+	areaIdMap[1] = true
+	unlockAreaList := make([]uint32, 0)
 	for areaId := range areaIdMap {
-		areaList = append(areaList, areaId)
+		unlockAreaList = append(unlockAreaList, areaId)
 	}
-	getScenePointRsp.UnlockAreaList = areaList
-	for _, pointId := range dbScene.GetUnlockPointList() {
-		pointData := gdconf.GetScenePointBySceneIdAndPointId(int32(req.SceneId), int32(pointId))
-		if pointData.IsModelHidden {
-			getScenePointRsp.HidePointList = append(getScenePointRsp.HidePointList, pointId)
-		}
-		getScenePointRsp.UnlockedPointList = append(getScenePointRsp.UnlockedPointList, pointId)
+	getScenePointRsp := &proto.GetScenePointRsp{
+		SceneId:           req.SceneId,
+		UnlockAreaList:    unlockAreaList,
+		UnlockedPointList: dbScene.GetUnlockPointList(),
+		UnhidePointList:   dbScene.GetUnHidePointList(),
 	}
 	g.SendMsg(cmd.GetScenePointRsp, player.PlayerId, player.ClientSeq, getScenePointRsp)
 }
 
+// MarkMapReq 地图标点请求
 func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.MarkMapReq)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
@@ -224,18 +227,21 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: g.PacketMapMarkPointList(player)})
 }
 
+// GetSceneAreaReq 获取场景区域请求
 func (g *Game) GetSceneAreaReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetSceneAreaReq)
 
 	getSceneAreaRsp := &proto.GetSceneAreaRsp{
 		SceneId: req.SceneId,
 	}
+	// 区域 暂时解锁全部区域
 	areaIdMap := make(map[uint32]bool)
 	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {
 		if uint32(worldAreaData.SceneId) == req.SceneId {
 			areaIdMap[uint32(worldAreaData.AreaId1)] = true
 		}
 	}
+	areaIdMap[1] = true
 	areaList := make([]uint32, 0)
 	for areaId := range areaIdMap {
 		areaList = append(areaList, areaId)
@@ -247,15 +253,13 @@ func (g *Game) GetSceneAreaReq(player *model.Player, payloadMsg pb.Message) {
 			{CityId: 2, Level: 10},
 			{CityId: 3, Level: 10},
 			{CityId: 4, Level: 10},
-			{CityId: 99, Level: 1},
-			{CityId: 100, Level: 1},
-			{CityId: 101, Level: 1},
-			{CityId: 102, Level: 1},
+			{CityId: 5, Level: 10},
 		}
 	}
 	g.SendMsg(cmd.GetSceneAreaRsp, player.PlayerId, player.ClientSeq, getSceneAreaRsp)
 }
 
+// EnterWorldAreaReq 进入世界区域请求
 func (g *Game) EnterWorldAreaReq(player *model.Player, payloadMsg pb.Message) {
 	logger.Debug("player enter world area, uid: %v", player.PlayerId)
 	req := payloadMsg.(*proto.EnterWorldAreaReq)
@@ -269,6 +273,7 @@ func (g *Game) EnterWorldAreaReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.EnterWorldAreaRsp, player.PlayerId, player.ClientSeq, enterWorldAreaRsp)
 }
 
+// ChangeGameTimeReq 修改游戏时间请求
 func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.ChangeGameTimeReq)
 	gameTime := req.GameTime
@@ -294,9 +299,12 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.ChangeGameTimeRsp, player.PlayerId, player.ClientSeq, changeGameTimeRsp)
 }
 
+// NpcTalkReq npc对话请求
 func (g *Game) NpcTalkReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.NpcTalkReq)
+
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_COMPLETE_TALK, "", int32(req.TalkId))
+
 	rsp := &proto.NpcTalkRsp{
 		CurTalkId:   req.TalkId,
 		NpcEntityId: req.NpcEntityId,
@@ -305,8 +313,10 @@ func (g *Game) NpcTalkReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.NpcTalkRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
+// DungeonEntryInfoReq 秘境信息请求
 func (g *Game) DungeonEntryInfoReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.DungeonEntryInfoReq)
+
 	pointDataConfig := gdconf.GetScenePointBySceneIdAndPointId(int32(req.SceneId), int32(req.PointId))
 	if pointDataConfig == nil {
 		g.SendError(cmd.DungeonEntryInfoRsp, player, &proto.DungeonEntryInfoRsp{})
@@ -325,6 +335,7 @@ func (g *Game) DungeonEntryInfoReq(player *model.Player, payloadMsg pb.Message) 
 	g.SendMsg(cmd.DungeonEntryInfoRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
+// PlayerEnterDungeonReq 玩家进入秘境请求
 func (g *Game) PlayerEnterDungeonReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerEnterDungeonReq)
 	dungeonDataConfig := gdconf.GetDungeonDataById(int32(req.DungeonId))
@@ -355,6 +366,7 @@ func (g *Game) PlayerEnterDungeonReq(player *model.Player, payloadMsg pb.Message
 	g.SendMsg(cmd.PlayerEnterDungeonRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
+// PlayerQuitDungeonReq 玩家离开秘境请求
 func (g *Game) PlayerQuitDungeonReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerQuitDungeonReq)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
@@ -386,6 +398,7 @@ func (g *Game) PlayerQuitDungeonReq(player *model.Player, payloadMsg pb.Message)
 	g.SendMsg(cmd.PlayerQuitDungeonRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
+// GadgetInteractReq gadget交互请求
 func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GadgetInteractReq)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)

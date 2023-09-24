@@ -331,9 +331,11 @@ func (g *Game) UpdatePlayerStamina(player *model.Player, staminaCost int32) {
 	// 大世界无限耐力
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if WORLD_MANAGER.IsBigWorld(world) {
+	// 大世界不扣除耐力 但可以回复
+	if WORLD_MANAGER.IsBigWorld(world) && staminaCost < 0 {
 		return
 	}
 	// 耐力消耗为0代表不更改 仍然执行后面的话会导致回复出问题

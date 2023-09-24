@@ -36,6 +36,9 @@ func (s *StaminaInfo) SetStaminaCost(state proto.MotionState) {
 		// 浪船加速
 		s.CostStamina = constant.STAMINA_COST_SKIFF_DASH
 	// 恢复耐力
+	case proto.MotionState_MOTION_FIGHT:
+		// 战斗 下坠攻击
+		s.CostStamina = constant.STAMINA_COST_FIGHT
 	case proto.MotionState_MOTION_DANGER_RUN, proto.MotionState_MOTION_RUN:
 		// 正常跑步
 		s.CostStamina = constant.STAMINA_COST_RUN

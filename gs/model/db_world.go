@@ -21,6 +21,7 @@ type MapMark struct {
 type DbScene struct {
 	SceneId        uint32
 	UnlockPointMap map[uint32]bool
+	UnHidePointMap map[uint32]bool
 	SceneGroupMap  map[uint32]*DbSceneGroup
 	VehicleMap     map[uint32]*DbVehicle
 }
@@ -49,6 +50,7 @@ func NewScene(sceneId uint32) *DbScene {
 	r := &DbScene{
 		SceneId:        sceneId,
 		UnlockPointMap: make(map[uint32]bool),
+		UnHidePointMap: make(map[uint32]bool),
 		SceneGroupMap:  make(map[uint32]*DbSceneGroup),
 		VehicleMap:     make(map[uint32]*DbVehicle),
 	}
@@ -70,8 +72,23 @@ func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
 	return scene
 }
 
+func (s *DbScene) GetUnHidePointMap() map[uint32]bool {
+	if s.UnHidePointMap == nil {
+		s.UnHidePointMap = make(map[uint32]bool)
+	}
+	return s.UnHidePointMap
+}
+
+func (s *DbScene) GetUnHidePointList() []uint32 {
+	unHidePointList := make([]uint32, 0, len(s.GetUnHidePointMap()))
+	for pointId := range s.GetUnHidePointMap() {
+		unHidePointList = append(unHidePointList, pointId)
+	}
+	return unHidePointList
+}
+
 func (s *DbScene) GetUnlockPointList() []uint32 {
-	unlockPointList := make([]uint32, 0)
+	unlockPointList := make([]uint32, 0, len(s.UnlockPointMap))
 	for pointId := range s.UnlockPointMap {
 		unlockPointList = append(unlockPointList, pointId)
 	}
@@ -84,6 +101,10 @@ func (s *DbScene) UnlockPoint(pointId uint32) {
 		return
 	}
 	s.UnlockPointMap[pointId] = true
+	// 隐藏锚点取消隐藏
+	if pointDataConfig.IsModelHidden {
+		s.GetUnHidePointMap()[pointId] = true
+	}
 }
 
 func (s *DbScene) CheckPointUnlock(pointId uint32) bool {

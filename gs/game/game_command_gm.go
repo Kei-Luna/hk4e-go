@@ -2,7 +2,7 @@ package game
 
 import (
 	"encoding/base64"
-
+	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -198,6 +198,78 @@ func (g *GMCmd) GMAddAll(userId uint32) {
 	g.GMAddAllFlycloak(userId)
 }
 
+// GMKillSelf 杀死自己
+func (g *GMCmd) GMKillSelf(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	// 激活的角色id
+	activeAvatarId := player.GetDbTeam().GetActiveAvatarId()
+	// 杀死角色
+	GAME.KillPlayerAvatar(player, activeAvatarId, proto.PlayerDieType_PLAYER_DIE_GM)
+}
+
+// GMKillMonster 杀死某个怪物
+func (g *GMCmd) GMKillMonster(userId uint32, entityId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	if scene == nil {
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		return
+	}
+	// 获取实体
+	entity := scene.GetEntity(entityId)
+	if entity == nil {
+		logger.Error("entity is nil, entityId: %v, uid: %v", entityId, player.PlayerId)
+		return
+	}
+	// 确保为怪物
+	if entity.entityType != constant.ENTITY_TYPE_MONSTER {
+		return
+	}
+	// 杀死怪物
+	GAME.KillEntity(player, scene, entity.id, proto.PlayerDieType_PLAYER_DIE_GM)
+}
+
+// GMKillAllMonster 杀死所有怪物
+func (g *GMCmd) GMKillAllMonster(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	if scene == nil {
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		return
+	}
+	// 杀死所有怪物实体
+	for _, entity := range scene.entityMap {
+		// 确保为怪物
+		if entity.entityType != constant.ENTITY_TYPE_MONSTER {
+			continue
+		}
+		// 杀死怪物
+		GAME.KillEntity(player, scene, entity.id, proto.PlayerDieType_PLAYER_DIE_GM)
+	}
+}
+
 // GMAddQuest 添加任务
 func (g *GMCmd) GMAddQuest(userId uint32, questId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
@@ -255,8 +327,8 @@ func (g *GMCmd) GMForceFinishAllQuest(userId uint32) {
 	GAME.AcceptQuest(player, true)
 }
 
-// GMUnlockAllPoint 解锁场景全部传送点
-func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
+// GMUnlockPoint 解锁场景某个锚点
+func (g *GMCmd) GMUnlockPoint(userId uint32, sceneId uint32, pointId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -269,13 +341,42 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 		return
 	}
 	scenePointMapConfig := gdconf.GetScenePointMapBySceneId(int32(sceneId))
+	if scenePointMapConfig == nil {
+		logger.Error("scene point config is nil, sceneId: %v", sceneId)
+		return
+	}
+	// 解锁锚点
+	dbScene.UnlockPoint(pointId)
+	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
+		SceneId:   sceneId,
+		PointList: []uint32{pointId},
+	})
+}
+
+// GMUnlockAllPoint 解锁场景全部锚点
+func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(sceneId)
+	if dbScene == nil {
+		logger.Error("db scene is nil, sceneId: %v, uid: %v", sceneId, userId)
+		return
+	}
+	scenePointMapConfig := gdconf.GetScenePointMapBySceneId(int32(sceneId))
+	if scenePointMapConfig == nil {
+		logger.Error("scene point config is nil, sceneId: %v", sceneId)
+		return
+	}
 	for _, pointData := range scenePointMapConfig {
 		dbScene.UnlockPoint(uint32(pointData.Id))
 	}
 	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
-		SceneId:         sceneId,
-		PointList:       dbScene.GetUnlockPointList(),
-		UnhidePointList: nil,
+		SceneId:   sceneId,
+		PointList: dbScene.GetUnlockPointList(),
 	})
 }
 

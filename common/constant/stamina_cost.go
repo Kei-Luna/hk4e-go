@@ -16,6 +16,7 @@ const (
 	STAMINA_COST_RUN         = 500 // 正常跑步
 	STAMINA_COST_STANDBY     = 500 // 站立
 	STAMINA_COST_WALK        = 500 // 走路
+	STAMINA_COST_FIGHT       = 500 // 战斗
 	// 载具浪船
 	STAMINA_COST_SKIFF_DASH    = -204 // 浪船加速
 	STAMINA_COST_SKIFF_NORMAL  = 500  // 浪船正常移动 (回复耐力)

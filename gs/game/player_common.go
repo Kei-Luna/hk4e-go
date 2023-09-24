@@ -1,6 +1,7 @@
 package game
 
 import (
+	"hk4e/gdconf"
 	"math"
 	"strings"
 	"time"
@@ -286,8 +287,8 @@ func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {
 		OpenStateMap: make(map[uint32]uint32),
 	}
 	// 先暂时开放全部功能模块
-	for _, v := range constant.ALL_OPEN_STATE {
-		openStateUpdateNotify.OpenStateMap[uint32(v)] = 1
+	for _, data := range gdconf.GetOpenStateDataMap() {
+		openStateUpdateNotify.OpenStateMap[uint32(data.OpenStateId)] = 1
 	}
 	return openStateUpdateNotify
 }

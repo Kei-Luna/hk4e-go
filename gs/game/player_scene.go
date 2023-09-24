@@ -873,7 +873,7 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 		GroupMap: make(map[uint32]uint32),
 	}
 	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
-	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
+	// g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
 
 	world := scene.GetWorld()
 	owner := world.GetOwner()
@@ -911,7 +911,7 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 		GroupList: make([]uint32, 0),
 	}
 	ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
-	g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
+	// g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
 // AddSceneGroupSuite 向场景组中添加场景小组

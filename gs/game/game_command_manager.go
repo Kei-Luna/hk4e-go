@@ -483,8 +483,16 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 	// 命令参数错误处理
 	if content.elseFunc == nil {
 		// 默认的错误处理
-		text := strings.ReplaceAll(controller.Usage, "{alias}", content.Name)
-		content.SendFailMessage(content.Executor, "参数或格式错误，正确用法：\n\n<color=white>%v</color>", text)
+		usage := "命令用法：\n"
+		for i, s := range controller.UsageList {
+			s = strings.ReplaceAll(s, "{alias}", content.Name)
+			usage += fmt.Sprintf("%v. %v", i+1, s)
+			// 换行
+			if i != len(controller.UsageList)-1 {
+				usage += "\n"
+			}
+		}
+		content.SendFailMessage(content.Executor, "参数或格式错误，正确用法：\n\n<color=white>%v</color>", usage)
 	} else {
 		// 自定义的错误处理
 		content.elseFunc()
