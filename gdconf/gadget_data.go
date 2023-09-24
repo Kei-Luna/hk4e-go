@@ -8,6 +8,7 @@ import (
 type GadgetData struct {
 	GadgetId        int32  `csv:"ID"`
 	Name            string `csv:"名称$text_name_Name,omitempty"`
+	PrefabPath      string `csv:"Prefab路径,omitempty"`
 	DefaultCamp     int32  `csv:"默认阵营,omitempty"`
 	Type            int32  `csv:"类型,omitempty"`
 	CanInteract     int32  `csv:"能否交互,omitempty"`

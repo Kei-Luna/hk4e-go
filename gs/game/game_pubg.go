@@ -54,7 +54,7 @@ func (w *World) StartPubg() {
 
 func (w *World) StopPubg() {
 	w.pubg = nil
-	TICK_MANAGER.CreateUserTimer(w.GetOwner().PlayerId, UserTimerActionPubgEnd, 30)
+	TICK_MANAGER.CreateUserTimer(w.GetOwner().PlayerId, UserTimerActionPubgEnd, 60)
 }
 
 func (p *Pubg) GetAreaPointList() []*proto.MapMarkPoint {

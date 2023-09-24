@@ -3,13 +3,19 @@ package game
 import (
 	"math"
 
+	"hk4e/gs/model"
 	"hk4e/pkg/alg"
 	"hk4e/pkg/logger"
 )
 
 const (
-	AVATAR_RADIUS = 0.4
-	AVATAR_HEIGHT = 2.0
+	AVATAR_RADIUS      = 0.5
+	AVATAR_HEIGHT      = 2.0
+	AVATAR_Y_OFFSET    = 1.0
+	ACC                = -5.0
+	DRAG               = 0.01
+	PITCH_ANGLE_OFFSET = 3.0
+	INIT_SPEED         = 50.0
 )
 
 // RigidBody 刚体
@@ -20,14 +26,17 @@ type RigidBody struct {
 	sceneId           uint32       // 子弹所在场景id
 	position          *alg.Vector3 // 坐标
 	velocity          *alg.Vector3 // 速度
-	drag              float32      // 阻力参数
-	mass              float32      // 质量
 }
 
 // PhysicsEngine 物理引擎
 type PhysicsEngine struct {
 	rigidBodyMap     map[uint32]*RigidBody      // 刚体集合
+	pathTracing      bool                       // 子弹路径追踪调试
 	acc              float32                    // 重力加速度
+	drag             float32                    // 阻力参数
+	pitchAngleOffset float32                    // 子弹俯仰角偏移
+	initSpeed        float32                    // 子弹初始速度
+	avatarYOffset    float32                    // 角色中心点位置高度偏移
 	lastUpdateTime   int64                      // 上一次更新时间
 	sceneBlockAoiMap map[uint32]*alg.AoiManager // 全局各场景地图的aoi管理器
 	world            *World                     // 世界对象
@@ -36,9 +45,42 @@ type PhysicsEngine struct {
 func (w *World) NewPhysicsEngine(sceneBlockAoiMap map[uint32]*alg.AoiManager) {
 	w.bulletPhysicsEngine = &PhysicsEngine{
 		rigidBodyMap:     make(map[uint32]*RigidBody),
-		acc:              -5.0,
+		pathTracing:      false,
+		acc:              ACC,
+		drag:             DRAG,
+		pitchAngleOffset: PITCH_ANGLE_OFFSET,
+		initSpeed:        INIT_SPEED,
+		avatarYOffset:    AVATAR_Y_OFFSET,
+		lastUpdateTime:   0,
 		sceneBlockAoiMap: sceneBlockAoiMap,
 		world:            w,
+	}
+}
+
+func (p *PhysicsEngine) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
+	p.pathTracing = pathTracing
+	p.acc = acc
+	p.drag = drag
+	p.pitchAngleOffset = pao
+	p.initSpeed = is
+	p.avatarYOffset = ayo
+}
+
+func (p *PhysicsEngine) ShowAvatarCollider() {
+	for _, scene := range p.world.GetAllScene() {
+		for _, player := range scene.GetAllPlayer() {
+			entityId := p.world.GetPlayerWorldAvatarEntityId(player, p.world.GetPlayerActiveAvatarId(player))
+			entity := scene.GetEntity(entityId)
+			avatarPos := entity.GetPos()
+			avatarPos.Y += float64(p.avatarYOffset)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y, Z: avatarPos.Z}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y + AVATAR_HEIGHT/2.0, Z: avatarPos.Z}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y - AVATAR_HEIGHT/2.0, Z: avatarPos.Z}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X + AVATAR_RADIUS, Y: avatarPos.Y, Z: avatarPos.Z}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X - AVATAR_RADIUS, Y: avatarPos.Y, Z: avatarPos.Z}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y, Z: avatarPos.Z + AVATAR_RADIUS}, GADGET_GREEN, nil)
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y, Z: avatarPos.Z - AVATAR_RADIUS}, GADGET_GREEN, nil)
+		}
 	}
 }
 
@@ -56,19 +98,19 @@ func (p *PhysicsEngine) Update(now int64) []*RigidBody {
 			continue
 		}
 		// 阻力作用于速度
-		dvx := rigidBody.drag * rigidBody.velocity.X * dt
+		dvx := p.drag * rigidBody.velocity.X * dt
 		if math.Abs(float64(dvx)) >= math.Abs(float64(rigidBody.velocity.X)) {
 			rigidBody.velocity.X = 0.0
 		} else {
 			rigidBody.velocity.X -= dvx
 		}
-		dvy := rigidBody.drag * rigidBody.velocity.Y * dt
+		dvy := p.drag * rigidBody.velocity.Y * dt
 		if math.Abs(float64(dvy)) >= math.Abs(float64(rigidBody.velocity.Y)) {
 			rigidBody.velocity.Y = 0.0
 		} else {
 			rigidBody.velocity.Y -= dvy
 		}
-		dvz := rigidBody.drag * rigidBody.velocity.Z * dt
+		dvz := p.drag * rigidBody.velocity.Z * dt
 		if math.Abs(float64(dvz)) >= math.Abs(float64(rigidBody.velocity.Z)) {
 			rigidBody.velocity.Z = 0.0
 		} else {
@@ -90,6 +132,13 @@ func (p *PhysicsEngine) Update(now int64) []*RigidBody {
 			p.DestroyRigidBody(rigidBody.entityId)
 		}
 		logger.Debug("[PhysicsEngineUpdate] e: %v, s: %v, p: %v, v: %v", rigidBody.entityId, rigidBody.sceneId, rigidBody.position, rigidBody.velocity)
+		if p.pathTracing {
+			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{
+				X: float64(rigidBody.position.X),
+				Y: float64(rigidBody.position.Y),
+				Z: float64(rigidBody.position.Z),
+			}, GADGET_RED, nil)
+		}
 	}
 	p.lastUpdateTime = now
 	return hitList
@@ -105,6 +154,7 @@ func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos 
 			continue
 		}
 		avatarPos := entity.GetPos()
+		avatarPos.Y += float64(p.avatarYOffset)
 		// x轴
 		lineMinX := float32(0)
 		lineMaxX := float32(0)
@@ -160,15 +210,18 @@ func (p *PhysicsEngine) IsRigidBody(entityId uint32) bool {
 	return exist
 }
 
-func (p *PhysicsEngine) CreateRigidBody(entityId, avatarEntityId, sceneId uint32, px, py, pz float32, vx, vy, vz float32) {
+func (p *PhysicsEngine) CreateRigidBody(entityId, avatarEntityId, sceneId uint32, x, y, z float32, pitchAngle, yawAngle float32) {
+	pitchAngle += p.pitchAngleOffset
+	vy := math.Sin(float64(pitchAngle)/360.0*2*math.Pi) * float64(p.initSpeed)
+	vxz := math.Cos(float64(pitchAngle)/360.0*2*math.Pi) * float64(p.initSpeed)
+	vx := math.Sin(float64(yawAngle)/360.0*2*math.Pi) * vxz
+	vz := math.Cos(float64(yawAngle)/360.0*2*math.Pi) * vxz
 	rigidBody := &RigidBody{
 		entityId:       entityId,
 		avatarEntityId: avatarEntityId,
 		sceneId:        sceneId,
-		position:       &alg.Vector3{X: px, Y: py, Z: pz},
-		velocity:       &alg.Vector3{X: vx, Y: vy, Z: vz},
-		drag:           0.01,
-		mass:           1.0,
+		position:       &alg.Vector3{X: x, Y: y, Z: z},
+		velocity:       &alg.Vector3{X: float32(vx), Y: float32(vy), Z: float32(vz)},
 	}
 	logger.Debug("[CreateRigidBody] e: %v, s: %v, p: %v, v: %v", rigidBody.entityId, rigidBody.sceneId, rigidBody.position, rigidBody.velocity)
 	p.rigidBodyMap[entityId] = rigidBody

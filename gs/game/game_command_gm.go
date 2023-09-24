@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/base64"
+
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -470,5 +471,19 @@ func (g *GMCmd) StartPubg(v bool) {
 func (g *GMCmd) StopPubg(v bool) {
 	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
 		world.StopPubg()
+	}
+}
+
+func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		engine := world.GetBulletPhysicsEngine()
+		engine.SetPhysicsEngineParam(pathTracing, acc, drag, pao, is, ayo)
+	}
+}
+
+func (g *GMCmd) ShowAvatarCollider(v bool) {
+	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
+		engine := world.GetBulletPhysicsEngine()
+		engine.ShowAvatarCollider()
 	}
 }

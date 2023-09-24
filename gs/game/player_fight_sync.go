@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -768,34 +767,37 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{req.EntityId}, true, true)
 
 	if WORLD_MANAGER.IsBigWorld(world) {
-		// 甘雨冰属性蓄力箭
-		if req.ConfigId == 41037009 && world.GetMultiplayer() {
-			logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", req)
-			pitchAngleRaw := float64(req.InitEulerAngles.X)
-			pitchAngle := 0.0
-			if pitchAngleRaw < 90.0 {
-				pitchAngle = -pitchAngleRaw
-			} else if pitchAngleRaw > 270.0 {
-				pitchAngle = 360.0 - pitchAngleRaw
-			} else {
-				logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
-				return
-			}
-			vy := math.Sin(pitchAngle/360.0*2*math.Pi) * 50.0
-			vxz := math.Cos(pitchAngle/360.0*2*math.Pi) * 50.0
-			yawAngle := float64(req.InitEulerAngles.Y)
-			vx := math.Sin(yawAngle/360.0*2*math.Pi) * vxz
-			vz := math.Cos(yawAngle/360.0*2*math.Pi) * vxz
-			bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-			activeAvatarId := world.GetPlayerActiveAvatarId(player)
-			bulletPhysicsEngine.CreateRigidBody(
-				req.EntityId,
-				world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
-				player.SceneId,
-				req.InitPos.X, req.InitPos.Y, req.InitPos.Z,
-				float32(vx), float32(vy), float32(vz),
-			)
+		gadgetDataConfig := gdconf.GetGadgetDataById(int32(req.ConfigId))
+		if gadgetDataConfig == nil {
+			logger.Error("gadget data config is nil, gadgetId: %v", req.ConfigId)
+			return
 		}
+		// 蓄力箭
+		if gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_ArrowAiming" &&
+			gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_Venti_ArrowAiming" {
+			return
+		}
+		logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", req)
+		pitchAngleRaw := req.InitEulerAngles.X
+		pitchAngle := float32(0.0)
+		if pitchAngleRaw < 90.0 {
+			pitchAngle = -pitchAngleRaw
+		} else if pitchAngleRaw > 270.0 {
+			pitchAngle = 360.0 - pitchAngleRaw
+		} else {
+			logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
+			return
+		}
+		yawAngle := req.InitEulerAngles.Y
+		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+		activeAvatarId := world.GetPlayerActiveAvatarId(player)
+		bulletPhysicsEngine.CreateRigidBody(
+			req.EntityId,
+			world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
+			player.SceneId,
+			req.InitPos.X, req.InitPos.Y, req.InitPos.Z,
+			pitchAngle, yawAngle,
+		)
 	}
 }
 
