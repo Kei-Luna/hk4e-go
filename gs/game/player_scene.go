@@ -973,7 +973,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		if isKill {
 			continue
 		}
-		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), monsterConfig)
+		entityId := g.CreateConfigEntity(scene, uint32(groupConfig.Id), monsterConfig)
 		if entityId == 0 {
 			continue
 		}
@@ -990,7 +990,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		if isKill {
 			continue
 		}
-		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), gadgetConfig)
+		entityId := g.CreateConfigEntity(scene, uint32(groupConfig.Id), gadgetConfig)
 		if entityId == 0 {
 			continue
 		}
@@ -998,7 +998,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		entityMap[entityId] = entity
 	}
 	for _, npcConfig := range groupConfig.NpcMap {
-		entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), npcConfig)
+		entityId := g.CreateConfigEntity(scene, uint32(groupConfig.Id), npcConfig)
 		if entityId == 0 {
 			continue
 		}
@@ -1009,7 +1009,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 }
 
 // CreateConfigEntity 创建配置表里的实体
-func (g *Game) CreateConfigEntity(player *model.Player, scene *Scene, groupId uint32, entityConfig any) uint32 {
+func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any) uint32 {
 	world := scene.GetWorld()
 	owner := world.GetOwner()
 	dbWorld := owner.GetDbWorld()
@@ -1133,7 +1133,7 @@ func (g *Game) SceneGroupCreateEntity(player *model.Player, groupId uint32, conf
 		logger.Error("unknown entity type: %v", entityType)
 		return
 	}
-	entityId := g.CreateConfigEntity(player, scene, uint32(groupConfig.Id), entityConfig)
+	entityId := g.CreateConfigEntity(scene, uint32(groupConfig.Id), entityConfig)
 	if entityId == 0 {
 		return
 	}

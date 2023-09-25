@@ -51,7 +51,7 @@ func (g *GMCmd) GMAddItem(userId, itemId, itemCount uint32) {
 }
 
 // GMAddWeapon 给予玩家武器
-func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, refinement uint8) {
+func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, promote, refinement uint8) {
 	// 武器数量
 	for i := uint32(0); i < itemCount; i++ {
 		// 给予武器
@@ -69,9 +69,7 @@ func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, refinement 
 			return
 		}
 		// 设置武器的突破等级
-		maxLevel := 90
-		maxPromote := 6
-		weapon.Promote = level / (uint8(maxLevel / maxPromote))
+		weapon.Promote = promote
 		// 设置武器等级
 		weapon.Level = level
 		weapon.Exp = 0
@@ -92,7 +90,7 @@ func (g *GMCmd) GMAddReliquary(userId, itemId, itemCount uint32) {
 }
 
 // GMAddAvatar 给予玩家角色
-func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level uint8) {
+func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level, promote uint8) {
 	// 添加角色
 	GAME.AddPlayerAvatar(userId, avatarId)
 	// 获取玩家
@@ -108,9 +106,7 @@ func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level uint8) {
 		return
 	}
 	// 设置角色的突破等级
-	maxLevel := 90
-	maxPromote := 6
-	avatar.Promote = level / (uint8(maxLevel / maxPromote))
+	avatar.Promote = promote
 	// 设置角色的等级
 	avatar.Level = level
 	avatar.Exp = 0
@@ -146,9 +142,9 @@ func (g *GMCmd) GMAddAllItem(userId, itemCount uint32) {
 }
 
 // GMAddAllWeapon 给予玩家所有武器
-func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32, level, refinement uint8) {
+func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32, level, promote, refinement uint8) {
 	for itemId := range GAME.GetAllWeaponDataConfig() {
-		g.GMAddWeapon(userId, uint32(itemId), itemCount, level, refinement)
+		g.GMAddWeapon(userId, uint32(itemId), itemCount, level, promote, refinement)
 	}
 }
 
@@ -161,9 +157,9 @@ func (g *GMCmd) GMAddAllReliquary(userId, itemCount uint32) {
 }
 
 // GMAddAllAvatar 给予玩家所有角色
-func (g *GMCmd) GMAddAllAvatar(userId uint32, level uint8) {
+func (g *GMCmd) GMAddAllAvatar(userId uint32, level, promote uint8) {
 	for avatarId := range GAME.GetAllAvatarDataConfig() {
-		g.GMAddAvatar(userId, uint32(avatarId), level)
+		g.GMAddAvatar(userId, uint32(avatarId), level, promote)
 	}
 }
 
@@ -187,11 +183,11 @@ func (g *GMCmd) GMAddAll(userId uint32) {
 	// 给予玩家所有物品
 	g.GMAddAllItem(userId, 9999)
 	// 给予玩家所有武器
-	g.GMAddAllWeapon(userId, 5, 90, 5)
+	g.GMAddAllWeapon(userId, 1, 90, 5, 5)
 	// 给予玩家所有圣遗物
 	g.GMAddAllReliquary(userId, 5)
 	// 给予玩家所有角色
-	g.GMAddAllAvatar(userId, 90)
+	g.GMAddAllAvatar(userId, 90, 5)
 	// 给予玩家所有时装
 	g.GMAddAllCostume(userId)
 	// 给予玩家所有风之翼
