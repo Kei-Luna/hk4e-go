@@ -40,8 +40,8 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 	}
 	unlock := dbScene.CheckPointUnlock(req.PointId)
 	if !unlock {
-		// g.SendError(cmd.SceneTransToPointRsp, player, &proto.SceneTransToPointRsp{}, proto.Retcode_RET_POINT_NOT_UNLOCKED)
-		// return
+		g.SendError(cmd.SceneTransToPointRsp, player, &proto.SceneTransToPointRsp{}, proto.Retcode_RET_POINT_NOT_UNLOCKED)
+		return
 	}
 	pointDataConfig := gdconf.GetScenePointBySceneIdAndPointId(int32(req.SceneId), int32(req.PointId))
 	if pointDataConfig == nil {
@@ -147,7 +147,7 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		pubg := world.GetPubg()
 		if pubg != nil {
 			GAME.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: pubg.GetAreaPointList()})
@@ -473,6 +473,34 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.GadgetInteractRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
+func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.EnterTransPointRegionNotify)
+	_ = req
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil || WORLD_MANAGER.IsAiWorld(world) {
+		return
+	}
+	dbAvatar := player.GetDbAvatar()
+	dbTeam := player.GetDbTeam()
+	activeTeam := dbTeam.GetActiveTeam()
+	for _, avatarId := range activeTeam.GetAvatarIdList() {
+		avatar := dbAvatar.AvatarMap[avatarId]
+		if avatar.LifeState == constant.LIFE_STATE_DEAD {
+			g.RevivePlayerAvatar(player, avatarId)
+		}
+		avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP]
+		g.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
+			AvatarGuid:   avatar.Guid,
+			FightPropMap: avatar.FightPropMap,
+		})
+	}
+}
+
+func (g *Game) ExitTransPointRegionNotify(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.ExitTransPointRegionNotify)
+	_ = req
+}
+
 /************************************************** 游戏功能 **************************************************/
 
 func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
@@ -499,7 +527,7 @@ func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 			logger.Error("get item data config is nil, itemId: %v, uid: %v", itemId, player.PlayerId)
 			continue
 		}
-		g.CreateDropGadget(player, entity.pos, uint32(itemDataConfig.GadgetId), itemId, count)
+		g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
 	}
 }
 
@@ -527,7 +555,7 @@ func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 			logger.Error("get item data config is nil, itemId: %v, uid: %v", itemId, player.PlayerId)
 			continue
 		}
-		g.CreateDropGadget(player, entity.pos, uint32(itemDataConfig.GadgetId), itemId, count)
+		g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
 	}
 }
 
@@ -610,8 +638,8 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 
-	if WORLD_MANAGER.IsBigWorld(world) && sceneId != 3 {
-		logger.Error("big world scene not support now, sceneId: %v, uid: %v", sceneId, player.PlayerId)
+	if WORLD_MANAGER.IsAiWorld(world) && sceneId != 3 {
+		logger.Error("ai world scene not support now, sceneId: %v, uid: %v", sceneId, player.PlayerId)
 		return
 	}
 
@@ -625,11 +653,12 @@ func (g *Game) TeleportPlayer(
 	player.SceneJump = jumpScene
 	oldScene := world.GetSceneById(oldSceneId)
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)
+	avatarEntityId := world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
+	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{avatarEntityId}, false, 0)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
-		bigWorldAoi := world.GetBigWorldAoi()
-		bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	}
 
 	if jumpScene {

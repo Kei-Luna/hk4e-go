@@ -99,7 +99,7 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 		id:                  entityId,
 		scene:               s,
 		lifeState:           avatar.LifeState,
-		pos:                 player.Pos,
+		pos:                 player.Pos, // 所有角色实体暂时公用玩家的位置信息
 		rot:                 player.Rot,
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
@@ -143,8 +143,8 @@ func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, le
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 pos,
-		rot:                 rot,
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
@@ -167,8 +167,8 @@ func (s *Scene) CreateEntityNpc(pos, rot *model.Vector, npcId, roomId, parentQue
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 pos,
-		rot:                 rot,
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
@@ -197,8 +197,8 @@ func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadge
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 pos,
-		rot:                 rot,
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
@@ -226,8 +226,8 @@ func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, confi
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 pos,
-		rot:                 rot,
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
@@ -264,8 +264,8 @@ func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vecto
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 pos,
-		rot:                 rot,
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
@@ -460,11 +460,11 @@ func (e *Entity) GetLastDieType() int32 {
 }
 
 func (e *Entity) GetPos() *model.Vector {
-	return e.pos
+	return &model.Vector{X: e.pos.X, Y: e.pos.Y, Z: e.pos.Z}
 }
 
 func (e *Entity) GetRot() *model.Vector {
-	return e.rot
+	return &model.Vector{X: e.rot.X, Y: e.rot.Y, Z: e.rot.Z}
 }
 
 func (e *Entity) GetMoveState() uint16 {

@@ -150,6 +150,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(WorldChestOpenNotify, func() any { return new(proto.WorldChestOpenNotify) })                     // 宝箱开启通知
 	c.regMsg(EntityForceSyncReq, func() any { return new(proto.EntityForceSyncReq) })                         // 场景实体强制同步请求 客户端强制同步
 	c.regMsg(EntityForceSyncRsp, func() any { return new(proto.EntityForceSyncRsp) })                         // 场景实体强制同步响应
+	c.regMsg(EnterTransPointRegionNotify, func() any { return new(proto.EnterTransPointRegionNotify) })       // 进入传送点区域通知 七天神像区域
+	c.regMsg(ExitTransPointRegionNotify, func() any { return new(proto.ExitTransPointRegionNotify) })         // 离开传送点区域通知
 
 	// 战斗与同步
 	c.regMsg(AvatarFightPropNotify, func() any { return new(proto.AvatarFightPropNotify) })                         // 角色战斗属性通知

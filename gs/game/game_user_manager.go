@@ -276,6 +276,20 @@ func (u *UserManager) SetRemoteUserOnlineState(userId uint32, isOnline bool, app
 	u.remotePlayerMapLock.Unlock()
 }
 
+func (u *UserManager) GetAllRemoteAiUidList() []uint32 {
+	userIdList := make([]uint32, 0)
+	u.remotePlayerMapLock.RLock()
+	for userId := uint32(AiBaseUid); userId < AiBaseUid+1000; userId++ {
+		_, exist := u.remotePlayerMap[userId]
+		if !exist {
+			continue
+		}
+		userIdList = append(userIdList, userId)
+	}
+	u.remotePlayerMapLock.RUnlock()
+	return userIdList
+}
+
 // GetRemoteOnlineUserList 获取指定数量的远程在线玩家 玩家数据只读禁止修改
 func (u *UserManager) GetRemoteOnlineUserList(total int) map[uint32]*model.Player {
 	if total > 50 {
@@ -286,6 +300,9 @@ func (u *UserManager) GetRemoteOnlineUserList(total int) map[uint32]*model.Playe
 	userIdList := make([]uint32, 0)
 	u.remotePlayerMapLock.RLock()
 	for userId := range u.remotePlayerMap {
+		if userId < PlayerBaseUid || userId > MaxPlayerBaseUid {
+			continue
+		}
 		userIdList = append(userIdList, userId)
 		count++
 		if count >= total {
@@ -335,6 +352,10 @@ func (u *UserManager) LoadGlobalPlayer(userId uint32) (player *model.Player, onl
 // LoadTempOfflineUser 加载临时离线玩家
 // 正常情况速度较快可以同步阻塞调用
 func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Player {
+	if userId < PlayerBaseUid || userId > MaxPlayerBaseUid {
+		logger.Error("try to load a not exist uid, uid: %v", userId)
+		return nil
+	}
 	player := u.GetOnlineUser(userId)
 	if player != nil {
 		logger.Error("not allow get a online player as offline player, uid: %v", userId)
@@ -353,10 +374,6 @@ func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Playe
 		// 玩家可能不存在于redis 尝试从db查询出来然后写入redis
 		// 大多数情况下活跃玩家都在redis 所以不会走到下面
 		// TODO 防止恶意攻击造成redis缓存穿透
-		if userId < PlayerBaseUid || userId > MaxPlayerBaseUid {
-			logger.Error("try to load a not exist uid, uid: %v", userId)
-			return nil
-		}
 		startTime := time.Now().UnixNano()
 		player = u.LoadUserFromDbSync(userId)
 		endTime := time.Now().UnixNano()
@@ -377,6 +394,10 @@ func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Playe
 // SaveTempOfflineUser 保存临时离线玩家
 // 如果调用LoadTempOfflineUser获取了离线玩家数据 则必须在逻辑完成后立即调用此函数回写并解锁
 func (u *UserManager) SaveTempOfflineUser(player *model.Player) {
+	if player.PlayerId < PlayerBaseUid || player.PlayerId > MaxPlayerBaseUid {
+		logger.Error("try to save a not exist uid, uid: %v", player.PlayerId)
+		return
+	}
 	// 主协程同步写入redis
 	u.SaveUserToRedisSync(player)
 	// 另一个协程异步的写回db

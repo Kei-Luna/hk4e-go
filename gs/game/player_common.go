@@ -1,10 +1,11 @@
 package game
 
 import (
-	"hk4e/gdconf"
 	"math"
 	"strings"
 	"time"
+
+	"hk4e/gdconf"
 
 	"hk4e/common/constant"
 	"hk4e/gs/model"
@@ -154,7 +155,7 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 			},
 		}
 
-		if WORLD_MANAGER.IsBigWorld(world) {
+		if WORLD_MANAGER.IsAiWorld(world) {
 			playerWorldLocationInfo.PlayerLoc.Pos = new(proto.Vector)
 			playerWorldLocationInfo.PlayerLoc.Rot = new(proto.Vector)
 		}
@@ -187,7 +188,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 				},
 			}
 
-			if WORLD_MANAGER.IsBigWorld(world) {
+			if WORLD_MANAGER.IsAiWorld(world) {
 				playerLocationInfo.Pos = new(proto.Vector)
 				playerLocationInfo.Rot = new(proto.Vector)
 			}
@@ -200,17 +201,17 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 				if entity != nil && entity.GetEntityType() == constant.ENTITY_TYPE_GADGET && entity.gadgetEntity.gadgetVehicleEntity != nil {
 					vehicleLocationInfo := &proto.VehicleLocationInfo{
 						Rot: &proto.Vector{
-							X: float32(entity.rot.X),
-							Y: float32(entity.rot.Y),
-							Z: float32(entity.rot.Z),
+							X: float32(entity.GetRot().X),
+							Y: float32(entity.GetRot().Y),
+							Z: float32(entity.GetRot().Z),
 						},
 						EntityId: entity.id,
 						CurHp:    entity.fightProp[constant.FIGHT_PROP_CUR_HP],
 						OwnerUid: entity.gadgetEntity.gadgetVehicleEntity.ownerUid,
 						Pos: &proto.Vector{
-							X: float32(entity.pos.X),
-							Y: float32(entity.pos.Y),
-							Z: float32(entity.pos.Z),
+							X: float32(entity.GetPos().X),
+							Y: float32(entity.GetPos().Y),
+							Z: float32(entity.GetPos().Z),
 						},
 						UidList:  make([]uint32, 0, len(entity.gadgetEntity.gadgetVehicleEntity.memberMap)),
 						GadgetId: entity.gadgetEntity.gadgetVehicleEntity.vehicleId,

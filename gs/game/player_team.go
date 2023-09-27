@@ -153,7 +153,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if WORLD_MANAGER.IsBigWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
+	if WORLD_MANAGER.IsAiWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
 	}
@@ -200,7 +200,7 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 	}
 	scene := world.GetSceneById(player.SceneId)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		pubg := world.GetPubg()
 		if pubg != nil {
 			alivePlayerNum := len(pubg.GetAlivePlayerList())
@@ -262,7 +262,7 @@ func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message)
 	_ = req
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		GAME.ReLoginPlayer(player.PlayerId, true)
 		return
 	}
@@ -339,7 +339,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 	}
 	empty := new(proto.AbilitySyncStateInfo)
 	for _, worldAvatar := range world.GetWorldAvatarList() {
-		if WORLD_MANAGER.IsBigWorld(world) && worldAvatar.uid != player.PlayerId {
+		if WORLD_MANAGER.IsAiWorld(world) && worldAvatar.uid != player.PlayerId {
 			continue
 		}
 

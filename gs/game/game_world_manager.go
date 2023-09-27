@@ -16,9 +16,9 @@ import (
 // 世界管理器
 
 const (
-	ENTITY_NUM_UNLIMIT        = true // 是否不限制场景内实体数量
-	ENTITY_MAX_SEND_NUM       = 1000 // 场景内最大实体数量
-	MAX_MULTIPLAYER_WORLD_NUM = 10   // 本服务器最大多人世界数量
+	ENTITY_NUM_UNLIMIT        = false // 是否不限制场景内实体数量
+	ENTITY_MAX_SEND_NUM       = 10000 // 场景内最大实体数量
+	MAX_MULTIPLAYER_WORLD_NUM = 10    // 本服务器最大多人世界数量
 )
 
 type WorldManager struct {
@@ -64,17 +64,17 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		waitEnterPlayerMap:   make(map[uint32]int64),
 		multiplayerTeam:      CreateMultiplayerTeam(),
 		peerList:             make([]*model.Player, 0),
-		bigWorldAoi:          nil,
+		aiWorldAoi:           nil,
 	}
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world
 
-	if w.IsBigWorld(world) {
+	if w.IsAiWorld(world) {
 		aoiManager := alg.NewAoiManager()
 		aoiManager.SetAoiRange(-8000, 4000, -200, 1000, -5500, 6500)
 		aoiManager.Init3DRectAoiManager(120, 12, 120, true)
-		world.bigWorldAoi = aoiManager
-		logger.Info("big world aoi init finish")
+		world.aiWorldAoi = aoiManager
+		logger.Info("ai world aoi init finish")
 	}
 
 	return world
@@ -101,17 +101,11 @@ func (w *WorldManager) GetAiWorld() *World {
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
-	if w.IsBigWorld(w.aiWorld) {
-		w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
-	}
+	w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
 	return world.owner.PlayerId < PlayerBaseUid
-}
-
-func (w *WorldManager) IsBigWorld(world *World) bool {
-	return world.owner.PlayerId == BigWorldAiUid
 }
 
 func (w *WorldManager) GetSceneBlockAoiMap() map[uint32]*alg.AoiManager {
@@ -225,7 +219,7 @@ type World struct {
 	waitEnterPlayerMap   map[uint32]int64              // 进入世界的玩家等待列表 key:uid value:开始时间
 	multiplayerTeam      *MultiplayerTeam              // 多人队伍
 	peerList             []*model.Player               // 玩家编号列表
-	bigWorldAoi          *alg.AoiManager               // 大世界的aoi管理器
+	aiWorldAoi           *alg.AoiManager               // ai世界的aoi管理器
 	bulletPhysicsEngine  *PhysicsEngine                // 蓄力箭子弹物理引擎
 	pubg                 *Pubg
 }
@@ -352,8 +346,8 @@ func (w *World) GetWorldPlayerNum() int {
 	return len(w.playerMap)
 }
 
-func (w *World) GetBigWorldAoi() *alg.AoiManager {
-	return w.bigWorldAoi
+func (w *World) GetAiWorldAoi() *alg.AoiManager {
+	return w.aiWorldAoi
 }
 
 func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
@@ -368,7 +362,7 @@ func (w *World) AddPlayer(player *model.Player, sceneId uint32) {
 		activeAvatarId := dbTeam.GetActiveAvatarId()
 		w.SetPlayerLocalTeam(player, []uint32{activeAvatarId})
 	}
-	if WORLD_MANAGER.IsBigWorld(w) {
+	if WORLD_MANAGER.IsAiWorld(w) {
 		w.AddMultiplayerTeam(player)
 	} else {
 		w.UpdateMultiplayerTeam()
@@ -400,7 +394,7 @@ func (w *World) RemovePlayer(player *model.Player) {
 	delete(w.multiplayerTeam.localTeamMap, player.PlayerId)
 	delete(w.multiplayerTeam.localAvatarIndexMap, player.PlayerId)
 	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerId)
-	if WORLD_MANAGER.IsBigWorld(w) {
+	if WORLD_MANAGER.IsAiWorld(w) {
 		w.RemoveMultiplayerTeam(player)
 	} else {
 		if player.PlayerId != w.owner.PlayerId {

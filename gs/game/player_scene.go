@@ -60,7 +60,7 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
 
-		if !WORLD_MANAGER.IsBigWorld(world) {
+		if !WORLD_MANAGER.IsAiWorld(world) {
 			// 卸载旧位置附近的group
 			for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
 				if !world.GetMultiplayer() {
@@ -309,14 +309,14 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
-		bigWorldAoi := world.GetBigWorldAoi()
-		bigWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	}
 
 	g.AddSceneEntityNotify(player, visionType, []uint32{activeWorldAvatar.GetAvatarEntityId()}, true, false)
 
-	if !WORLD_MANAGER.IsBigWorld(world) {
+	if !WORLD_MANAGER.IsAiWorld(world) {
 		// 加载附近的group
 		for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
 			g.AddSceneGroup(player, scene, groupConfig)
@@ -335,7 +335,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 			continue
 		}
 
-		if WORLD_MANAGER.IsBigWorld(world) {
+		if WORLD_MANAGER.IsAiWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
@@ -350,9 +350,9 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		g.AddSceneEntityNotify(player, visionType, vehicleEntityIdList, false, false)
 	}
 
-	if WORLD_MANAGER.IsBigWorld(world) {
-		bigWorldAoi := world.GetBigWorldAoi()
-		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 		entityIdList := make([]uint32, 0)
 		for _, otherWorldAvatarAny := range otherWorldAvatarMap {
 			otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -383,14 +383,6 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 			continue
 		}
 		g.JoinOtherWorld(otherPlayer, player)
-	}
-
-	if WORLD_MANAGER.IsBigWorld(world) {
-		// aoi区域玩家数量限制
-		bigWorldAoi := world.GetBigWorldAoi()
-		if len(bigWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))) > 8 {
-			g.LogoutPlayer(player.PlayerId)
-		}
 	}
 }
 
@@ -639,7 +631,7 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 		g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
 	}
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionPubgDieExit, 10)
 	}
 }
@@ -783,11 +775,11 @@ func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Enti
 	ratio := float32(ENTITY_VISION_DISTANCE*ENTITY_VISION_DISTANCE) / float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE)
 	visionEntity := make(map[uint32]*Entity, int(float32(len(allEntityMap))*ratio))
 	for _, entity := range allEntityMap {
-		dx := int32(pos.X) - int32(entity.pos.X)
+		dx := int32(pos.X) - int32(entity.GetPos().X)
 		if dx < 0 {
 			dx *= -1
 		}
-		dy := int32(pos.Z) - int32(entity.pos.Z)
+		dy := int32(pos.Z) - int32(entity.GetPos().Z)
 		if dy < 0 {
 			dy *= -1
 		}
@@ -869,10 +861,10 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 		return
 	}
 	g.AddSceneGroupSuiteCore(player, scene, uint32(groupConfig.Id), uint8(initSuiteId))
-	ntf := &proto.GroupSuiteNotify{
-		GroupMap: make(map[uint32]uint32),
-	}
-	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
+	// ntf := &proto.GroupSuiteNotify{
+	// 	GroupMap: make(map[uint32]uint32),
+	// }
+	// ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
 	// g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
 
 	world := scene.GetWorld()
@@ -907,10 +899,10 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 	for suiteId := range group.GetAllSuite() {
 		scene.RemoveGroupSuite(uint32(groupConfig.Id), suiteId)
 	}
-	ntf := &proto.GroupUnloadNotify{
-		GroupList: make([]uint32, 0),
-	}
-	ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
+	// ntf := &proto.GroupUnloadNotify{
+	// 	GroupList: make([]uint32, 0),
+	// }
+	// ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
 	// g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
@@ -932,11 +924,11 @@ func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId 
 	}
 	scene := world.GetSceneById(player.SceneId)
 	g.AddSceneGroupSuiteCore(player, scene, groupId, suiteId)
-	ntf := &proto.GroupSuiteNotify{
-		GroupMap: make(map[uint32]uint32),
-	}
-	ntf.GroupMap[uint32(groupConfig.Id)] = uint32(suiteId)
-	g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
+	// ntf := &proto.GroupSuiteNotify{
+	// 	GroupMap: make(map[uint32]uint32),
+	// }
+	// ntf.GroupMap[uint32(groupConfig.Id)] = uint32(suiteId)
+	// g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
 	group := scene.GetGroupById(groupId)
 	suite := group.GetSuiteById(suiteId)
 	entityIdList := make([]uint32, 0)

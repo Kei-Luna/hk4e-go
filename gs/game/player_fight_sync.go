@@ -148,7 +148,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		return
 	}
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		if world.GetPubg() == nil {
 			return
 		}
@@ -183,7 +183,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			defAvatarEntity := defEntity.GetAvatarEntity()
 			g.KillPlayerAvatar(player, defAvatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
 
-			if WORLD_MANAGER.IsBigWorld(world) {
+			if WORLD_MANAGER.IsAiWorld(world) {
 				defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetUid())
 				if defPlayer == nil {
 					return
@@ -223,26 +223,17 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 	}
 	if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 		// 玩家实体在移动
-		g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos,
-			&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
-			entity.GetId(),
-		)
-
-		if WORLD_MANAGER.IsBigWorld(world) {
-			g.BigWorldAoiPlayerMove(player, world, scene, player.Pos,
-				&model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
-			)
+		g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
+		if WORLD_MANAGER.IsAiWorld(world) {
+			g.AiWorldAoiPlayerMove(player, world, scene, player.Pos, pos)
 		}
-
 		// 更新玩家的位置信息
 		player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
 		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
 	}
 	// 更新场景实体的位置信息
-	entityPos := entity.GetPos()
-	entityPos.X, entityPos.Y, entityPos.Z = pos.X, pos.Y, pos.Z
-	entityRot := entity.GetRot()
-	entityRot.X, entityRot.Y, entityRot.Z = rot.X, rot.Y, rot.Z
+	entity.pos.X, entity.pos.Y, entity.pos.Z = pos.X, pos.Y, pos.Z
+	entity.rot.X, entity.rot.Y, entity.rot.Z = rot.X, rot.Y, rot.Z
 	if !force {
 		motionInfo := moveInfo.MotionInfo
 		switch entity.GetEntityType() {
@@ -281,7 +272,7 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 }
 
 func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, entityId uint32) {
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
 
@@ -355,7 +346,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 			continue
 		}
 
-		if WORLD_MANAGER.IsBigWorld(world) {
+		if WORLD_MANAGER.IsAiWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
@@ -371,7 +362,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 			continue
 		}
 
-		if WORLD_MANAGER.IsBigWorld(world) {
+		if WORLD_MANAGER.IsAiWorld(world) {
 			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 				continue
 			}
@@ -391,16 +382,17 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	g.SceneRegionTriggerCheck(player, oldPos, newPos, entityId)
 }
 
-func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
-	bigWorldAoi := world.GetBigWorldAoi()
-	oldGid := bigWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
-	newGid := bigWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
+	aiWorldAoi := world.GetAiWorldAoi()
+	oldGid := aiWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+	newGid := aiWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
 	if oldGid != newGid {
 		// 玩家跨越了格子
-		logger.Debug("player cross big world aoi grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
+		logger.Debug("player cross ai world aoi grid, oldGid: %v, oldPos: %+v, newGid: %v, newPos: %+v, uid: %v",
+			oldGid, oldPos, newGid, newPos, player.PlayerId)
 		// 找出本次移动所带来的消失和出现的格子
-		oldGridList := bigWorldAoi.GetSurrGridListByGid(oldGid)
-		newGridList := bigWorldAoi.GetSurrGridListByGid(newGid)
+		oldGridList := aiWorldAoi.GetSurrGridListByGid(oldGid)
+		newGridList := aiWorldAoi.GetSurrGridListByGid(newGid)
 		delGridIdList := make([]uint32, 0)
 		for _, oldGrid := range oldGridList {
 			exist := false
@@ -432,11 +424,11 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 		// 老格子移除玩家
-		bigWorldAoi.RemoveObjectFromGrid(int64(player.PlayerId), oldGid)
+		aiWorldAoi.RemoveObjectFromGrid(int64(player.PlayerId), oldGid)
 		// 处理消失的格子
 		for _, delGridId := range delGridIdList {
 			// 通知自己 老格子里的其它玩家消失
-			oldOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(delGridId)
+			oldOtherWorldAvatarMap := aiWorldAoi.GetObjectListByGid(delGridId)
 			delEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range oldOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -458,7 +450,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 		// 处理出现的格子
 		for _, addGridId := range addGridIdList {
 			// 通知自己 新格子里的其他玩家出现
-			newOtherWorldAvatarMap := bigWorldAoi.GetObjectListByGid(addGridId)
+			newOtherWorldAvatarMap := aiWorldAoi.GetObjectListByGid(addGridId)
 			addEntityIdList := make([]uint32, 0)
 			for _, otherWorldAvatarAny := range newOtherWorldAvatarMap {
 				otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -479,11 +471,7 @@ func (g *Game) BigWorldAoiPlayerMove(player *model.Player, world *World, scene *
 			}
 		}
 		// 新格子添加玩家
-		bigWorldAoi.AddObjectToGrid(int64(player.PlayerId), activeWorldAvatar, newGid)
-		// aoi区域玩家数量限制
-		if len(bigWorldAoi.GetObjectListByGid(newGid)) > 8 {
-			g.LogoutPlayer(player.PlayerId)
-		}
+		aiWorldAoi.AddObjectToGrid(int64(player.PlayerId), activeWorldAvatar, newGid)
 	}
 }
 
@@ -717,7 +705,7 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	scene := world.GetSceneById(player.SceneId)
 	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, req)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
 		if bulletPhysicsEngine.IsRigidBody(req.EntityId) {
 			logger.Debug("[FPS] EvtBulletHitNotify: %+v", req)
@@ -766,7 +754,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	}, req.EntityId, req.ConfigId, req.CampId, req.CampType, req.OwnerEntityId, req.TargetEntityId, req.PropOwnerEntityId)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{req.EntityId}, true, true)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) {
 		gadgetDataConfig := gdconf.GetGadgetDataById(int32(req.ConfigId))
 		if gadgetDataConfig == nil {
 			logger.Error("gadget data config is nil, gadgetId: %v", req.ConfigId)

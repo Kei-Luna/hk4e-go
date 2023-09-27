@@ -119,6 +119,8 @@ func (r *RouteManager) initRoute() {
 	r.registerRouter(cmd.AvatarDieAnimationEndReq, GAME.AvatarDieAnimationEndReq)
 	r.registerRouter(cmd.WorldPlayerReviveReq, GAME.WorldPlayerReviveReq)
 	r.registerRouter(cmd.UseItemReq, GAME.UseItemReq)
+	r.registerRouter(cmd.EnterTransPointRegionNotify, GAME.EnterTransPointRegionNotify)
+	r.registerRouter(cmd.ExitTransPointRegionNotify, GAME.ExitTransPointRegionNotify)
 }
 
 type HandlerFunc func(player *model.Player, payloadMsg pb.Message)

@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/base64"
+
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -407,7 +408,8 @@ func (g *GMCmd) ChangePlayerCmdPerm(userId uint32, cmdPerm uint8) {
 	player.CmdPerm = cmdPerm
 }
 
-func (g *GMCmd) ReloadGameDataConfig() {
+func (g *GMCmd) ReloadGameDataConfig(v bool) {
+	// TODO 不知道为什么0个参数的函数会反射调用失败
 	LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 		EventId: ReloadGameDataConfig,
 	}
@@ -451,10 +453,7 @@ func (g *GMCmd) UpdateFrame(rgb bool) {
 
 var RobotUidCounter uint32 = 0
 
-func (g *GMCmd) CreateRobotInBigWorld(uid uint32, name string, avatarId uint32) {
-	if !GAME.IsMainGs() {
-		return
-	}
+func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32) {
 	if uid == 0 {
 		RobotUidCounter++
 		uid = 1000000 + RobotUidCounter
@@ -560,27 +559,23 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 }
 
 func (g *GMCmd) StartPubg(v bool) {
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		world.StartPubg()
-	}
+	world := WORLD_MANAGER.GetAiWorld()
+	world.StartPubg()
 }
 
 func (g *GMCmd) StopPubg(v bool) {
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		world.StopPubg()
-	}
+	world := WORLD_MANAGER.GetAiWorld()
+	world.StopPubg()
 }
 
 func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		engine := world.GetBulletPhysicsEngine()
-		engine.SetPhysicsEngineParam(pathTracing, acc, drag, pao, is, ayo)
-	}
+	world := WORLD_MANAGER.GetAiWorld()
+	engine := world.GetBulletPhysicsEngine()
+	engine.SetPhysicsEngineParam(pathTracing, acc, drag, pao, is, ayo)
 }
 
 func (g *GMCmd) ShowAvatarCollider(v bool) {
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		engine := world.GetBulletPhysicsEngine()
-		engine.ShowAvatarCollider()
-	}
+	world := WORLD_MANAGER.GetAiWorld()
+	engine := world.GetBulletPhysicsEngine()
+	engine.ShowAvatarCollider()
 }

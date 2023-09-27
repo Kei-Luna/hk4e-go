@@ -23,11 +23,8 @@ const (
 	PlayerBaseUid    = 100000000
 	MaxPlayerBaseUid = 200000000
 	AiBaseUid        = 10000
-	AiName           = "GM"
+	AiName           = "小可爱"
 	AiSign           = "快捷指令"
-	BigWorldAiUid    = 100
-	BigWorldAiName   = "小可爱"
-	BigWorldAiSign   = "UnKownOwO"
 )
 
 var GAME *Game = nil
@@ -77,17 +74,9 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	uid := AiBaseUid + gsId
 	name := AiName
 	sign := AiSign + " GS:" + strconv.Itoa(int(gsId))
-	if r.IsMainGs() {
-		// 约定MainGameServer的Ai的AiWorld叫BigWorld
-		// 此世界会出现在全服的在线玩家列表中 所有的玩家都可以进入到此世界里来
-		uid = BigWorldAiUid
-		name = BigWorldAiName
-		sign = BigWorldAiSign
-	}
 	r.ai = r.CreateRobot(uid, name, sign)
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
-	USER_MANAGER.SetRemoteUserOnlineState(BigWorldAiUid, true, mainGsAppid)
 	r.run()
 	r.isStop = false
 	return r
@@ -134,17 +123,13 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
 		EnterSceneToken: world.GetEnterSceneToken(),
 	})
-	if uid == BigWorldAiUid {
-		g.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
-			MotionInfo: &proto.MotionInfo{
-				Pos: &proto.Vector{X: 500.0, Y: 900.0, Z: -500.0},
-				Rot: new(proto.Vector),
-			},
-			EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
-		})
-	} else {
-		COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(uid, 3)
-	}
+	g.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
+		MotionInfo: &proto.MotionInfo{
+			Pos: &proto.Vector{X: 500.0, Y: 900.0, Z: -500.0},
+			Rot: new(proto.Vector),
+		},
+		EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
+	})
 	return robot
 }
 
@@ -426,9 +411,9 @@ func (g *Game) SendToWorldH(world *World, cmdId uint16, seq uint32, msg pb.Messa
 // SendToSceneA 给场景内所有玩家发消息
 func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Message) {
 	world := scene.GetWorld()
-	if WORLD_MANAGER.IsBigWorld(world) && SELF != nil {
-		bigWorldAoi := world.GetBigWorldAoi()
-		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
+		aiWorldAoi := world.GetAiWorldAoi()
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {
 			g.SendMsg(cmdId, uint32(uid), seq, msg)
 		}
@@ -442,9 +427,9 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 // SendToSceneAEC 给场景内除某玩家(一般是自己)以外的所有玩家发消息
 func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
 	world := scene.GetWorld()
-	if WORLD_MANAGER.IsBigWorld(world) && SELF != nil {
-		bigWorldAoi := world.GetBigWorldAoi()
-		otherWorldAvatarMap := bigWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
+		aiWorldAoi := world.GetAiWorldAoi()
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {
 			if aecUid == uint32(uid) {
 				continue

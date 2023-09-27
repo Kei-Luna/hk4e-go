@@ -157,7 +157,6 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 		}
 		pubg := world.GetPubg()
 		if pubg == nil {
-			logger.Error("pubg is nil,  worldId: %v, uid: %v", player.WorldId, userId)
 			return
 		}
 		pubg.phase++
@@ -255,12 +254,11 @@ func (t *TickManager) onDayChange(now int64) {
 
 func (t *TickManager) onHourChange(now int64) {
 	logger.Info("on hour change, time: %v", now)
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		if world.GetPubg() != nil {
-			return
-		}
-		world.StartPubg()
+	world := WORLD_MANAGER.GetAiWorld()
+	if world.GetPubg() != nil {
+		return
 	}
+	world.StartPubg()
 }
 
 func (t *TickManager) onTickHour(now int64) {
@@ -289,7 +287,7 @@ func (t *TickManager) onTick5Second(now int64) {
 		}
 	}
 	aiWorld := WORLD_MANAGER.GetAiWorld()
-	if WORLD_MANAGER.IsBigWorld(aiWorld) {
+	if WORLD_MANAGER.IsAiWorld(aiWorld) {
 		if aiWorld.GetPubg() != nil {
 			return
 		}
@@ -314,32 +312,31 @@ func (t *TickManager) onTickSecond(now int64) {
 		game.onTick()
 	}
 	// PUBG游戏
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		pubg := world.GetPubg()
-		if pubg == nil {
-			return
+	world := WORLD_MANAGER.GetAiWorld()
+	pubg := world.GetPubg()
+	if pubg == nil {
+		return
+	}
+	pubg.UpdateArea()
+	scene := world.GetSceneById(world.GetOwner().SceneId)
+	for _, scenePlayer := range scene.GetAllPlayer() {
+		if !pubg.IsInBlueArea(scenePlayer.Pos) {
+			GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
+				AttackResult: &proto.AttackResult{
+					AttackerId: 0,
+					DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
+					Damage:     10,
+				},
+			})
 		}
-		pubg.UpdateArea()
-		scene := world.GetSceneById(world.GetOwner().SceneId)
-		for _, scenePlayer := range scene.GetAllPlayer() {
-			if !pubg.IsInBlueArea(scenePlayer.Pos) {
-				GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
-					AttackResult: &proto.AttackResult{
-						AttackerId: 0,
-						DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
-						Damage:     10,
-					},
-				})
-			}
+	}
+	alivePlayerList := pubg.GetAlivePlayerList()
+	if len(alivePlayerList) <= 1 {
+		if len(alivePlayerList) == 1 {
+			info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
+			GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		}
-		alivePlayerList := pubg.GetAlivePlayerList()
-		if len(alivePlayerList) <= 1 {
-			if len(alivePlayerList) == 1 {
-				info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
-				GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-			}
-			world.StopPubg()
-		}
+		world.StopPubg()
 	}
 }
 
@@ -364,21 +361,20 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 			}
 		}
 	}
-	if world := WORLD_MANAGER.GetAiWorld(); WORLD_MANAGER.IsBigWorld(world) {
-		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		hitList := bulletPhysicsEngine.Update(now)
-		for _, rigidBody := range hitList {
-			scene := world.GetSceneById(rigidBody.sceneId)
-			defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
-			defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
-			GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
-				AttackResult: &proto.AttackResult{
-					AttackerId: rigidBody.avatarEntityId,
-					DefenseId:  rigidBody.hitAvatarEntityId,
-					Damage:     100,
-				},
-			})
-		}
+	world := WORLD_MANAGER.GetAiWorld()
+	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+	hitList := bulletPhysicsEngine.Update(now)
+	for _, rigidBody := range hitList {
+		scene := world.GetSceneById(rigidBody.sceneId)
+		defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
+		defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
+		GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
+			AttackResult: &proto.AttackResult{
+				AttackerId: rigidBody.avatarEntityId,
+				DefenseId:  rigidBody.hitAvatarEntityId,
+				Damage:     100,
+			},
+		})
 	}
 }
 

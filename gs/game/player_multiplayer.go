@@ -387,7 +387,7 @@ func (g *Game) PlayerLeaveWorld(player *model.Player) bool {
 }
 
 func (g *Game) WorldAddPlayer(world *World, player *model.Player) {
-	if world.GetWorldPlayerNum() >= 4 && !WORLD_MANAGER.IsBigWorld(world) {
+	if world.GetWorldPlayerNum() >= 4 && !WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
 	_, exist := world.GetAllPlayer()[player.PlayerId]
@@ -443,9 +443,9 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 
 	world.RemovePlayer(player)
 
-	if WORLD_MANAGER.IsBigWorld(world) {
-		bigWorldAoi := world.GetBigWorldAoi()
-		bigWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 	}
 
 	player.WorldId = 0

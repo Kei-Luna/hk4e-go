@@ -2,6 +2,7 @@ package game
 
 import (
 	"regexp"
+	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -372,28 +373,34 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Message) {
 	count := 0
-	getOnlinePlayerListRsp := &proto.GetOnlinePlayerListRsp{
+	rsp := &proto.GetOnlinePlayerListRsp{
 		PlayerInfoList: make([]*proto.OnlinePlayerInfo, 0),
 	}
-	getOnlinePlayerListRsp.PlayerInfoList = append(getOnlinePlayerListRsp.PlayerInfoList, &proto.OnlinePlayerInfo{
-		Uid:                 BigWorldAiUid,
-		Nickname:            BigWorldAiName,
-		PlayerLevel:         1,
-		AvatarId:            10000007,
-		MpSettingType:       proto.MpSettingType_MP_SETTING_ENTER_AFTER_APPLY,
-		NameCardId:          210001,
-		Signature:           BigWorldAiSign,
-		ProfilePicture:      &proto.ProfilePicture{AvatarId: 10000007},
-		CurPlayerNumInWorld: 1,
-	})
-	count++
+	// 最先添加全服ai玩家
+	aiUidList := USER_MANAGER.GetAllRemoteAiUidList()
+	aiUidList = append(aiUidList, g.GetAi().PlayerId)
+	for _, aiUid := range aiUidList {
+		sign := AiSign + " GS:" + strconv.Itoa(int(aiUid-AiBaseUid))
+		rsp.PlayerInfoList = append(rsp.PlayerInfoList, &proto.OnlinePlayerInfo{
+			Uid:                 aiUid,
+			Nickname:            AiName,
+			PlayerLevel:         1,
+			AvatarId:            10000007,
+			MpSettingType:       proto.MpSettingType_MP_SETTING_ENTER_AFTER_APPLY,
+			NameCardId:          210001,
+			Signature:           sign,
+			ProfilePicture:      &proto.ProfilePicture{AvatarId: 10000007},
+			CurPlayerNumInWorld: 1,
+		})
+		count++
+	}
 	onlinePlayerList := make([]*model.Player, 0)
 	// 优先获取本地的在线玩家
 	for _, onlinePlayer := range USER_MANAGER.GetAllOnlineUserList() {
-		if onlinePlayer.PlayerId == player.PlayerId {
+		if onlinePlayer.PlayerId < PlayerBaseUid || onlinePlayer.PlayerId > MaxPlayerBaseUid {
 			continue
 		}
-		if g.IsMainGs() && onlinePlayer.PlayerId == g.GetAi().PlayerId {
+		if onlinePlayer.PlayerId == player.PlayerId {
 			continue
 		}
 		onlinePlayerList = append(onlinePlayerList, onlinePlayer)
@@ -418,9 +425,9 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 
 	for _, onlinePlayer := range onlinePlayerList {
 		onlinePlayerInfo := g.PacketOnlinePlayerInfo(onlinePlayer)
-		getOnlinePlayerListRsp.PlayerInfoList = append(getOnlinePlayerListRsp.PlayerInfoList, onlinePlayerInfo)
+		rsp.PlayerInfoList = append(rsp.PlayerInfoList, onlinePlayerInfo)
 	}
-	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, getOnlinePlayerListRsp)
+	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 func (g *Game) GetOnlinePlayerInfoReq(player *model.Player, payloadMsg pb.Message) {
