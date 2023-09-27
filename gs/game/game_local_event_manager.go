@@ -65,7 +65,7 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 	switch localEvent.EventId {
 	case LoadLoginUserFromDbFinish:
 		playerLoginInfo := localEvent.Msg.(*PlayerLoginInfo)
-		GAME.OnLogin(playerLoginInfo.UserId, playerLoginInfo.ClientSeq, playerLoginInfo.GateAppId, playerLoginInfo.Player, playerLoginInfo.JoinHostUserId)
+		GAME.OnLogin(playerLoginInfo.UserId, playerLoginInfo.ClientSeq, playerLoginInfo.GateAppId, playerLoginInfo.Player, playerLoginInfo.JoinHostUserId, playerLoginInfo.Ok)
 	case ExitRunUserCopyAndSave:
 		fallthrough
 	case RunUserCopyAndSave:

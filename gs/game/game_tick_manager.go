@@ -10,6 +10,8 @@ import (
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
+
+	pb "google.golang.org/protobuf/proto"
 )
 
 // 游戏服务器定时帧管理器
@@ -375,6 +377,28 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				Damage:     100,
 			},
 		})
+		if attackResultTemplate != nil {
+			evtBeingHitInfo := &proto.EvtBeingHitInfo{
+				PeerId:       0,
+				AttackResult: attackResultTemplate,
+				FrameNum:     0,
+			}
+			evtBeingHitInfo.AttackResult.AttackerId = rigidBody.avatarEntityId
+			evtBeingHitInfo.AttackResult.DefenseId = rigidBody.hitAvatarEntityId
+			evtBeingHitInfo.AttackResult.Damage = 100
+			evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(defPlayer.Pos.X), Y: float32(defPlayer.Pos.Y), Z: float32(defPlayer.Pos.Z)}
+			combatData, err := pb.Marshal(evtBeingHitInfo)
+			if err != nil {
+				return
+			}
+			GAME.SendToSceneA(scene, cmd.CombatInvocationsNotify, 0, &proto.CombatInvocationsNotify{
+				InvokeList: []*proto.CombatInvokeEntry{{
+					CombatData:   combatData,
+					ForwardType:  proto.ForwardType_FORWARD_TO_ALL,
+					ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
+				}},
+			})
+		}
 	}
 }
 

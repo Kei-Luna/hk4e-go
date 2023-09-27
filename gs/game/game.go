@@ -105,7 +105,7 @@ func (g *Game) GetAi() *model.Player {
 }
 
 func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
-	g.OnLogin(uid, 0, "", nil, 0)
+	g.OnLogin(uid, 0, "", nil, 0, true)
 	robot := USER_MANAGER.GetOnlineUser(uid)
 	robot.DbState = model.DbNormal
 	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})

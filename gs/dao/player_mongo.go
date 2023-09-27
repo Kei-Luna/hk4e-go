@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"errors"
 
 	"hk4e/gs/model"
 
@@ -188,7 +189,7 @@ func (d *Dao) QueryPlayerById(playerId uint32) (*model.Player, error) {
 	player := new(model.Player)
 	err := result.Decode(player)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, nil
 		} else {
 			return nil, err
@@ -206,7 +207,7 @@ func (d *Dao) QueryChatMsgById(id primitive.ObjectID) (*model.ChatMsg, error) {
 	chatMsg := new(model.ChatMsg)
 	err := result.Decode(chatMsg)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, nil
 		} else {
 			return nil, err

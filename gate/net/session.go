@@ -510,12 +510,12 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	}
 	if tokenVerifyRsp.RetCode != 0 {
 		logger.Error("verify token error, openId: %v", req.AccountUid)
-		return k.loginFailRsp(0, proto.Retcode_RET_TOKEN_ERROR, false, 0)
+		return k.loginFailRsp(0, proto.Retcode_RET_ACCOUNT_VEIRFY_ERROR, false, 0)
 	}
 	account, err := k.db.QueryAccountByOpenId(req.AccountUid)
 	if err != nil {
 		logger.Error("query account error: %v, openId: %v", err, req.AccountUid)
-		return k.loginFailRsp(0, proto.Retcode_RET_LOGIN_DB_FAIL, false, 0)
+		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	if account == nil {
 		// 注册账号与uid关联
@@ -533,7 +533,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 		_, err = k.db.InsertAccount(account)
 		if err != nil {
 			logger.Error("insert account error: %v, openId: %v", err, req.AccountUid)
-			return k.loginFailRsp(0, proto.Retcode_RET_LOGIN_DB_FAIL, false, 0)
+			return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 		}
 	}
 	uid := account.Uid

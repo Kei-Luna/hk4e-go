@@ -75,7 +75,12 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
 }
 
-func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player *model.Player, joinHostUserId uint32) {
+func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player *model.Player, joinHostUserId uint32, ok bool) {
+	if !ok {
+		g.SendMsgToGate(cmd.PlayerLoginRsp, userId, clientSeq, gateAppId, &proto.PlayerLoginRsp{Retcode: int32(proto.Retcode_RET_LOGIN_INIT_FAIL)})
+		return
+	}
+
 	if player == nil {
 		player = g.CreatePlayer(userId)
 		USER_MANAGER.ChangeUserDbState(player, model.DbInsert)

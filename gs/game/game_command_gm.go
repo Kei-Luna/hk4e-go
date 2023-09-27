@@ -432,14 +432,11 @@ func (g *GMCmd) XLuaDebug(userId uint32, luacBase64 string) {
 		logger.Error("decode luac error: %v", err)
 		return
 	}
-	GAME.SendMsg(cmd.WindSeedClientNotify, player.PlayerId, 0, &proto.WindSeedClientNotify{
-		Notify: &proto.WindSeedClientNotify_AreaNotify_{
-			AreaNotify: &proto.WindSeedClientNotify_AreaNotify{
-				AreaCode: luac,
-				AreaId:   1,
-				AreaType: 1,
-			},
-		},
+	GAME.SendMsg(cmd.PlayerLuaShellNotify, player.PlayerId, 0, &proto.PlayerLuaShellNotify{
+		ShellType: proto.LuaShellType_LUASHELL_NORMAL,
+		Id:        1,
+		LuaShell:  luac,
+		UseType:   1,
 	})
 }
 
@@ -545,7 +542,7 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 		logger.Error("cmd name not found")
 		return
 	}
-	if cmdId == cmd.WindSeedClientNotify {
+	if cmdId == cmd.WindSeedClientNotify || cmdId == cmd.PlayerLuaShellNotify {
 		logger.Error("what are you doing ???")
 		return
 	}

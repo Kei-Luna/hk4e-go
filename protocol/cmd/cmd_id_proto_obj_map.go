@@ -64,6 +64,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(PlayerTimeNotify, func() any { return new(proto.PlayerTimeNotify) })                     // 玩家累计在线时长通知
 	c.regMsg(ServerTimeNotify, func() any { return new(proto.ServerTimeNotify) })                     // 服务器时间通知
 	c.regMsg(WindSeedClientNotify, func() any { return new(proto.WindSeedClientNotify) })             // 客户端XLUA调试通知
+	c.regMsg(PlayerLuaShellNotify, func() any { return new(proto.PlayerLuaShellNotify) })             // 客户端XLUA调试通知
 	c.regMsg(ServerAnnounceNotify, func() any { return new(proto.ServerAnnounceNotify) })             // 服务器公告通知
 	c.regMsg(ServerAnnounceRevokeNotify, func() any { return new(proto.ServerAnnounceRevokeNotify) }) // 服务器公告撤销通知
 	c.regMsg(TowerAllDataReq, func() any { return new(proto.TowerAllDataReq) })                       // 深渊数据请求

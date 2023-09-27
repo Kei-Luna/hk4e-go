@@ -95,6 +95,7 @@ type PlayerLoginInfo struct {
 	ClientSeq      uint32
 	GateAppId      string
 	JoinHostUserId uint32
+	Ok             bool
 }
 
 // OnlineUser 玩家上线
@@ -110,19 +111,39 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 		ok := u.db.DistLockSync(userId)
 		if !ok {
 			logger.Error("lock redis offline player data error, uid: %v", userId)
+			LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
+				EventId: LoadLoginUserFromDbFinish,
+				Msg: &PlayerLoginInfo{
+					UserId:    userId,
+					ClientSeq: clientSeq,
+					GateAppId: gateAppId,
+					Ok:        false,
+				},
+			}
 			return
 		}
-		player := u.LoadUserFromDbSync(userId)
+		player, err := u.LoadUserFromDbSync(userId)
+		if err != nil {
+			logger.Error("can not load user from db, uid: %v", userId)
+			LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
+				EventId: LoadLoginUserFromDbFinish,
+				Msg: &PlayerLoginInfo{
+					UserId:    userId,
+					ClientSeq: clientSeq,
+					GateAppId: gateAppId,
+					Ok:        false,
+				},
+			}
+			// 解离线玩家数据分布式锁
+			u.db.DistUnlock(userId)
+			return
+		}
 		if player != nil {
 			u.SaveUserToRedisSync(player)
-		}
-		// 解离线玩家数据分布式锁
-		u.db.DistUnlock(userId)
-		if player != nil {
 			u.ChangeUserDbState(player, model.DbNormal)
 			player.ChatMsgMap = u.LoadUserChatMsgFromDbSync(userId)
 		} else {
-			logger.Error("can not find user from db, uid: %v", userId)
+			logger.Info("reg new player, uid: %v", userId)
 		}
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: LoadLoginUserFromDbFinish,
@@ -132,8 +153,11 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 				ClientSeq:      clientSeq,
 				GateAppId:      gateAppId,
 				JoinHostUserId: joinHostUserId,
+				Ok:             true,
 			},
 		}
+		// 解离线玩家数据分布式锁
+		u.db.DistUnlock(userId)
 	}()
 }
 
@@ -375,7 +399,7 @@ func (u *UserManager) LoadTempOfflineUser(userId uint32, lock bool) *model.Playe
 		// 大多数情况下活跃玩家都在redis 所以不会走到下面
 		// TODO 防止恶意攻击造成redis缓存穿透
 		startTime := time.Now().UnixNano()
-		player = u.LoadUserFromDbSync(userId)
+		player, _ = u.LoadUserFromDbSync(userId)
 		endTime := time.Now().UnixNano()
 		costTime := endTime - startTime
 		logger.Info("try to load player from db sync in game main loop, cost time: %v ns", costTime)
@@ -483,13 +507,13 @@ func (u *UserManager) saveUserHandle() {
 	}()
 }
 
-func (u *UserManager) LoadUserFromDbSync(userId uint32) *model.Player {
+func (u *UserManager) LoadUserFromDbSync(userId uint32) (*model.Player, error) {
 	player, err := u.db.QueryPlayerById(userId)
 	if err != nil {
 		logger.Error("query player error: %v", err)
-		return nil
+		return nil, err
 	}
-	return player
+	return player, nil
 }
 
 func (u *UserManager) SaveUserToDbSync(player *model.Player) {
