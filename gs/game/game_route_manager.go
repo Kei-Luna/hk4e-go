@@ -120,6 +120,8 @@ func (r *RouteManager) initRoute() {
 		cmd.AvatarDieAnimationEndReq:          GAME.AvatarDieAnimationEndReq,
 		cmd.WorldPlayerReviveReq:              GAME.WorldPlayerReviveReq,
 		cmd.UseItemReq:                        GAME.UseItemReq,
+		cmd.EnterTransPointRegionNotify:       GAME.EnterTransPointRegionNotify,
+		cmd.ExitTransPointRegionNotify:        GAME.ExitTransPointRegionNotify,
 	}
 }
 
