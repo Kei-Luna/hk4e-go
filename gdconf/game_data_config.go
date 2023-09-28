@@ -72,6 +72,9 @@ type GameDataConfig struct {
 	SkillStaminaDataMap     map[int32]*SkillStaminaData             // 角色技能消耗体力 临时的
 	VehicleDataMap          map[int32]*VehicleData                  // 载具
 	OpenStateDataMap        map[int32]*OpenStateData                // 开放状态
+	WeatherDataMap          map[int32]*WeatherData                  // 天气
+	WeatherTemplateMap      map[string]map[int32]*WeatherTemplate   // 天气模版
+	SceneWeatherAreaMap     map[int32][]*SceneWeatherArea           // 天气区域
 }
 
 func InitGameDataConfig() {
@@ -176,6 +179,9 @@ func (g *GameDataConfig) load() {
 	g.loadSkillStaminaData()     // 角色技能消耗体力 临时的
 	g.loadVehicleData()          // 载具
 	g.loadOpenStateData()        // 开放状态
+	g.loadWeatherData()          // 天气
+	g.loadWeatherTemplateData()  // 天气模版
+	g.loadSceneWeatherArea()     // 天气区域
 }
 
 // CSV相关

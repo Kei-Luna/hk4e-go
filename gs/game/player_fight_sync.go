@@ -384,6 +384,8 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	}
 	// 场景区域触发器检测
 	g.SceneRegionTriggerCheck(player, oldPos, newPos, entityId)
+	// 场景天气区域变更检测
+	g.SceneWeatherAreaCheck(player, oldPos, newPos)
 }
 
 func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {

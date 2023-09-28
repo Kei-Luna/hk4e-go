@@ -245,11 +245,8 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.SendMsg(cmd.PlayerEnterSceneInfoNotify, player.PlayerId, player.ClientSeq, playerEnterSceneInfoNotify)
 
-		sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
-			WeatherAreaId: 0,
-			ClimateType:   constant.CLIMATE_TYPE_SUNNY,
-		}
-		g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
+		weatherAreaId := g.GetPlayerInWeatherAreaId(player)
+		g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, g.PacketSceneAreaWeatherNotify(weatherAreaId))
 	}
 
 	g.UpdateWorldScenePlayerInfo(player, world)
@@ -361,11 +358,8 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
 	}
 
-	sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
-		WeatherAreaId: 0,
-		ClimateType:   constant.CLIMATE_TYPE_SUNNY,
-	}
-	g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
+	weatherAreaId := g.GetPlayerInWeatherAreaId(player)
+	g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, g.PacketSceneAreaWeatherNotify(weatherAreaId))
 
 	enterSceneDoneRsp := &proto.EnterSceneDoneRsp{
 		EnterSceneToken: req.EnterSceneToken,
@@ -1217,6 +1211,64 @@ func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetI
 	})
 }
 
+// GetPlayerInWeatherAreaId 获取玩家所在的天气区域id
+func (g *Game) GetPlayerInWeatherAreaId(player *model.Player) int32 {
+	// 获取场景天气区域配置表
+	sceneWeatherAreaList := gdconf.GetSceneWeatherAreaListBySceneId(int32(player.SceneId))
+	if sceneWeatherAreaList == nil {
+		logger.Error("scene weather area config not exist, sceneId: %v", player.SceneId)
+		return 0
+	}
+	// 寻找玩家所在范围内的天气区域
+	var weatherAreaId int32
+	var priority int32
+	posX := float32(player.Pos.X)
+	posZ := float32(player.Pos.Z)
+	// 玩家所在的天气区域
+	for _, area := range sceneWeatherAreaList {
+		polygon := area.Points
+		isInside := false
+		for i, j := 0, len(polygon)-1; i < len(polygon); i++ {
+			if (polygon[i].Y > posZ) != (polygon[j].Y > posZ) &&
+				posX < (polygon[j].X-polygon[i].X)*(posZ-polygon[i].Y)/(polygon[j].Y-polygon[i].Y)+polygon[i].X {
+				isInside = !isInside
+			}
+			j = i
+		}
+		// 获取天气数据配置表
+		weatherConfig := gdconf.GetWeatherDataById(area.AreaId)
+		if weatherConfig == nil {
+			// 有些天气不在配置表内
+			// logger.Error("weather data config not exist, weatherId: %v", area.AreaId)
+			continue
+		}
+		// 确保默认自动开启
+		if weatherConfig.DefaultOpen != 1 {
+			continue
+		}
+		if isInside && weatherConfig.Priority > priority {
+			weatherAreaId = area.AreaId
+			priority = weatherConfig.Priority
+		}
+	}
+	return weatherAreaId
+}
+
+// SceneWeatherAreaCheck 场景天气区域变更检测
+func (g *Game) SceneWeatherAreaCheck(player *model.Player, oldPos *model.Vector, newPos *model.Vector) {
+	// 如果玩家没移动就不检测变更
+	if oldPos.X == newPos.X && oldPos.Z == newPos.Z {
+		return
+	}
+	// 获取当前所在的天气区域
+	weatherAreaId := g.GetPlayerInWeatherAreaId(player)
+	// 判断天气区域是否变更
+	if player.WeatherAreaId != weatherAreaId {
+		player.WeatherAreaId = weatherAreaId
+		g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, g.PacketSceneAreaWeatherNotify(weatherAreaId))
+	}
+}
+
 /************************************************** 打包封装 **************************************************/
 
 var SceneTransactionSeq uint32 = 0
@@ -1758,4 +1810,66 @@ func (g *Game) PacketDelTeamEntityNotify(scene *Scene, player *model.Player) *pr
 		DelEntityIdList: []uint32{scene.GetWorld().GetPlayerTeamEntityId(player)},
 	}
 	return delTeamEntityNotify
+}
+
+// PacketSceneAreaWeatherNotify 场景区域天气通知
+func (g *Game) PacketSceneAreaWeatherNotify(weatherAreaId int32) *proto.SceneAreaWeatherNotify {
+	// 获取天气数据配置表
+	weatherConfig := gdconf.GetWeatherDataById(weatherAreaId)
+	if weatherConfig == nil {
+		logger.Error("weather data config not exist, weatherId: %v", weatherAreaId)
+		return new(proto.SceneAreaWeatherNotify)
+	}
+
+	// 如果指定了则使用指定的天气
+	var weatherTemplateConfig *gdconf.WeatherTemplate
+	if weatherConfig.UseDefaultWeather == 1 && weatherConfig.DefaultWeather != 0 {
+		weatherTemplateConfig = gdconf.GetWeatherTemplateByTemplateNameAndWeather(weatherConfig.TemplateName, weatherConfig.DefaultWeather)
+	} else {
+		// 随机取个天气类型
+		weatherTemplateMap := gdconf.GetWeatherTemplateMap()[weatherConfig.TemplateName]
+		if weatherTemplateMap == nil {
+			logger.Error("weather template map not exist, templateName: %v", weatherConfig.TemplateName)
+			return new(proto.SceneAreaWeatherNotify)
+		}
+		weatherTemplateList := make([]int32, 0, len(weatherTemplateMap))
+		for key := range weatherTemplateMap {
+			weatherTemplateList = append(weatherTemplateList, key)
+		}
+		weatherTemplateConfig = weatherTemplateMap[random.GetRandomInt32(0, int32(len(weatherTemplateList)))]
+	}
+	// 确保指定的天气模版存在
+	if weatherTemplateConfig == nil {
+		logger.Error("weather template config not exist, templateName: %v", weatherConfig.TemplateName)
+		return new(proto.SceneAreaWeatherNotify)
+	}
+	// 随机气象 轮盘赌选择法RWS
+	var climateType uint32
+	climateWeightMap := map[uint32]int32{
+		constant.CLIMATE_TYPE_SUNNY:        weatherTemplateConfig.Sunny,
+		constant.CLIMATE_TYPE_CLOUDY:       weatherTemplateConfig.Cloudy,
+		constant.CLIMATE_TYPE_RAIN:         weatherTemplateConfig.Rain,
+		constant.CLIMATE_TYPE_THUNDERSTORM: weatherTemplateConfig.ThunderStorm,
+		constant.CLIMATE_TYPE_SNOW:         weatherTemplateConfig.Snow,
+		constant.CLIMATE_TYPE_MIST:         weatherTemplateConfig.Mist,
+		constant.CLIMATE_TYPE_DESERT:       weatherTemplateConfig.Desert,
+	}
+	randNum := random.GetRandomInt32(0, 100-1)
+	sumWeight := int32(0)
+	for climate, weight := range climateWeightMap {
+		sumWeight += weight
+		if sumWeight > randNum {
+			climateType = climate
+			break
+		}
+	}
+	logger.Debug("weather climateType: %v, weatherAreaId: %v", climateType, weatherAreaId)
+	sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
+		WeatherAreaId:   uint32(weatherConfig.WeatherAreaId),
+		WeatherGadgetId: uint32(weatherConfig.GadgetID),
+		ClimateType:     climateType,
+		TransDuration:   0,
+		WeatherValueMap: nil,
+	}
+	return sceneAreaWeatherNotify
 }
