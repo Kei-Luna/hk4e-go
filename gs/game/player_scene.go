@@ -1275,7 +1275,6 @@ func (g *Game) SceneWeatherAreaCheck(player *model.Player, oldPos *model.Vector,
 	}
 	// 如果玩家还在历史区域内就不获取当前所在区域
 	if g.GetPosIsInWeatherArea(newPos.X, newPos.Z, player.SceneId, player.WeatherInfo.WeatherAreaId) {
-		logger.Error("nonono")
 		return
 	}
 	// 获取当前所在的天气区域
