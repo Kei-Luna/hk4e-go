@@ -84,7 +84,7 @@ type Player struct {
 	NetFreeze                 bool                                     `bson:"-" msgpack:"-"` // 客户端网络上下行冻结状态
 	LastSceneBlockAoiMoveTime uint64                                   `bson:"-" msgpack:"-"` // 上一次移动处理场景区块aoi的时间
 	CommandAssignUid          uint32                                   `bson:"-" msgpack:"-"` // 命令指定uid
-	WeatherAreaId             int32                                    `bson:"-" msgpack:"-"` // 天气区域id
+	WeatherInfo               *WeatherInfo                             `bson:"-" msgpack:"-"` // 天气信息
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 }
@@ -103,6 +103,7 @@ func (p *Player) InitOnlineData() {
 	p.CombatInvokeHandler = NewInvokeHandler[proto.CombatInvokeEntry]()
 	p.AbilityInvokeHandler = NewInvokeHandler[proto.AbilityInvokeEntry]()
 	p.GCGInfo = NewGCGInfo() // 临时测试用数据
+	p.WeatherInfo = NewWeatherInfo()
 
 	dbAvatar := p.GetDbAvatar()
 	dbAvatar.InitDbAvatar(p)

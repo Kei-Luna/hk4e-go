@@ -20,7 +20,7 @@ type AreaPoint struct {
 }
 
 func (g *GameDataConfig) loadSceneWeatherArea() {
-	g.SceneWeatherAreaMap = make(map[int32][]*SceneWeatherArea)
+	g.SceneWeatherAreaMap = make(map[int32]map[int32]*SceneWeatherArea)
 	sceneLuaPrefix := g.luaPrefix + "scene/"
 	count := 0
 	for _, sceneData := range g.SceneDataMap {
@@ -43,19 +43,23 @@ func (g *GameDataConfig) loadSceneWeatherArea() {
 		for _, area := range sceneWeatherAreaList {
 			_, exist := g.SceneWeatherAreaMap[sceneId]
 			if !exist {
-				g.SceneWeatherAreaMap[sceneId] = make([]*SceneWeatherArea, 0)
+				g.SceneWeatherAreaMap[sceneId] = make(map[int32]*SceneWeatherArea, len(area.Points))
 			}
-			g.SceneWeatherAreaMap[sceneId] = append(g.SceneWeatherAreaMap[sceneId], area)
+			g.SceneWeatherAreaMap[sceneId][area.AreaId] = area
 			count++
 		}
 	}
 	logger.Info("SceneWeatherArea count: %v", count)
 }
 
-func GetSceneWeatherAreaListBySceneId(sceneId int32) []*SceneWeatherArea {
-	return CONF.SceneWeatherAreaMap[sceneId]
+func GetSceneWeatherAreaMapBySceneIdAndWeatherAreaId(sceneId int32, WeatherAreaId int32) *SceneWeatherArea {
+	value, exist := CONF.SceneWeatherAreaMap[sceneId]
+	if !exist {
+		return nil
+	}
+	return value[WeatherAreaId]
 }
 
-func GetSceneWeatherAreaMap() map[int32][]*SceneWeatherArea {
+func GetSceneWeatherAreaMap() map[int32]map[int32]*SceneWeatherArea {
 	return CONF.SceneWeatherAreaMap
 }

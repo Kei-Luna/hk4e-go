@@ -154,6 +154,8 @@ func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("ChangeGroupVariableValueByGroup", ChangeGroupVariableValueByGroup)
 	gdconf.RegScriptLibFunc("GetRegionEntityCount", GetRegionEntityCount)
 	gdconf.RegScriptLibFunc("CreateGroupTimerEvent", CreateGroupTimerEvent)
+	gdconf.RegScriptLibFunc("EnterWeatherArea", EnterWeatherArea)
+	gdconf.RegScriptLibFunc("SetWeatherAreaState", SetWeatherAreaState)
 }
 
 func GetEntityType(luaState *lua.LState) int {
@@ -746,6 +748,41 @@ func CreateGroupTimerEvent(luaState *lua.LState) int {
 	delay := luaState.ToInt(4)
 	TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionLuaGroupTimerEvent, uint32(delay),
 		uint32(groupId), source)
+	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func EnterWeatherArea(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	weatherAreaId := luaState.ToInt(2)
+	GAME.SetPlayerWeatherByWeatherAreaId(player, uint32(weatherAreaId))
+	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func SetWeatherAreaState(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	weatherAreaId := luaState.ToInt(2)
+	climateType := luaState.ToInt(3)
+	GAME.SetPlayerWeather(player, uint32(weatherAreaId), uint32(climateType))
 	luaState.Push(lua.LNumber(0))
 	return 1
 }

@@ -106,11 +106,11 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(PlayerGameTimeNotify, func() any { return new(proto.PlayerGameTimeNotify) })                     // 玩家游戏内时间通知
 	c.regMsg(SceneEntityAppearNotify, func() any { return new(proto.SceneEntityAppearNotify) })               // 场景实体出现通知
 	c.regMsg(SceneEntityDisappearNotify, func() any { return new(proto.SceneEntityDisappearNotify) })         // 场景实体消失通知
-	c.regMsg(SceneAreaWeatherNotify, func() any { return new(proto.SceneAreaWeatherNotify) })                 // 场景地区天气通知
-	c.regMsg(EnterSceneWeatherAreaNotify, func() any { return new(proto.EnterSceneWeatherAreaNotify) })       // 进入场景天气地区通知
-	c.regMsg(ExitSceneWeatherAreaNotify, func() any { return new(proto.ExitSceneWeatherAreaNotify) })         // 离开场景天气地区通知
-	c.regMsg(SetSceneWeatherAreaReq, func() any { return new(proto.SetSceneWeatherAreaReq) })                 // 设置场景天气地区请求
-	c.regMsg(SetSceneWeatherAreaRsp, func() any { return new(proto.SetSceneWeatherAreaRsp) })                 // 设置场景天气地区响应
+	c.regMsg(SceneAreaWeatherNotify, func() any { return new(proto.SceneAreaWeatherNotify) })                 // 场景天气区域通知
+	c.regMsg(EnterSceneWeatherAreaNotify, func() any { return new(proto.EnterSceneWeatherAreaNotify) })       // 进入场景天气区域通知
+	c.regMsg(ExitSceneWeatherAreaNotify, func() any { return new(proto.ExitSceneWeatherAreaNotify) })         // 离开场景天气区域通知
+	c.regMsg(SetSceneWeatherAreaReq, func() any { return new(proto.SetSceneWeatherAreaReq) })                 // 设置场景天气区域请求
+	c.regMsg(SetSceneWeatherAreaRsp, func() any { return new(proto.SetSceneWeatherAreaRsp) })                 // 设置场景天气区域响应
 	c.regMsg(SceneWeatherForecastReq, func() any { return new(proto.SceneWeatherForecastReq) })               // 场景天气预测请求
 	c.regMsg(SceneWeatherForecastRsp, func() any { return new(proto.SceneWeatherForecastRsp) })               // 场景天气预测响应
 	c.regMsg(WorldPlayerLocationNotify, func() any { return new(proto.WorldPlayerLocationNotify) })           // 世界玩家位置通知

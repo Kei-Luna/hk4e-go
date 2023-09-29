@@ -74,7 +74,7 @@ type GameDataConfig struct {
 	OpenStateDataMap        map[int32]*OpenStateData                // 开放状态
 	WeatherDataMap          map[int32]*WeatherData                  // 天气
 	WeatherTemplateMap      map[string]map[int32]*WeatherTemplate   // 天气模版
-	SceneWeatherAreaMap     map[int32][]*SceneWeatherArea           // 天气区域
+	SceneWeatherAreaMap     map[int32]map[int32]*SceneWeatherArea   // 天气区域
 }
 
 func InitGameDataConfig() {
