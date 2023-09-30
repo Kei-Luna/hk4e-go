@@ -221,15 +221,10 @@ type World struct {
 	peerList             []*model.Player               // 玩家编号列表
 	aiWorldAoi           *alg.AoiManager               // ai世界的aoi管理器
 	bulletPhysicsEngine  *PhysicsEngine                // 蓄力箭子弹物理引擎
-	pubg                 *Pubg
 }
 
 func (w *World) GetBulletPhysicsEngine() *PhysicsEngine {
 	return w.bulletPhysicsEngine
-}
-
-func (w *World) GetPubg() *Pubg {
-	return w.pubg
 }
 
 func (w *World) GetId() uint32 {

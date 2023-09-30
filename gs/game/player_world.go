@@ -147,12 +147,13 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		pubg := world.GetPubg()
-		if pubg != nil {
-			GAME.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: pubg.GetAreaPointList()})
-			return
-		}
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdMarkMap, &PluginEventMarkMap{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		MarkMapReq:  req,
+	}) {
+		return
 	}
 
 	// 地图标点传送

@@ -153,9 +153,6 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 	}
 
 	if WORLD_MANAGER.IsAiWorld(world) {
-		if world.GetPubg() == nil {
-			return
-		}
 		if defEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR &&
 			defEntity.GetAvatarEntity().GetUid() == world.GetOwner().PlayerId {
 			return
@@ -944,6 +941,9 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 		}
 		gadgetEntity := entity.GetGadgetEntity()
 		gadgetId := gadgetEntity.GetGadgetId()
+		if gadgetId == 0 {
+			return
+		}
 		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetId))
 		if gadgetDataConfig == nil {
 			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())

@@ -1,8 +1,6 @@
 package game
 
 import (
-	"fmt"
-
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -200,16 +198,13 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 	}
 	scene := world.GetSceneById(player.SceneId)
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		pubg := world.GetPubg()
-		if pubg != nil {
-			alivePlayerNum := len(pubg.GetAlivePlayerList())
-			info := fmt.Sprintf("『%v』死亡了，剩余%v位存活玩家。", player.NickName, alivePlayerNum)
-			g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-			player.PubgRank += uint32(100 - alivePlayerNum)
-			g.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: req.SkillId, DieGuid: req.DieGuid})
-			return
-		}
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdAvatarDieAnimationEnd, &PluginEventAvatarDieAnimationEnd{
+		PluginEvent:              NewPluginEvent(),
+		Player:                   player,
+		AvatarDieAnimationEndReq: req,
+	}) {
+		return
 	}
 
 	entity := scene.GetEntity(uint32(req.DieGuid))

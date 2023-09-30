@@ -600,9 +600,6 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 		logger.Error("get db avatar is nil, avatarId: %v", avatarId)
 		return
 	}
-	avatar.LifeState = constant.LIFE_STATE_DEAD
-	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 0
-
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -613,6 +610,19 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 	}
 	scene := world.GetSceneById(player.SceneId)
 	entity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
+
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdPlayerKillAvatar, &PluginEventKillAvatar{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		AvatarId:    avatarId,
+		DieType:     dieType,
+	}) {
+		return
+	}
+
+	avatar.LifeState = constant.LIFE_STATE_DEAD
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 0
 
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	if avatarId == activeAvatarId {
@@ -625,10 +635,6 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 			MoveReliableSeq: entity.GetLastMoveReliableSeq(),
 		}
 		g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf)
-	}
-
-	if WORLD_MANAGER.IsAiWorld(world) {
-		TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionPubgDieExit, 10)
 	}
 }
 
@@ -1312,7 +1318,7 @@ func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherArea
 		for key := range weatherTemplateMap {
 			weatherTemplateList = append(weatherTemplateList, key)
 		}
-		weather = random.GetRandomInt32(0, int32(len(weatherTemplateList)-1))
+		weather = random.GetRandomInt32(1, int32(len(weatherTemplateList)-1))
 		weatherTemplateConfig = weatherTemplateMap[weather]
 	}
 	// 确保指定的天气模版存在

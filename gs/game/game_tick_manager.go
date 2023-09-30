@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"time"
 
 	"hk4e/common/constant"
@@ -116,9 +115,7 @@ const (
 	UserTimerActionTest = iota
 	UserTimerActionLuaCreateMonster
 	UserTimerActionLuaGroupTimerEvent
-	UserTimerActionPubgUpdateArea
-	UserTimerActionPubgDieExit
-	UserTimerActionPubgEnd
+	UserTimerActionPlugin
 )
 
 func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
@@ -150,35 +147,9 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 			return
 		}
 		GAME.TimerEventTriggerCheck(player, group, source)
-	case UserTimerActionPubgUpdateArea:
-		logger.Debug("UserTimerActionPubgUpdateArea")
-		world := WORLD_MANAGER.GetWorldById(player.WorldId)
-		if world == nil {
-			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
-			return
-		}
-		pubg := world.GetPubg()
-		if pubg == nil {
-			return
-		}
-		pubg.phase++
-		pubg.RefreshArea()
-	case UserTimerActionPubgDieExit:
-		logger.Debug("UserTimerActionPubgDieExit")
-		GAME.ReLoginPlayer(player.PlayerId, true)
-	case UserTimerActionPubgEnd:
-		logger.Debug("UserTimerActionPubgEnd")
-		world := WORLD_MANAGER.GetWorldById(player.WorldId)
-		if world == nil {
-			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
-			return
-		}
-		for _, worldPlayer := range world.GetAllPlayer() {
-			if worldPlayer.PlayerId == world.GetOwner().PlayerId {
-				continue
-			}
-			GAME.ReLoginPlayer(worldPlayer.PlayerId, true)
-		}
+	case UserTimerActionPlugin:
+		logger.Debug("UserTimerActionPlugin, data: %v", data)
+		PLUGIN_MANAGER.HandleUserTimer(player, data)
 	}
 }
 
@@ -190,27 +161,35 @@ func (t *TickManager) OnGameServerTick() {
 	now := tm.UnixMilli()
 	if t.globalTickCount%(50/ServerTickTime) == 0 {
 		t.onTick50MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick50MilliSecond)
 	}
 	if t.globalTickCount%(100/ServerTickTime) == 0 {
 		t.onTick100MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick100MilliSecond)
 	}
 	if t.globalTickCount%(200/ServerTickTime) == 0 {
 		t.onTick200MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick200MilliSecond)
 	}
 	if t.globalTickCount%(1000/ServerTickTime) == 0 {
 		t.onTickSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickSecond)
 	}
 	if t.globalTickCount%(5000/ServerTickTime) == 0 {
 		t.onTick5Second(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick5Second)
 	}
 	if t.globalTickCount%(10000/ServerTickTime) == 0 {
 		t.onTick10Second(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick10Second)
 	}
 	if t.globalTickCount%(60000/ServerTickTime) == 0 {
 		t.onTickMinute(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinute)
 	}
 	if t.globalTickCount%(60000*60/ServerTickTime) == 0 {
 		t.onTickHour(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHour)
 	}
 	for userId, userTick := range t.userTickMap {
 		if len(userTick.globalTick.C) == 0 {
@@ -256,11 +235,6 @@ func (t *TickManager) onDayChange(now int64) {
 
 func (t *TickManager) onHourChange(now int64) {
 	logger.Info("on hour change, time: %v", now)
-	world := WORLD_MANAGER.GetAiWorld()
-	if world.GetPubg() != nil {
-		return
-	}
-	world.StartPubg()
 }
 
 func (t *TickManager) onTickHour(now int64) {
@@ -290,9 +264,7 @@ func (t *TickManager) onTick5Second(now int64) {
 	}
 	aiWorld := WORLD_MANAGER.GetAiWorld()
 	if WORLD_MANAGER.IsAiWorld(aiWorld) {
-		if aiWorld.GetPubg() != nil {
-			return
-		}
+		// todo pubg允许超过100人
 		if len(aiWorld.GetAllPlayer()) >= 100 {
 			return
 		}
@@ -312,33 +284,6 @@ func (t *TickManager) onTickSecond(now int64) {
 	// GCG游戏Tick
 	for _, game := range GCG_MANAGER.gameMap {
 		game.onTick()
-	}
-	// PUBG游戏
-	world := WORLD_MANAGER.GetAiWorld()
-	pubg := world.GetPubg()
-	if pubg == nil {
-		return
-	}
-	pubg.UpdateArea()
-	scene := world.GetSceneById(world.GetOwner().SceneId)
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		if !pubg.IsInBlueArea(scenePlayer.Pos) {
-			GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
-				AttackResult: &proto.AttackResult{
-					AttackerId: 0,
-					DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
-					Damage:     10,
-				},
-			})
-		}
-	}
-	alivePlayerList := pubg.GetAlivePlayerList()
-	if len(alivePlayerList) <= 1 {
-		if len(alivePlayerList) == 1 {
-			info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
-			GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-		}
-		world.StopPubg()
 	}
 }
 
@@ -377,28 +322,33 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				Damage:     100,
 			},
 		})
-		if attackResultTemplate != nil {
-			evtBeingHitInfo := &proto.EvtBeingHitInfo{
-				PeerId:       0,
-				AttackResult: attackResultTemplate,
-				FrameNum:     0,
-			}
-			evtBeingHitInfo.AttackResult.AttackerId = rigidBody.avatarEntityId
-			evtBeingHitInfo.AttackResult.DefenseId = rigidBody.hitAvatarEntityId
-			evtBeingHitInfo.AttackResult.Damage = 100
-			evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(defPlayer.Pos.X), Y: float32(defPlayer.Pos.Y), Z: float32(defPlayer.Pos.Z)}
-			combatData, err := pb.Marshal(evtBeingHitInfo)
-			if err != nil {
-				return
-			}
-			GAME.SendToSceneA(scene, cmd.CombatInvocationsNotify, 0, &proto.CombatInvocationsNotify{
-				InvokeList: []*proto.CombatInvokeEntry{{
-					CombatData:   combatData,
-					ForwardType:  proto.ForwardType_FORWARD_TO_ALL,
-					ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
-				}},
-			})
+		if attackResultTemplate == nil {
+			return
 		}
+		evtBeingHitInfo := &proto.EvtBeingHitInfo{
+			PeerId:       0,
+			AttackResult: attackResultTemplate,
+			FrameNum:     0,
+		}
+		evtBeingHitInfo.AttackResult.AttackerId = rigidBody.avatarEntityId
+		evtBeingHitInfo.AttackResult.DefenseId = rigidBody.hitAvatarEntityId
+		evtBeingHitInfo.AttackResult.Damage = 100
+		if evtBeingHitInfo.AttackResult.HitCollision == nil {
+			return
+		}
+		evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(defPlayer.Pos.X), Y: float32(defPlayer.Pos.Y), Z: float32(defPlayer.Pos.Z)}
+		combatData, err := pb.Marshal(evtBeingHitInfo)
+		if err != nil {
+			return
+		}
+		GAME.SendToSceneA(scene, cmd.CombatInvocationsNotify, 0, &proto.CombatInvocationsNotify{
+			InvokeList: []*proto.CombatInvokeEntry{{
+				CombatData:   combatData,
+				ForwardType:  proto.ForwardType_FORWARD_TO_ALL,
+				ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
+			}},
+		})
+
 	}
 }
 

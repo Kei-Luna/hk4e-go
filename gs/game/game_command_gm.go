@@ -556,13 +556,13 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 }
 
 func (g *GMCmd) StartPubg(v bool) {
-	world := WORLD_MANAGER.GetAiWorld()
-	world.StartPubg()
+	pubg := PLUGIN_MANAGER.GetIPlugin("pubg").(*PluginPubg)
+	pubg.StartPubg()
 }
 
 func (g *GMCmd) StopPubg(v bool) {
-	world := WORLD_MANAGER.GetAiWorld()
-	world.StopPubg()
+	pubg := PLUGIN_MANAGER.GetIPlugin("pubg").(*PluginPubg)
+	pubg.StopPubg()
 }
 
 func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {

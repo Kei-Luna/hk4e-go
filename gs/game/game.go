@@ -35,6 +35,7 @@ var WORLD_MANAGER *WorldManager = nil
 var TICK_MANAGER *TickManager = nil
 var COMMAND_MANAGER *CommandManager = nil
 var GCG_MANAGER *GCGManager = nil
+var PLUGIN_MANAGER *PluginManager = nil
 var MESSAGE_QUEUE *mq.MessageQueue
 
 var ONLINE_PLAYER_NUM int32 = 0 // 当前在线玩家数
@@ -69,6 +70,7 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	TICK_MANAGER = NewTickManager()
 	COMMAND_MANAGER = NewCommandManager()
 	GCG_MANAGER = NewGCGManager()
+	PLUGIN_MANAGER = NewPluginManager()
 	RegLuaScriptLibFunc()
 	// 创建本服的Ai世界
 	uid := AiBaseUid + gsId

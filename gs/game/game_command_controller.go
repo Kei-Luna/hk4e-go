@@ -510,7 +510,7 @@ func GiveCommand(c *CommandContent) {
 		case "weapon":
 			// 给予玩家所有武器
 			COMMAND_MANAGER.gmCmd.GMAddAllWeapon(c.AssignPlayer.PlayerId, count, 1, 0, 1)
-			c.SendSuccMessage(c.Executor, "已给予所有武器，指定UID：%v，数量：%v。", c.AssignPlayer.PlayerId, itemId, count)
+			c.SendSuccMessage(c.Executor, "已给予所有武器，指定UID：%v，数量：%v。", c.AssignPlayer.PlayerId, count)
 		case "reliquary":
 			// 给予玩家所有圣遗物
 			COMMAND_MANAGER.gmCmd.GMAddAllReliquary(c.AssignPlayer.PlayerId, count)
