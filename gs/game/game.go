@@ -79,6 +79,8 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	r.ai = r.CreateRobot(uid, name, sign)
 	WORLD_MANAGER.InitAiWorld(r.ai)
 	COMMAND_MANAGER.SetSystem(r.ai)
+	// 初始化插件 最后再调用以免插件需要访问其他模块导致出错
+	PLUGIN_MANAGER.InitPlugin()
 	r.run()
 	r.isStop = false
 	return r
@@ -286,6 +288,8 @@ func (g *Game) Close() {
 			},
 		})
 	}
+	// 卸载插件
+	PLUGIN_MANAGER.DelAllPlugin()
 	logger.Warn("stop game server finish")
 }
 

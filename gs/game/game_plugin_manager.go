@@ -9,8 +9,8 @@ import (
 
 // 游戏服务器插件管理器
 
-// initPlugin 初始化插件
-func (p *PluginManager) initPlugin() {
+// InitPlugin 初始化插件
+func (p *PluginManager) InitPlugin() {
 	iPluginList := []IPlugin{
 		NewPluginPubg(),
 	}
@@ -21,10 +21,10 @@ func (p *PluginManager) initPlugin() {
 type PluginEventId uint16
 
 const (
-	PluginEventIdNone                  = PluginEventId(iota)
-	PluginEventIdPlayerKillAvatar      // 角色被杀死
-	PluginEventIdMarkMap               // 地图标点
-	PluginEventIdAvatarDieAnimationEnd // 角色死亡动画结束
+	PluginEventIdNone = PluginEventId(iota)
+	PluginEventIdPlayerKillAvatar
+	PluginEventIdMarkMap
+	PluginEventIdAvatarDieAnimationEnd
 )
 
 // PluginEventKillAvatar 角色被杀死
@@ -38,15 +38,15 @@ type PluginEventKillAvatar struct {
 // PluginEventMarkMap 地图标点
 type PluginEventMarkMap struct {
 	*PluginEvent
-	Player     *model.Player     // 玩家
-	MarkMapReq *proto.MarkMapReq // 地图标点请求
+	Player *model.Player     // 玩家
+	Req    *proto.MarkMapReq // 请求
 }
 
 // PluginEventAvatarDieAnimationEnd 角色死亡动画结束
 type PluginEventAvatarDieAnimationEnd struct {
 	*PluginEvent
-	Player                   *model.Player                   // 玩家
-	AvatarDieAnimationEndReq *proto.AvatarDieAnimationEndReq // 角色死亡动画结束请求
+	Player *model.Player                   // 玩家
+	Req    *proto.AvatarDieAnimationEndReq // 请求
 }
 
 type PluginEventFunc func(event IPluginEvent)
@@ -80,8 +80,8 @@ func (p *PluginEvent) IsCancel() bool {
 // IPlugin 插件接口
 type IPlugin interface {
 	GetPlugin() *Plugin
-	Enable()
-	Disable()
+	OnEnable()
+	OnDisable()
 }
 
 // PluginEventPriority 插件事件优先级
@@ -121,7 +121,7 @@ type PluginUserTimerFunc func(player *model.Player, data []any)
 
 // Plugin 插件结构
 type Plugin struct {
-	PluginName string // 插件名
+	PluginName string // 插件名 遵守小驼峰命名法
 
 	isEnable      bool                                 // 是否启用
 	eventMap      map[PluginEventId][]*PluginEventInfo // 事件集合
@@ -144,14 +144,14 @@ func (p *Plugin) GetPlugin() *Plugin {
 	return p
 }
 
-// Enable 启用插件
-func (p *Plugin) Enable() {
-
+// OnEnable 插件启用时的生命周期
+func (p *Plugin) OnEnable() {
+	// 具体逻辑由插件来重写
 }
 
-// Disable 禁用插件
-func (p *Plugin) Disable() {
-
+// OnDisable 插件禁用时的生命周期
+func (p *Plugin) OnDisable() {
+	// 具体逻辑由插件来重写
 }
 
 // ListenEvent 监听事件
@@ -199,7 +199,6 @@ type PluginManager struct {
 func NewPluginManager() *PluginManager {
 	r := new(PluginManager)
 	r.pluginMap = make(map[string]IPlugin)
-	r.initPlugin()
 	return r
 }
 
@@ -219,7 +218,32 @@ func (p *PluginManager) RegPlugin(iPlugin IPlugin) {
 		logger.Error("plugin has been register, name: %v", plugin.PluginName)
 		return
 	}
+	logger.Info("plugin enable, name: %v", plugin.PluginName)
+	// 调用插件启用的生命周期
+	iPlugin.OnEnable()
 	p.pluginMap[plugin.PluginName] = iPlugin
+}
+
+// DelAllPlugin 卸载全部插件
+func (p *PluginManager) DelAllPlugin() {
+	for _, plugin := range p.pluginMap {
+		p.DelPlugin(plugin)
+	}
+}
+
+// DelPlugin 卸载插件
+func (p *PluginManager) DelPlugin(iPlugin IPlugin) {
+	plugin := iPlugin.GetPlugin()
+	// 校验插件是否注册
+	_, exist := p.pluginMap[plugin.PluginName]
+	if !exist {
+		logger.Error("plugin not exist, name: %v", plugin.PluginName)
+		return
+	}
+	logger.Info("plugin disable, name: %v", plugin.PluginName)
+	// 调用插件禁用的生命周期
+	iPlugin.OnDisable()
+	delete(p.pluginMap, plugin.PluginName)
 }
 
 // GetIPlugin 获取抽象插件

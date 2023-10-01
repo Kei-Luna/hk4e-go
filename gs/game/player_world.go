@@ -151,7 +151,7 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdMarkMap, &PluginEventMarkMap{
 		PluginEvent: NewPluginEvent(),
 		Player:      player,
-		MarkMapReq:  req,
+		Req:         req,
 	}) {
 		return
 	}

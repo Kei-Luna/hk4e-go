@@ -556,13 +556,19 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 }
 
 func (g *GMCmd) StartPubg(v bool) {
-	pubg := PLUGIN_MANAGER.GetIPlugin("pubg").(*PluginPubg)
-	pubg.StartPubg()
+	iPlugin := PLUGIN_MANAGER.GetIPlugin(PLUGIN_NAME_PUBG)
+	if iPlugin != nil {
+		pubg := iPlugin.(*PluginPubg)
+		pubg.StartPubg()
+	}
 }
 
 func (g *GMCmd) StopPubg(v bool) {
-	pubg := PLUGIN_MANAGER.GetIPlugin("pubg").(*PluginPubg)
-	pubg.StopPubg()
+	iPlugin := PLUGIN_MANAGER.GetIPlugin(PLUGIN_NAME_PUBG)
+	if iPlugin != nil {
+		pubg := iPlugin.(*PluginPubg)
+		pubg.StopPubg()
+	}
 }
 
 func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {

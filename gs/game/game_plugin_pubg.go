@@ -23,6 +23,9 @@ const (
 	PUBG_FIRST_AREA_REDUCE_TIME = 600.0
 )
 
+const PLUGIN_NAME_PUBG = "pubg" // 插件名
+
+// PluginPubg pubg游戏插件
 type PluginPubg struct {
 	*Plugin
 	world                 *World                // 世界对象
@@ -39,7 +42,7 @@ type PluginPubg struct {
 
 func NewPluginPubg() *PluginPubg {
 	p := &PluginPubg{
-		Plugin:                NewPlugin("pubg"),
+		Plugin:                NewPlugin(PLUGIN_NAME_PUBG),
 		world:                 nil,
 		blueAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
 		blueAreaRadius:        0.0,
@@ -98,7 +101,7 @@ func (p *PluginPubg) EventAvatarDieAnimationEnd(iEvent IPluginEvent) {
 	info := fmt.Sprintf("『%v』死亡了，剩余%v位存活玩家。", player.NickName, alivePlayerNum)
 	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 	player.PubgRank += uint32(100 - alivePlayerNum)
-	GAME.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: event.AvatarDieAnimationEndReq.SkillId, DieGuid: event.AvatarDieAnimationEndReq.DieGuid})
+	GAME.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: event.Req.SkillId, DieGuid: event.Req.DieGuid})
 	event.Cancel()
 }
 

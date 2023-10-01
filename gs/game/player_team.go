@@ -200,9 +200,9 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 
 	// 触发事件
 	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdAvatarDieAnimationEnd, &PluginEventAvatarDieAnimationEnd{
-		PluginEvent:              NewPluginEvent(),
-		Player:                   player,
-		AvatarDieAnimationEndReq: req,
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Req:         req,
 	}) {
 		return
 	}
