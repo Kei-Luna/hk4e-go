@@ -117,7 +117,17 @@ func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	dbWorld := owner.GetDbWorld()
+	if dbWorld == nil {
+		logger.Error("db world is nil, uid: %v", player.PlayerId)
+		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
+		return
+	}
 	dbScene := dbWorld.GetSceneById(req.SceneId)
+	if dbScene == nil {
+		logger.Error("db scene is nil, sceneId: %v, uid: %v", req.SceneId, player.PlayerId)
+		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
+		return
+	}
 	// 区域 暂时解锁全部区域
 	areaIdMap := make(map[uint32]bool)
 	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {

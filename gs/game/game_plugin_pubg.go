@@ -132,7 +132,7 @@ func (p *PluginPubg) GlobalTickPubg() {
 	}
 	alivePlayerList := p.GetAlivePlayerList()
 	if len(alivePlayerList) <= 1 {
-		if len(alivePlayerList) <= 1 {
+		if len(alivePlayerList) == 1 {
 			info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
 			GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		}
