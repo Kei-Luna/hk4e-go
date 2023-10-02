@@ -132,7 +132,7 @@ func (p *PluginPubg) GlobalTickPubg() {
 	}
 	alivePlayerList := p.GetAlivePlayerList()
 	if len(alivePlayerList) <= 1 {
-		if len(alivePlayerList) == 1 {
+		if len(alivePlayerList) <= 1 {
 			info := fmt.Sprintf("『%v』大吉大利，今晚吃鸡。", alivePlayerList[0].NickName)
 			GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		}
@@ -149,9 +149,9 @@ func (p *PluginPubg) GlobalTickHourStart() {
 
 // UserTimerPubgEnd pubg游戏结束后执行定时器
 func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	logger.Debug("PubgEnd")
+	world := p.world
 	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
 	for _, worldPlayer := range world.GetAllPlayer() {
@@ -164,21 +164,14 @@ func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
 
 // UserTimerPubgUpdateArea 更新游戏区域
 func (p *PluginPubg) UserTimerPubgUpdateArea(player *model.Player, data []any) {
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
-		return
-	}
-	for _, worldPlayer := range world.GetAllPlayer() {
-		if worldPlayer.PlayerId == world.GetOwner().PlayerId {
-			continue
-		}
-		GAME.ReLoginPlayer(worldPlayer.PlayerId, true)
-	}
+	logger.Debug("PubgUpdateArea")
+	p.phase++
+	p.RefreshArea()
 }
 
 // UserTimerPubgDieExit pubg死亡离开
 func (p *PluginPubg) UserTimerPubgDieExit(player *model.Player, data []any) {
+	logger.Debug("PubgDieExit")
 	GAME.ReLoginPlayer(player.PlayerId, true)
 }
 
