@@ -119,6 +119,14 @@ func Logic(account string, session *net.Session) {
 						session.SendMsg(cmd.PlayerApplyEnterMpReq, &proto.PlayerApplyEnterMpReq{TargetUid: onlinePlayerInfo.Uid})
 					}
 				}
+			case cmd.GmTalkRsp:
+				rsp := protoMsg.PayloadMessage.(*proto.GmTalkRsp)
+				if rsp.Retcode == -1 {
+					session.SendMsg(cmd.GmTalkReq, &proto.GmTalkReq{Msg: rsp.Msg})
+					logger.Debug("SendGMtalk %v", rsp.Msg)
+				} else {
+					logger.Debug("Msg: %s, Retcode: %v, Retmsg: %v", rsp.Msg, rsp.Retcode, rsp.Retmsg)
+				}
 			case cmd.ClientReconnectNotify:
 				logger.Info("client reconnect, account: %v", account)
 				session.Close()
