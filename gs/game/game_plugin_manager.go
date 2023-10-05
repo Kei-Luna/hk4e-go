@@ -1,9 +1,12 @@
 package game
 
 import (
+	"errors"
+	"fmt"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
+	"reflect"
 	"sort"
 )
 
@@ -16,6 +19,10 @@ func (p *PluginManager) InitPlugin() {
 	}
 	p.RegAllPlugin(iPluginList...)
 }
+
+// 事件定义
+// 添加事件编号 事件结构
+// 即可触发以及监听事件
 
 // PluginEventId 事件编号
 type PluginEventId uint16
@@ -121,21 +128,20 @@ type PluginUserTimerFunc func(player *model.Player, data []any)
 
 // Plugin 插件结构
 type Plugin struct {
-	PluginName string // 插件名 遵守小驼峰命名法
-
-	isEnable      bool                                 // 是否启用
-	eventMap      map[PluginEventId][]*PluginEventInfo // 事件集合
-	globalTickMap map[PluginGlobalTick][]func()        // 全局tick集合
-	userTimerMap  map[uint64]PluginUserTimerFunc       // 用户timer集合
+	isEnable              bool                                 // 是否启用
+	eventMap              map[PluginEventId][]*PluginEventInfo // 事件集合
+	globalTickMap         map[PluginGlobalTick][]func()        // 全局tick集合
+	userTimerMap          map[uint64]PluginUserTimerFunc       // 用户timer集合
+	commandControllerList []*CommandController                 // 命令控制器列表
 }
 
-func NewPlugin(pluginName string) *Plugin {
+func NewPlugin() *Plugin {
 	return &Plugin{
-		PluginName:    pluginName,
-		isEnable:      true,
-		eventMap:      make(map[PluginEventId][]*PluginEventInfo),
-		globalTickMap: make(map[PluginGlobalTick][]func()),
-		userTimerMap:  make(map[uint64]PluginUserTimerFunc),
+		isEnable:              true,
+		eventMap:              make(map[PluginEventId][]*PluginEventInfo),
+		globalTickMap:         make(map[PluginGlobalTick][]func()),
+		userTimerMap:          make(map[uint64]PluginUserTimerFunc),
+		commandControllerList: make([]*CommandController, 0),
 	}
 }
 
@@ -191,14 +197,19 @@ func (p *Plugin) CreateUserTimer(userId uint32, delay uint32, timerFunc PluginUs
 	TICK_MANAGER.CreateUserTimer(userId, UserTimerActionPlugin, delay, data...)
 }
 
+// RegCommandController 注册命令控制器
+func (p *Plugin) RegCommandController(controller *CommandController) {
+	COMMAND_MANAGER.RegController(controller)
+}
+
 type PluginManager struct {
-	pluginMap        map[string]IPlugin // 插件集合
-	userTimerCounter uint64             // 用户timer计数器
+	pluginMap        map[reflect.Type]IPlugin // 插件集合
+	userTimerCounter uint64                   // 用户timer计数器
 }
 
 func NewPluginManager() *PluginManager {
 	r := new(PluginManager)
-	r.pluginMap = make(map[string]IPlugin)
+	r.pluginMap = make(map[reflect.Type]IPlugin)
 	return r
 }
 
@@ -211,17 +222,18 @@ func (p *PluginManager) RegAllPlugin(iPluginList ...IPlugin) {
 
 // RegPlugin 注册插件
 func (p *PluginManager) RegPlugin(iPlugin IPlugin) {
-	plugin := iPlugin.GetPlugin()
+	// 反射类型
+	refType := reflect.TypeOf(iPlugin)
 	// 校验插件名是否已被注册
-	_, exist := p.pluginMap[plugin.PluginName]
+	_, exist := p.pluginMap[refType]
 	if exist {
-		logger.Error("plugin has been register, name: %v", plugin.PluginName)
+		logger.Error("plugin has been register,refType: %v", refType)
 		return
 	}
-	logger.Info("plugin enable, name: %v", plugin.PluginName)
+	logger.Info("plugin enable, refType: %v", refType)
 	// 调用插件启用的生命周期
 	iPlugin.OnEnable()
-	p.pluginMap[plugin.PluginName] = iPlugin
+	p.pluginMap[refType] = iPlugin
 }
 
 // DelAllPlugin 卸载全部插件
@@ -233,27 +245,53 @@ func (p *PluginManager) DelAllPlugin() {
 
 // DelPlugin 卸载插件
 func (p *PluginManager) DelPlugin(iPlugin IPlugin) {
-	plugin := iPlugin.GetPlugin()
+	// 反射类型
+	refType := reflect.TypeOf(iPlugin)
 	// 校验插件是否注册
-	_, exist := p.pluginMap[plugin.PluginName]
+	_, exist := p.pluginMap[refType]
 	if !exist {
-		logger.Error("plugin not exist, name: %v", plugin.PluginName)
+		logger.Error("plugin not exist, refType: %v", refType)
 		return
 	}
-	logger.Info("plugin disable, name: %v", plugin.PluginName)
+	logger.Info("plugin disable, refType: %v", refType)
 	// 调用插件禁用的生命周期
 	iPlugin.OnDisable()
-	delete(p.pluginMap, plugin.PluginName)
+	// 卸载插件注册的命令
+	plugin := iPlugin.GetPlugin()
+	for _, controller := range plugin.commandControllerList {
+		COMMAND_MANAGER.DelAllController(controller)
+	}
+	delete(p.pluginMap, refType)
 }
 
-// GetIPlugin 获取抽象插件
-func (p *PluginManager) GetIPlugin(pluginName string) IPlugin {
-	iPlugin, exist := p.pluginMap[pluginName]
-	if !exist {
-		logger.Error("plugin not exist, name: %v", pluginName)
-		return nil
+// GetPlugin 获取插件实例
+func (p *PluginManager) GetPlugin(value IPlugin) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case string:
+				err = errors.New(x)
+			case error:
+				err = x
+			default:
+				err = errors.New("unknown panic")
+			}
+		}
+	}()
+	refValue := reflect.ValueOf(value)
+	if refValue.Kind() != reflect.Pointer || refValue.IsNil() {
+		return errors.New("value is not pointer")
 	}
-	return iPlugin
+	refType := refValue.Type()
+	// 校验插件是否注册
+	plugin, exist := p.pluginMap[refType]
+	if !exist {
+		err = errors.New(fmt.Sprintf("plugin not exist, refType: %v", refType))
+		return
+	}
+	refPlugin := reflect.ValueOf(plugin)
+	refValue.Elem().Set(refPlugin.Elem())
+	return
 }
 
 // TriggerEvent 触发事件

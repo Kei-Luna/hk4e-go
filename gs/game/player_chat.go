@@ -266,7 +266,7 @@ func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content a
 		privateChatNotify := &proto.PrivateChatNotify{
 			ChatInfo: chatInfo,
 		}
-		g.SendMsg(cmd.PrivateChatNotify, targetPlayer.PlayerId, player.ClientSeq, privateChatNotify)
+		g.SendMsg(cmd.PrivateChatNotify, targetPlayer.PlayerId, targetPlayer.ClientSeq, privateChatNotify)
 	}
 }
 
@@ -289,6 +289,7 @@ func (g *Game) ConvChatInfoToChatMsg(chatInfo *proto.ChatInfo) (chatMsg *model.C
 		chatMsg.MsgType = model.ChatMsgTypeIcon
 		chatMsg.Icon = chatInfo.Content.(*proto.ChatInfo_Icon).Icon
 	default:
+		logger.Error("chat info content type error, contentType: %T", chatInfo.Content)
 	}
 	return chatMsg
 }
@@ -312,6 +313,7 @@ func (g *Game) ConvChatMsgToChatInfo(chatMsg *model.ChatMsg) (chatInfo *proto.Ch
 			Icon: chatMsg.Icon,
 		}
 	default:
+		logger.Error("chat info content type error, msgType: %v", chatMsg.MsgType)
 	}
 	return chatInfo
 }

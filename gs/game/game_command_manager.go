@@ -22,7 +22,7 @@ const (
 )
 
 // CommandFunc 命令执行函数
-type CommandFunc func(content *CommandContent)
+type CommandFunc func(content *CommandContent) bool
 
 const (
 	PlayerChatGM = iota // 玩家聊天GM
@@ -42,14 +42,24 @@ type CommandMessage struct {
 	ParamList []string // 函数参数列表
 }
 
-// ContentParamResult 命令内容参数返回
-type ContentParamResult uint8
+// CommandContentStepFunc 命令步骤处理函数
+type CommandContentStepFunc func(param any) bool
+
+// CommandContentStepType 命令步骤类型
+type CommandContentStepType uint8
 
 const (
-	ContentParamResultInit    ContentParamResult = iota
-	ContentParamResultFailed                     // 失败
-	ContentParamResultSuccess                    // 成功
+	CommandContentStepTypeNone    = CommandContentStepType(iota)
+	CommandContentStepTypeDynamic // 动态
+	CommandContentStepTypeOption  // 可选
 )
+
+// CommandContentStep 命令步骤结构
+type CommandContentStep struct {
+	StepType     CommandContentStepType // 步骤类型
+	ParamTypeStr string                 // 当前步骤参数类型
+	StepFunc     CommandContentStepFunc // 步骤处理函数
+}
 
 // CommandContent 命令内容
 type CommandContent struct {
@@ -59,9 +69,9 @@ type CommandContent struct {
 	ParamList    []string           // 玩家输入的参数列表
 	Controller   *CommandController // 命令控制器
 	// 执行时数据
-	paramIndex  uint8              // 当前执行到的参数索引
-	paramResult ContentParamResult // 当前参数执行结果
-	elseFunc    func()             // 参数错误处理函数
+	paramIndex uint8                 // 当前执行到的参数索引
+	elseFunc   func()                // 参数错误处理函数
+	stepList   []*CommandContentStep // 步骤处理函数列表
 }
 
 // SendMessage 发送消息
@@ -182,51 +192,69 @@ func (c *CommandContent) getNextParam(typeStr string) (param any, ok bool) {
 }
 
 // Dynamic 动态参数执行
-func (c *CommandContent) Dynamic(typeStr string, dynamicFunc func(param any) bool) *CommandContent {
-	// 上个参数执行错误则跳出
-	if c.paramResult == ContentParamResultFailed {
-		return c
+func (c *CommandContent) Dynamic(typeStr string, stepFunc CommandContentStepFunc) *CommandContent {
+	step := &CommandContentStep{
+		StepType:     CommandContentStepTypeDynamic,
+		ParamTypeStr: typeStr,
+		StepFunc:     stepFunc,
 	}
-	// 拥有下个参数则继续执行
-	nowParam, ok := c.getNextParam(typeStr)
-	if ok && dynamicFunc(nowParam) {
-		c.paramResult = ContentParamResultSuccess
-	} else {
-		c.paramResult = ContentParamResultFailed
-	}
+	c.stepList = append(c.stepList, step)
 	return c
 }
 
 // Option 可选参数执行
-func (c *CommandContent) Option(typeStr string, ifDynamicFunc func(param any) bool) *CommandContent {
-	// 上个参数执行错误则跳出
-	if c.paramResult == ContentParamResultFailed {
-		return c
+func (c *CommandContent) Option(typeStr string, stepFunc CommandContentStepFunc) *CommandContent {
+	step := &CommandContentStep{
+		StepType:     CommandContentStepTypeOption,
+		ParamTypeStr: typeStr,
+		StepFunc:     stepFunc,
 	}
-	// 条件成立则执行
-	if len(c.ParamList) > int(c.paramIndex) {
-		return c.Dynamic(typeStr, ifDynamicFunc)
-	}
+	c.stepList = append(c.stepList, step)
 	return c
 }
 
 // Execute 执行命令实际业务并返回结果
-func (c *CommandContent) Execute(thenFunc func() bool) {
-	// 上个参数执行错误则跳出
-	if c.paramResult == ContentParamResultFailed {
-		return
+func (c *CommandContent) Execute(thenFunc func() bool) bool {
+	dynamicStepCount := 0 // 必填参数数量
+	dynamicStepIndex := 0 // 必填参数最后的位置
+	for i, step := range c.stepList {
+		if step.StepType == CommandContentStepTypeDynamic {
+			dynamicStepCount++
+			dynamicStepIndex = i
+		}
+	}
+	// 执行每个步骤
+	for i, step := range c.stepList {
+		switch step.StepType {
+		case CommandContentStepTypeOption:
+			// 可选参数 参数不足则不执行
+			if i <= dynamicStepIndex {
+				if len(c.ParamList) <= i+dynamicStepCount {
+					continue
+				}
+			} else if len(c.ParamList) <= i {
+				continue
+			}
+		}
+		// 获取当前参数
+		param, ok := c.getNextParam(step.ParamTypeStr)
+		if !ok {
+			return false
+		}
+		// 执行处理函数
+		if !step.StepFunc(param) {
+			return false
+		}
 	}
 	if thenFunc() {
-		c.paramResult = ContentParamResultSuccess
-	} else {
-		c.paramResult = ContentParamResultFailed
+		return true
 	}
+	return false
 }
 
 // SetElse 设置参数执行错误处理
-func (c *CommandContent) SetElse(elseFunc func()) *CommandContent {
+func (c *CommandContent) SetElse(elseFunc func()) {
 	c.elseFunc = elseFunc
-	return c
 }
 
 // CommandManager 命令管理器
@@ -243,6 +271,8 @@ type CommandManager struct {
 func NewCommandManager() *CommandManager {
 	r := new(CommandManager)
 	// 初始化
+	r.commandControllerList = make([]*CommandController, 0)
+	r.commandControllerMap = make(map[string]*CommandController)
 	r.commandMessageInput = make(chan *CommandMessage, 1000)
 	r.InitController() // 初始化控制器
 	r.gmCmd = new(GMCmd)
@@ -264,25 +294,50 @@ func (c *CommandManager) InitController() {
 	// 初始化命令控制器列表
 	c.InitControllerList()
 	// 注册所有的命令控制器
-	c.RegisterAllController()
+	c.RegAllController()
 }
 
-// RegisterAllController 注册所有命令控制器
-func (c *CommandManager) RegisterAllController() {
-	c.commandControllerMap = make(map[string]*CommandController)
+// RegAllController 注册所有命令控制器
+func (c *CommandManager) RegAllController(controllerList ...*CommandController) {
+	for _, controller := range controllerList {
+		c.RegController(controller)
+	}
+}
 
-	for _, controller := range c.commandControllerList {
-		// 支持一个命令拥有多个别名
-		for _, name := range controller.AliasList {
-			// 命令名统一转为小写
-			name = strings.ToLower(name)
-			// 如果命令已注册则报错 后者覆盖前者
-			_, ok := c.commandControllerMap[name]
-			if ok {
-				logger.Error("register command repeat, name: %v", name)
-			}
-			// 记录命令
-			c.commandControllerMap[name] = controller
+// RegController 注册命令控制器
+func (c *CommandManager) RegController(controller *CommandController) {
+	// 支持一个命令拥有多个别名
+	for _, name := range controller.AliasList {
+		// 命令名统一转为小写
+		name = strings.ToLower(name)
+		// 如果命令已注册则报错 后者覆盖前者
+		_, ok := c.commandControllerMap[name]
+		if ok {
+			logger.Error("register command repeat, name: %v", name)
+		}
+		// 记录命令
+		c.commandControllerMap[name] = controller
+	}
+	c.commandControllerList = append(c.commandControllerList, controller)
+}
+
+// DelAllController 卸载所有命令控制器
+func (c *CommandManager) DelAllController(controllerList ...*CommandController) {
+	for _, controller := range controllerList {
+		c.DelController(controller)
+	}
+}
+
+// DelController 卸载命令控制器
+func (c *CommandManager) DelController(controller *CommandController) {
+	// 支持一个命令拥有多个别名
+	for _, name := range controller.AliasList {
+		delete(c.commandControllerMap, name)
+	}
+	// 卸载列表上的控制器
+	for i, commandController := range c.commandControllerList {
+		if commandController == controller {
+			c.commandControllerList = append(c.commandControllerList[:i], c.commandControllerList[i+1:]...)
 		}
 	}
 }
@@ -475,9 +530,8 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 		content.AssignPlayer = target
 	}
 	// 执行命令
-	controller.Func(content)
-	// 命令执行过程中没有问题就跳出
-	if content.paramResult == ContentParamResultSuccess {
+	if controller.Func(content) {
+		// 命令执行过程中没有问题就跳出
 		return
 	}
 	// 命令参数错误处理

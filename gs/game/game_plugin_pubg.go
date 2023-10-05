@@ -23,8 +23,6 @@ const (
 	PUBG_FIRST_AREA_REDUCE_TIME = 600.0
 )
 
-const PLUGIN_NAME_PUBG = "pubg" // 插件名
-
 // PluginPubg pubg游戏插件
 type PluginPubg struct {
 	*Plugin
@@ -42,7 +40,7 @@ type PluginPubg struct {
 
 func NewPluginPubg() *PluginPubg {
 	p := &PluginPubg{
-		Plugin:                NewPlugin(PLUGIN_NAME_PUBG),
+		Plugin:                NewPlugin(),
 		world:                 nil,
 		blueAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
 		blueAreaRadius:        0.0,
@@ -54,13 +52,15 @@ func NewPluginPubg() *PluginPubg {
 		areaReduceZSpeed:      0.0,
 		areaPointList:         make([]*proto.MapMarkPoint, 0),
 	}
-	// 注册事件
+	// 监听事件
 	p.ListenEvent(PluginEventIdPlayerKillAvatar, PluginEventPriorityNormal, p.EventKillAvatar)
 	p.ListenEvent(PluginEventIdMarkMap, PluginEventPriorityNormal, p.EventMarkMap)
 	p.ListenEvent(PluginEventIdAvatarDieAnimationEnd, PluginEventPriorityNormal, p.EventAvatarDieAnimationEnd)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
 	p.AddGlobalTick(PluginGlobalTickHour, p.GlobalTickHourStart)
+	// 注册命令
+	p.RegCommandController(p.NewPubgCommandController())
 	return p
 }
 
@@ -173,6 +173,47 @@ func (p *PluginPubg) UserTimerPubgUpdateArea(player *model.Player, data []any) {
 func (p *PluginPubg) UserTimerPubgDieExit(player *model.Player, data []any) {
 	logger.Debug("PubgDieExit")
 	GAME.ReLoginPlayer(player.PlayerId, true)
+}
+
+/************************************************** 命令控制器 **************************************************/
+
+// pubg游戏命令
+
+func (p *PluginPubg) NewPubgCommandController() *CommandController {
+	return &CommandController{
+		Name:        "PUBG游戏",
+		AliasList:   []string{"pubg"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>测试pubg游戏</color>",
+		UsageList: []string{
+			"{alias} <start/stop> 开始或关闭pubg游戏",
+		},
+		Perm: CommandPermNormal,
+		Func: p.PubgCommand,
+	}
+}
+
+func (p *PluginPubg) PubgCommand(c *CommandContent) bool {
+	var mode string // 模式
+
+	return c.Dynamic("string", func(param any) bool {
+		// 模式
+		mode = param.(string)
+		return true
+	}).Execute(func() bool {
+		switch mode {
+		case "start":
+			// 开始游戏
+			p.StartPubg()
+			c.SendSuccMessage(c.Executor, "已开始PUBG游戏。")
+		case "stop":
+			// 结束游戏
+			p.StopPubg()
+			c.SendSuccMessage(c.Executor, "已结束PUBG游戏。")
+		default:
+			return false
+		}
+		return true
+	})
 }
 
 /************************************************** 插件功能 **************************************************/

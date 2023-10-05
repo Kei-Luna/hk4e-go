@@ -33,7 +33,7 @@ const (
 	ConnSendTimeout       = 10         // 发包超时时间 秒
 	MaxClientConnNumLimit = 1000       // 最大客户端连接数限制
 	TcpNoDelay            = true       // 是否禁用tcp的nagle
-	SessionSendChanLen    = 100        // 会话发送管道缓存包容量
+	SessionSendChanLen    = 1000       // 会话发送管道缓存包容量
 )
 
 var CLIENT_CONN_NUM int32 = 0 // 当前客户端连接数

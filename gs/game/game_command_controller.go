@@ -23,42 +23,45 @@ type CommandController struct {
 
 // InitControllerList 初始化控制器列表
 func (c *CommandManager) InitControllerList() {
-	c.commandControllerList = []*CommandController{
-		// 权限等级 0: 普通玩家
-		HelpCommandController,
-		GotoCommandController,
-		JumpCommandController,
-		EquipCommandController,
-		ItemCommandController,
-		AvatarCommandController,
-		GiveCommandController,
-		KillCommandController,
-		QuestCommandController,
-		PointCommandController,
-		XLuaDebugCommandController,
-		GcgCommandController,
+	controllerList := []*CommandController{
 		// 权限等级 1: GM 1级
-		AssignCommandController,
+		c.NewAssignCommandController(),
+		// 权限等级 0: 普通玩家
+		c.NewHelpCommandController(),
+		c.NewGotoCommandController(),
+		c.NewJumpCommandController(),
+		c.NewEquipCommandController(),
+		c.NewItemCommandController(),
+		c.NewAvatarCommandController(),
+		c.NewGiveCommandController(),
+		c.NewKillCommandController(),
+		c.NewQuestCommandController(),
+		c.NewPointCommandController(),
+		c.NewXLuaDebugCommandController(),
+		c.NewGcgCommandController(),
 	}
+	c.RegAllController(controllerList...)
 }
 
 // 指定命令
 
-var AssignCommandController = &CommandController{
-	Name:        "指定",
-	AliasList:   []string{"assign"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>设置命令指定玩家</color>",
-	UsageList: []string{
-		"{alias} <目标UID> 指定某个玩家",
-	},
-	Perm: CommandPermGM,
-	Func: AssignCommand,
+func (c *CommandManager) NewAssignCommandController() *CommandController {
+	return &CommandController{
+		Name:        "指定",
+		AliasList:   []string{"assign"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>设置命令指定玩家</color>",
+		UsageList: []string{
+			"{alias} <目标UID> 指定某个玩家",
+		},
+		Perm: CommandPermGM,
+		Func: AssignCommand,
+	}
 }
 
-func AssignCommand(c *CommandContent) {
+func AssignCommand(c *CommandContent) bool {
 	var assignUid uint32
 
-	c.Dynamic("uint32", func(param any) bool {
+	return c.Dynamic("uint32", func(param any) bool {
 		value := param.(uint32)
 		// 指定uid
 		assignUid = value
@@ -73,44 +76,25 @@ func AssignCommand(c *CommandContent) {
 
 // 帮助命令
 
-var HelpCommandController = &CommandController{
-	Name:        "帮助",
-	AliasList:   []string{"help"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>查看简要帮助信息</color>",
-	UsageList: []string{
-		"{alias} 查看简要帮助信息",
-		"{alias} <序号/命令别名> 查看详细帮助信息",
-	},
-	Perm: CommandPermNormal,
-	Func: HelpCommand,
+func (c *CommandManager) NewHelpCommandController() *CommandController {
+	return &CommandController{
+		Name:        "帮助",
+		AliasList:   []string{"help"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>查看简要帮助信息</color>",
+		UsageList: []string{
+			"{alias} 查看简要帮助信息",
+			"{alias} <序号/命令别名> 查看详细帮助信息",
+		},
+		Perm: CommandPermNormal,
+		Func: HelpCommand,
+	}
 }
 
-func HelpCommand(c *CommandContent) {
+func HelpCommand(c *CommandContent) bool {
 	var controller *CommandController // 命令控制器
 	var alias string                  // 别名
 
-	c.SetElse(func() {
-		// 显示简要帮助信息
-		helpText := "<color=#66B2FF>================</color><color=#CCE5FF>/ 帮 助 /</color><color=#66B2FF>================</color>\n"
-		for i, controller := range COMMAND_MANAGER.commandControllerList {
-			// 权限不足跳过
-			if c.Executor.CmdPerm < uint8(controller.Perm) {
-				continue
-			}
-			// GM命令和普通命令区分颜色
-			var permColor string
-			switch controller.Perm {
-			case CommandPermNormal:
-				permColor = "#CCFFCC"
-			case CommandPermGM:
-				permColor = "#FF9999"
-			}
-			helpText += fmt.Sprintf("<color=%v>%v. %v</color> <color=#FFE5CC>-</color> %v\n", permColor, strconv.Itoa(i+1), controller.Name, strings.ReplaceAll(controller.Description, "{alias}", controller.AliasList[0]))
-		}
-		helpText += "\n<color=#FFFFCC>help</color> <color=#FFCCE5><命令别名></color> <color=#FF9999>能查看详细用法哦~</color>\n"
-		helpText += "<color=#FF6347><></color> <color=#87CEFA>代表必填参数</color> <color=#FF6347>[]</color> <color=#87CEFA>代表可选参数</color> <color=#FF6347>/</color> <color=#87CEFA>代表或者</color>"
-		c.SendMessage(c.Executor, helpText)
-	}).Dynamic("string", func(param any) bool {
+	return c.Option("string", func(param any) bool {
 		value := param.(string)
 		// 通过别名获取
 		controller = COMMAND_MANAGER.commandControllerMap[value]
@@ -120,6 +104,32 @@ func HelpCommand(c *CommandContent) {
 		alias = value
 		return true
 	}).Execute(func() bool {
+		if alias == "" {
+			// 显示简要帮助信息
+			helpText := "<color=#66B2FF>================</color><color=#CCE5FF>/ 帮 助 /</color><color=#66B2FF>================</color>\n"
+			commandCount := 0 // 权限足够的命令
+			for _, controller := range COMMAND_MANAGER.commandControllerList {
+				// 权限不足跳过
+				if c.Executor.CmdPerm < uint8(controller.Perm) {
+					continue
+				}
+				commandCount++
+				// GM命令和普通命令区分颜色
+				var permColor string
+				switch controller.Perm {
+				case CommandPermNormal:
+					permColor = "#CCFFCC"
+				case CommandPermGM:
+					permColor = "#FF9999"
+				}
+				helpText += fmt.Sprintf("<color=%v>%v. %v</color> <color=#FFE5CC>-</color> %v\n", permColor, commandCount, controller.Name, strings.ReplaceAll(controller.Description, "{alias}", controller.AliasList[0]))
+			}
+			helpText += "\n<color=#FFFFCC>help</color> <color=#FFCCE5><命令别名></color> <color=#FF9999>能查看详细用法哦~</color>\n"
+			helpText += "<color=#FF6347><></color> <color=#87CEFA>代表必填参数</color> <color=#FF6347>[]</color> <color=#87CEFA>代表可选参数</color> <color=#FF6347>/</color> <color=#87CEFA>代表或者</color>"
+			c.SendMessage(c.Executor, helpText)
+			return true
+		}
+		// 命令详细用法
 		usage := "命令用法：\n"
 		for i, s := range controller.UsageList {
 			s = strings.ReplaceAll(s, "{alias}", alias)
@@ -137,18 +147,20 @@ func HelpCommand(c *CommandContent) {
 
 // 传送坐标命令
 
-var GotoCommandController = &CommandController{
-	Name:        "传送坐标",
-	AliasList:   []string{"goto"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>传送到指定坐标</color>",
-	UsageList: []string{
-		"{alias} <坐标X> <坐标Y> <坐标Z> 传送至指定坐标",
-	},
-	Perm: CommandPermNormal,
-	Func: GotoCommand,
+func (c *CommandManager) NewGotoCommandController() *CommandController {
+	return &CommandController{
+		Name:        "传送坐标",
+		AliasList:   []string{"goto"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>传送到指定坐标</color>",
+		UsageList: []string{
+			"{alias} <坐标X> <坐标Y> <坐标Z> 传送至指定坐标",
+		},
+		Perm: CommandPermNormal,
+		Func: GotoCommand,
+	}
 }
 
-func GotoCommand(c *CommandContent) {
+func GotoCommand(c *CommandContent) bool {
 	// 计算相对坐标
 	parseRelativePosFunc := func(param string, pos float64) (float64, bool) {
 		// 不以 ~ 开头代表使用绝对坐标
@@ -175,7 +187,7 @@ func GotoCommand(c *CommandContent) {
 	var posX, posY, posZ float64
 
 	// 解析命令
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 坐标x
 		value := param.(string)
 		pos, ok := parseRelativePosFunc(value, c.AssignPlayer.Pos.X)
@@ -204,21 +216,23 @@ func GotoCommand(c *CommandContent) {
 
 // 传送场景命令
 
-var JumpCommandController = &CommandController{
-	Name:        "传送场景",
-	AliasList:   []string{"jump"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>传送到至指定场景</color>",
-	UsageList: []string{
-		"{alias} <场景ID> 传送至指定场景",
-	},
-	Perm: CommandPermNormal,
-	Func: JumpCommand,
+func (c *CommandManager) NewJumpCommandController() *CommandController {
+	return &CommandController{
+		Name:        "传送场景",
+		AliasList:   []string{"jump"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>传送到至指定场景</color>",
+		UsageList: []string{
+			"{alias} <场景ID> 传送至指定场景",
+		},
+		Perm: CommandPermNormal,
+		Func: JumpCommand,
+	}
 }
 
-func JumpCommand(c *CommandContent) {
+func JumpCommand(c *CommandContent) bool {
 	var sceneId uint32 // 场景id
 
-	c.Dynamic("uint32", func(param any) bool {
+	return c.Dynamic("uint32", func(param any) bool {
 		// 场景id
 		sceneId = param.(uint32)
 		return true
@@ -246,24 +260,26 @@ func JumpCommand(c *CommandContent) {
 
 // 管理武器命令
 
-var EquipCommandController = &CommandController{
-	Name:        "管理武器",
-	AliasList:   []string{"equip", "weapon"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的武器</color>",
-	UsageList: []string{
-		"{alias} add <武器ID/all> [武器等级] [突破等级] 添加武器",
-	},
-	Perm: CommandPermNormal,
-	Func: EquipCommand,
+func (c *CommandManager) NewEquipCommandController() *CommandController {
+	return &CommandController{
+		Name:        "管理武器",
+		AliasList:   []string{"equip", "weapon"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的武器</color>",
+		UsageList: []string{
+			"{alias} add <武器ID/all> [武器等级] [突破等级] 添加武器",
+		},
+		Perm: CommandPermNormal,
+		Func: EquipCommand,
+	}
 }
 
-func EquipCommand(c *CommandContent) {
+func EquipCommand(c *CommandContent) bool {
 	var mode string     // 模式
 	var param1 string   // 参数1
 	var level uint8 = 1 // 武器等级
 	var promote uint8   // 突破等级
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 模式
 		mode = param.(string)
 		return true
@@ -305,23 +321,25 @@ func EquipCommand(c *CommandContent) {
 
 // 管理物品命令
 
-var ItemCommandController = &CommandController{
-	Name:        "管理物品",
-	AliasList:   []string{"item"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的物品</color>",
-	UsageList: []string{
-		"{alias} add <物品ID/all> [数量] 添加物品",
-	},
-	Perm: CommandPermNormal,
-	Func: ItemCommand,
+func (c *CommandManager) NewItemCommandController() *CommandController {
+	return &CommandController{
+		Name:        "管理物品",
+		AliasList:   []string{"item"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的物品</color>",
+		UsageList: []string{
+			"{alias} add <物品ID/all> [数量] 添加物品",
+		},
+		Perm: CommandPermNormal,
+		Func: ItemCommand,
+	}
 }
 
-func ItemCommand(c *CommandContent) {
+func ItemCommand(c *CommandContent) bool {
 	var mode string      // 模式
 	var param1 string    // 参数1
 	var count uint32 = 1 // 数量
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 模式
 		mode = param.(string)
 		return true
@@ -359,22 +377,24 @@ func ItemCommand(c *CommandContent) {
 
 // 管理角色命令
 
-var AvatarCommandController = &CommandController{
-	Name:        "管理角色",
-	AliasList:   []string{"avatar"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的角色</color>",
-	UsageList: []string{
-		"{alias} add <角色ID/all>",
-	},
-	Perm: CommandPermNormal,
-	Func: AvatarCommand,
+func (c *CommandManager) NewAvatarCommandController() *CommandController {
+	return &CommandController{
+		Name:        "管理角色",
+		AliasList:   []string{"avatar"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的角色</color>",
+		UsageList: []string{
+			"{alias} add <角色ID/all>",
+		},
+		Perm: CommandPermNormal,
+		Func: AvatarCommand,
+	}
 }
 
-func AvatarCommand(c *CommandContent) {
+func AvatarCommand(c *CommandContent) bool {
 	var mode string   // 模式
 	var param1 string // 参数1
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 模式
 		mode = param.(string)
 		return true
@@ -408,26 +428,28 @@ func AvatarCommand(c *CommandContent) {
 
 // 给予命令
 
-var GiveCommandController = &CommandController{
-	Name:        "给予物品",
-	AliasList:   []string{"give"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>获得全部物品</color>",
-	UsageList: []string{
-		"模式：ID / item (所有物品) / weapon (所有武器) / reliquary (所有圣遗物) / avatar (所有角色) / costume (所有时装) / flycloak (所有风之翼) / all (全部)\n不要加上括号内的中文！！",
-		"{alias} <模式> [数量] 给予指定物品",
-		"数量仅物品、武器、圣遗物可用",
-	},
-	Perm: CommandPermNormal,
-	Func: GiveCommand,
+func (c *CommandManager) NewGiveCommandController() *CommandController {
+	return &CommandController{
+		Name:        "给予物品",
+		AliasList:   []string{"give"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>获得全部物品</color>",
+		UsageList: []string{
+			"模式：ID / item (所有物品) / weapon (所有武器) / reliquary (所有圣遗物) / avatar (所有角色) / costume (所有时装) / flycloak (所有风之翼) / all (全部)\n不要加上括号内的中文！！",
+			"{alias} <模式> [数量] 给予指定物品",
+			"数量仅物品、武器、圣遗物可用",
+		},
+		Perm: CommandPermNormal,
+		Func: GiveCommand,
+	}
 }
 
-func GiveCommand(c *CommandContent) {
+func GiveCommand(c *CommandContent) bool {
 	// 给予物品
 	var mode string      // 给予的模式
 	var itemId uint32    // 物品id
 	var count uint32 = 1 // 数量
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		value := param.(string)
 		// 给予的物品
 		switch value {
@@ -540,23 +562,25 @@ func GiveCommand(c *CommandContent) {
 
 // 杀死实体命令
 
-var KillCommandController = &CommandController{
-	Name:        "杀死实体",
-	AliasList:   []string{"kill"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>杀死讨厌的实体</color>",
-	UsageList: []string{
-		"{alias} self 杀死自己",
-		"{alias} monster <实体ID/all> 杀死怪物",
-	},
-	Perm: CommandPermNormal,
-	Func: KillCommand,
+func (c *CommandManager) NewKillCommandController() *CommandController {
+	return &CommandController{
+		Name:        "杀死实体",
+		AliasList:   []string{"kill"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>杀死讨厌的实体</color>",
+		UsageList: []string{
+			"{alias} self 杀死自己",
+			"{alias} monster <实体ID/all> 杀死怪物",
+		},
+		Perm: CommandPermNormal,
+		Func: KillCommand,
+	}
 }
 
-func KillCommand(c *CommandContent) {
+func KillCommand(c *CommandContent) bool {
 	var mode string   // 模式
 	var param1 string // 参数
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 模式
 		mode = param.(string)
 		return true
@@ -601,23 +625,25 @@ func KillCommand(c *CommandContent) {
 
 // 管理任务命令
 
-var QuestCommandController = &CommandController{
-	Name:        "管理任务",
-	AliasList:   []string{"quest"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的任务</color>",
-	UsageList: []string{
-		"{alias} <add/accept> <任务ID> 接受任务",
-		"{alias} finish <任务ID/all> 完成任务",
-	},
-	Perm: CommandPermNormal,
-	Func: QuestCommand,
+func (c *CommandManager) NewQuestCommandController() *CommandController {
+	return &CommandController{
+		Name:        "管理任务",
+		AliasList:   []string{"quest"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的任务</color>",
+		UsageList: []string{
+			"{alias} <add/accept> <任务ID> 接受任务",
+			"{alias} finish <任务ID/all> 完成任务",
+		},
+		Perm: CommandPermNormal,
+		Func: QuestCommand,
+	}
 }
 
-func QuestCommand(c *CommandContent) {
+func QuestCommand(c *CommandContent) bool {
 	var mode string   // 模式
 	var param1 string // 参数1
 
-	c.Dynamic("string", func(param any) bool {
+	return c.Dynamic("string", func(param any) bool {
 		// 模式
 		mode = param.(string)
 		return true
@@ -661,40 +687,32 @@ func QuestCommand(c *CommandContent) {
 
 // 解锁锚点命令
 
-var PointCommandController = &CommandController{
-	Name:        "解锁锚点",
-	AliasList:   []string{"point"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>解锁地图上的锚点</color>",
-	UsageList: []string{
-		"{alias} [场景ID] <锚点ID/all> 解锁锚点",
-	},
-	Perm: CommandPermNormal,
-	Func: PointCommand,
+func (c *CommandManager) NewPointCommandController() *CommandController {
+	return &CommandController{
+		Name:        "解锁锚点",
+		AliasList:   []string{"point"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>解锁地图上的锚点</color>",
+		UsageList: []string{
+			"{alias} [场景ID] <锚点ID/all> 解锁锚点",
+		},
+		Perm: CommandPermNormal,
+		Func: PointCommand,
+	}
 }
 
-func PointCommand(c *CommandContent) {
+func PointCommand(c *CommandContent) bool {
 	var sceneId = c.AssignPlayer.SceneId // 场景id
 	var param1 string                    // 参数1
 
-	switch len(c.ParamList) {
-	case 1:
-		c.Dynamic("string", func(param any) bool {
-			// 参数1
-			param1 = param.(string)
-			return true
-		})
-	case 2:
-		c.Dynamic("uint32", func(param any) bool {
-			// 场景id
-			sceneId = param.(uint32)
-			return true
-		}).Dynamic("string", func(param any) bool {
-			// 参数1
-			param1 = param.(string)
-			return true
-		})
-	}
-	c.Execute(func() bool {
+	return c.Option("uint32", func(param any) bool {
+		// 场景id
+		sceneId = param.(uint32)
+		return true
+	}).Dynamic("string", func(param any) bool {
+		// 参数1
+		param1 = param.(string)
+		return true
+	}).Execute(func() bool {
 		if param1 == "all" {
 			// 解锁当前场景所有锚点
 			COMMAND_MANAGER.gmCmd.GMUnlockAllPoint(c.AssignPlayer.PlayerId, sceneId)
@@ -714,19 +732,21 @@ func PointCommand(c *CommandContent) {
 
 // xLua调试命令
 
-var XLuaDebugCommandController = &CommandController{
-	Name:        "xLua调试",
-	AliasList:   []string{"xluadebug"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>开关xLua调试</color>",
-	UsageList: []string{
-		"{alias} 开关xLua调试",
-	},
-	Perm: CommandPermNormal,
-	Func: XLuaDebugCommand,
+func (c *CommandManager) NewXLuaDebugCommandController() *CommandController {
+	return &CommandController{
+		Name:        "xLua调试",
+		AliasList:   []string{"xluadebug"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>开关xLua调试</color>",
+		UsageList: []string{
+			"{alias} 开关xLua调试",
+		},
+		Perm: CommandPermNormal,
+		Func: XLuaDebugCommand,
+	}
 }
 
-func XLuaDebugCommand(c *CommandContent) {
-	c.Execute(func() bool {
+func XLuaDebugCommand(c *CommandContent) bool {
+	return c.Execute(func() bool {
 		// 主动开关客户端XLUA调试
 		if !c.AssignPlayer.XLuaDebug {
 			c.AssignPlayer.XLuaDebug = true
@@ -741,19 +761,21 @@ func XLuaDebugCommand(c *CommandContent) {
 
 // 七圣召唤测试命令
 
-var GcgCommandController = &CommandController{
-	Name:        "七圣召唤测试",
-	AliasList:   []string{"gcgtest"},
-	Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>测试七圣召唤</color>",
-	UsageList: []string{
-		"{alias} 测试七圣召唤",
-	},
-	Perm: CommandPermNormal,
-	Func: GcgCommand,
+func (c *CommandManager) NewGcgCommandController() *CommandController {
+	return &CommandController{
+		Name:        "七圣召唤测试",
+		AliasList:   []string{"gcgtest"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>测试七圣召唤</color>",
+		UsageList: []string{
+			"{alias} 测试七圣召唤",
+		},
+		Perm: CommandPermNormal,
+		Func: GcgCommand,
+	}
 }
 
-func GcgCommand(c *CommandContent) {
-	c.Execute(func() bool {
+func GcgCommand(c *CommandContent) bool {
+	return c.Execute(func() bool {
 		// 开始七圣召唤对局
 		GAME.GCGStartChallenge(c.AssignPlayer)
 		c.SendSuccMessage(c.Executor, "已开始七圣召唤对局，指定UID：%v。", c.AssignPlayer.PlayerId)

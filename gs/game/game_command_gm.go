@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/base64"
-
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -556,19 +555,24 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 }
 
 func (g *GMCmd) StartPubg(v bool) {
-	iPlugin := PLUGIN_MANAGER.GetIPlugin(PLUGIN_NAME_PUBG)
-	if iPlugin != nil {
-		pubg := iPlugin.(*PluginPubg)
-		pubg.StartPubg()
+	pluginPubg := &PluginPubg{}
+	err := PLUGIN_MANAGER.GetPlugin(pluginPubg)
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
+		return
 	}
+	logger.Error("plugin: %v", pluginPubg)
+	pluginPubg.StartPubg()
 }
 
 func (g *GMCmd) StopPubg(v bool) {
-	iPlugin := PLUGIN_MANAGER.GetIPlugin(PLUGIN_NAME_PUBG)
-	if iPlugin != nil {
-		pubg := iPlugin.(*PluginPubg)
-		pubg.StopPubg()
+	pluginPubg := &PluginPubg{}
+	err := PLUGIN_MANAGER.GetPlugin(pluginPubg)
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
+		return
 	}
+	pluginPubg.StopPubg()
 }
 
 func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
