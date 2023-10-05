@@ -274,7 +274,8 @@ func NewCommandManager() *CommandManager {
 	r.commandControllerList = make([]*CommandController, 0)
 	r.commandControllerMap = make(map[string]*CommandController)
 	r.commandMessageInput = make(chan *CommandMessage, 1000)
-	r.InitController() // 初始化控制器
+	// 初始化命令控制器
+	r.InitController()
 	r.gmCmd = new(GMCmd)
 	r.gmCmdRefValue = reflect.ValueOf(r.gmCmd)
 	return r
@@ -287,14 +288,6 @@ func (c *CommandManager) GetCommandMessageInput() chan *CommandMessage {
 // SetSystem 设置GM指令聊天消息机器人
 func (c *CommandManager) SetSystem(system *model.Player) {
 	c.system = system
-}
-
-// InitController 初始化命令控制器
-func (c *CommandManager) InitController() {
-	// 初始化命令控制器列表
-	c.InitControllerList()
-	// 注册所有的命令控制器
-	c.RegAllController()
 }
 
 // RegAllController 注册所有命令控制器
@@ -313,6 +306,13 @@ func (c *CommandManager) RegController(controller *CommandController) {
 		// 如果命令已注册则报错 后者覆盖前者
 		_, ok := c.commandControllerMap[name]
 		if ok {
+			// 别名重复注册提示功能
+			controller.Func = func(content *CommandContent) bool {
+				content.SetElse(func() {
+					content.SendFailMessage(content.Executor, "命令别名重复注册，重复的别名：%v。", name)
+				})
+				return false
+			}
 			logger.Error("register command repeat, name: %v", name)
 		}
 		// 记录命令
