@@ -1582,7 +1582,7 @@ message UnlockTransPointRsp {
     int32 retcode = 12;
 }
 
-message SceneWeatherForecastReq {
+message SceneWeatherForcastReq {
     enum CmdId {
         option allow_alias = true;
         NONE = 0;
@@ -1595,7 +1595,7 @@ message SceneWeatherForecastReq {
     uint32 weather_area_id = 15;
 }
 
-message SceneWeatherForecastRsp {
+message SceneWeatherForcastRsp {
     enum CmdId {
         option allow_alias = true;
         NONE = 0;

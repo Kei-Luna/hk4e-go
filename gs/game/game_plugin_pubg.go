@@ -2,13 +2,14 @@ package game
 
 import (
 	"fmt"
+	"math"
+
 	"hk4e/common/constant"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
-	"math"
 )
 
 const (

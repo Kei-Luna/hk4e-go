@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/base64"
+
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"

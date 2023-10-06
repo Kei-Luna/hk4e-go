@@ -111,8 +111,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(ExitSceneWeatherAreaNotify, func() any { return new(proto.ExitSceneWeatherAreaNotify) })         // 离开场景天气区域通知
 	c.regMsg(SetSceneWeatherAreaReq, func() any { return new(proto.SetSceneWeatherAreaReq) })                 // 设置场景天气区域请求
 	c.regMsg(SetSceneWeatherAreaRsp, func() any { return new(proto.SetSceneWeatherAreaRsp) })                 // 设置场景天气区域响应
-	c.regMsg(SceneWeatherForecastReq, func() any { return new(proto.SceneWeatherForecastReq) })               // 场景天气预测请求
-	c.regMsg(SceneWeatherForecastRsp, func() any { return new(proto.SceneWeatherForecastRsp) })               // 场景天气预测响应
+	c.regMsg(SceneWeatherForcastReq, func() any { return new(proto.SceneWeatherForcastReq) })                 // 场景天气预测请求
+	c.regMsg(SceneWeatherForcastRsp, func() any { return new(proto.SceneWeatherForcastRsp) })                 // 场景天气预测响应
 	c.regMsg(WorldPlayerLocationNotify, func() any { return new(proto.WorldPlayerLocationNotify) })           // 世界玩家位置通知
 	c.regMsg(ScenePlayerLocationNotify, func() any { return new(proto.ScenePlayerLocationNotify) })           // 场景玩家位置通知
 	c.regMsg(SceneForceUnlockNotify, func() any { return new(proto.SceneForceUnlockNotify) })                 // 场景强制解锁通知
