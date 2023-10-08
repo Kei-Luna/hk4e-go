@@ -89,7 +89,7 @@ gen_natsrpc:
 # 生成客户端协议代码
 .PHONY: gen_proto
 gen_proto:
-	cd protocol/proto_hk4e && \
+	cd protocol/hk4e_proto && \
 	rm -rf ./proto && mkdir -p proto && \
 	protoc --proto_path=./ --go_out=paths=source_relative:./proto ./*.proto && \
 	protoc --proto_path=./ --go_out=paths=source_relative:./proto ./cmd/*.proto && \
