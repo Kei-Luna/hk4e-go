@@ -47,7 +47,6 @@ type Player struct {
 	SafePos         *Vector            // 在陆地时的坐标
 	Pos             *Vector            // 坐标
 	Rot             *Vector            // 朝向
-	PubgRank        uint32             // 大逃杀模式积分
 	DbItem          *DbItem            // 道具
 	DbWeapon        *DbWeapon          // 武器
 	DbReliquary     *DbReliquary       // 圣遗物

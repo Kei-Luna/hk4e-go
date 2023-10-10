@@ -289,7 +289,7 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 		beginIndex := strings.Index(commandText, "(")
 		endIndex := strings.Index(commandText, ")")
 		if beginIndex == 0 || beginIndex == -1 || endIndex == -1 || beginIndex >= endIndex {
-			g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "命令解析失败", Msg: req.Msg})
+			g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "GM函数解析失败", Msg: req.Msg})
 			return
 		}
 		funcName := commandText[:beginIndex]
@@ -303,7 +303,7 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 		commandMessageInput <- &CommandMessage{
 			GMType:   DevClientGM,
 			Executor: player,
-			Text:     req.Msg,
+			Text:     strings.ToLower(req.Msg),
 		}
 	}
 	g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})

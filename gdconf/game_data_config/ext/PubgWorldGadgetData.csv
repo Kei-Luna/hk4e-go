@@ -1,0 +1,4 @@
+Id,GadgetId,X,Y,Z
+int32,int32,float32,float32,float32
+ID,物件ID,X坐标,Y坐标,Z坐标
+1,70520009,396.491,201.000,-353.049

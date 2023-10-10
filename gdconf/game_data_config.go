@@ -75,6 +75,7 @@ type GameDataConfig struct {
 	WeatherDataMap          map[int32]*WeatherData                  // 天气
 	WeatherTemplateMap      map[string]map[int32]*WeatherTemplate   // 天气模版
 	SceneWeatherAreaMap     map[int32]map[int32]*SceneWeatherArea   // 天气区域
+	PubgWorldGadgetDataMap  map[int32]*PubgWorldGadgetData          // pubg世界物件
 }
 
 func InitGameDataConfig() {
@@ -182,6 +183,7 @@ func (g *GameDataConfig) load() {
 	g.loadWeatherData()          // 天气
 	g.loadWeatherTemplateData()  // 天气模版
 	g.loadSceneWeatherArea()     // 天气区域
+	g.loadPubgWorldGadgetData()  // pubg世界物件
 }
 
 // CSV相关

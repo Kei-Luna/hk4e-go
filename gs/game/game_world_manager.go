@@ -101,7 +101,7 @@ func (w *WorldManager) GetAiWorld() *World {
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
 	w.aiWorld.ChangeToMultiplayer()
-	w.aiWorld.NewPhysicsEngine(w.sceneBlockAoiMap)
+	w.aiWorld.NewPhysicsEngine()
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
@@ -188,6 +188,18 @@ func (w *WorldManager) LoadSceneBlockAoiMap() {
 		}
 		w.sceneBlockAoiMap[uint32(sceneLuaConfig.Id)] = aoiManager
 	}
+}
+
+func (w *World) IsValidSceneBlockPos(sceneId uint32, x, y, z float32) bool {
+	aoiManager, exist := WORLD_MANAGER.sceneBlockAoiMap[sceneId]
+	if !exist {
+		return false
+	}
+	return aoiManager.IsValidAoiPos(x, y, z)
+}
+
+func (w *World) IsValidAiWorldPos(sceneId uint32, x, y, z float32) bool {
+	return w.aiWorldAoi.IsValidAoiPos(x, y, z)
 }
 
 func (w *WorldManager) GetMultiplayerWorldNum() uint32 {

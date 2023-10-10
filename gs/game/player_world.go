@@ -408,6 +408,16 @@ func (g *Game) PlayerQuitDungeonReq(player *model.Player, payloadMsg pb.Message)
 // GadgetInteractReq gadget交互请求
 func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GadgetInteractReq)
+
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdGadgetInteract, &PluginEventGadgetInteract{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Req:         req,
+	}) {
+		return
+	}
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)

@@ -556,23 +556,23 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 }
 
 func (g *GMCmd) StartPubg(v bool) {
-	pluginPubg := &PluginPubg{}
-	err := PLUGIN_MANAGER.GetPlugin(pluginPubg)
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
 	if err != nil {
 		logger.Error("get plugin pubg error: %v", err)
 		return
 	}
+	pluginPubg := iPlugin.(*PluginPubg)
 	logger.Error("plugin: %v", pluginPubg)
 	pluginPubg.StartPubg()
 }
 
 func (g *GMCmd) StopPubg(v bool) {
-	pluginPubg := &PluginPubg{}
-	err := PLUGIN_MANAGER.GetPlugin(pluginPubg)
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
 	if err != nil {
 		logger.Error("get plugin pubg error: %v", err)
 		return
 	}
+	pluginPubg := iPlugin.(*PluginPubg)
 	pluginPubg.StopPubg()
 }
 

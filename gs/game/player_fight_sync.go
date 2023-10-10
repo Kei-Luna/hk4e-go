@@ -272,11 +272,14 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 	}
 }
 
-func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, entityId uint32) {
+func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, avatarEntityId uint32) {
 	if WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
 
+	if !world.IsValidSceneBlockPos(scene.GetId(), float32(newPos.X), 0.0, float32(newPos.Z)) {
+		return
+	}
 	// 服务器处理玩家移动场景区块aoi事件频率限制
 	now := uint64(time.Now().UnixMilli())
 	if now-player.LastSceneBlockAoiMoveTime < 200 {
@@ -341,34 +344,20 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
-	for entityId, entity := range oldVisionEntityMap {
+	for entityId := range oldVisionEntityMap {
 		_, exist := newVisionEntityMap[entityId]
 		if exist {
 			continue
 		}
-
-		if WORLD_MANAGER.IsAiWorld(world) {
-			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-				continue
-			}
-		}
-
 		// 旧有新没有的实体即为消失的
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
 	addEntityIdList := make([]uint32, 0)
-	for entityId, entity := range newVisionEntityMap {
+	for entityId := range newVisionEntityMap {
 		_, exist := oldVisionEntityMap[entityId]
 		if exist {
 			continue
 		}
-
-		if WORLD_MANAGER.IsAiWorld(world) {
-			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-				continue
-			}
-		}
-
 		// 新有旧没有的实体即为出现的
 		addEntityIdList = append(addEntityIdList, entityId)
 	}
@@ -380,12 +369,15 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
 	}
 	// 场景区域触发器检测
-	g.SceneRegionTriggerCheck(player, oldPos, newPos, entityId)
+	g.SceneRegionTriggerCheck(player, oldPos, newPos, avatarEntityId)
 	// 场景天气区域变更检测
 	g.SceneWeatherAreaCheck(player, oldPos, newPos)
 }
 
 func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
+	if !world.IsValidAiWorldPos(scene.GetId(), float32(newPos.X), float32(newPos.Y), float32(newPos.Z)) {
+		return
+	}
 	aiWorldAoi := world.GetAiWorldAoi()
 	oldGid := aiWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
 	newGid := aiWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
@@ -475,6 +467,34 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		}
 		// 新格子添加玩家
 		aiWorldAoi.AddObjectToGrid(int64(player.PlayerId), activeWorldAvatar, newGid)
+	}
+	// 消失和出现的场景实体
+	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
+	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
+	delEntityIdList := make([]uint32, 0)
+	for entityId := range oldVisionEntityMap {
+		_, exist := newVisionEntityMap[entityId]
+		if exist {
+			continue
+		}
+		// 旧有新没有的实体即为消失的
+		delEntityIdList = append(delEntityIdList, entityId)
+	}
+	addEntityIdList := make([]uint32, 0)
+	for entityId := range newVisionEntityMap {
+		_, exist := oldVisionEntityMap[entityId]
+		if exist {
+			continue
+		}
+		// 新有旧没有的实体即为出现的
+		addEntityIdList = append(addEntityIdList, entityId)
+	}
+	// 同步客户端消失和出现的场景实体
+	if len(delEntityIdList) > 0 {
+		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+	}
+	if len(addEntityIdList) > 0 {
+		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
 	}
 }
 

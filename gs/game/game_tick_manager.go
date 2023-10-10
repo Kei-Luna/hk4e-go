@@ -327,11 +327,20 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		scene := world.GetSceneById(rigidBody.sceneId)
 		defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
 		defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
+		iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
+		if err != nil {
+			logger.Error("get plugin pubg error: %v", err)
+			return
+		}
+		pluginPubg := iPlugin.(*PluginPubg)
+		entity := scene.GetEntity(rigidBody.avatarEntityId)
+		avatarEntity := entity.GetAvatarEntity()
+		atk := pluginPubg.playerAtkMap[avatarEntity.GetUid()]
 		GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
 			AttackResult: &proto.AttackResult{
 				AttackerId: rigidBody.avatarEntityId,
 				DefenseId:  rigidBody.hitAvatarEntityId,
-				Damage:     100,
+				Damage:     atk,
 			},
 		})
 		if attackResultTemplate == nil {
@@ -344,7 +353,7 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		}
 		evtBeingHitInfo.AttackResult.AttackerId = rigidBody.avatarEntityId
 		evtBeingHitInfo.AttackResult.DefenseId = rigidBody.hitAvatarEntityId
-		evtBeingHitInfo.AttackResult.Damage = 100
+		evtBeingHitInfo.AttackResult.Damage = atk
 		if evtBeingHitInfo.AttackResult.HitCollision == nil {
 			return
 		}

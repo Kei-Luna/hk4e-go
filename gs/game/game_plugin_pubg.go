@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"hk4e/common/constant"
+	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/random"
@@ -13,10 +14,10 @@ import (
 )
 
 const (
-	PUBG_PHASE_WAIT = iota
-	PUBG_PHASE_START
-	PUBG_PHASE_II
-	PUBG_PHASE_END
+	PUBG_PHASE_WAIT  = -1
+	PUBG_PHASE_START = 0
+	PUBG_PHASE_II    = 2
+	PUBG_PHASE_END   = 16
 )
 
 const (
@@ -37,6 +38,7 @@ type PluginPubg struct {
 	areaReduceXSpeed      float64               // 缩圈X速度
 	areaReduceZSpeed      float64               // 缩圈Z速度
 	areaPointList         []*proto.MapMarkPoint // 客户端区域地图坐标列表
+	playerAtkMap          map[uint32]float32    // 玩家攻击力集合
 }
 
 func NewPluginPubg() *PluginPubg {
@@ -47,11 +49,12 @@ func NewPluginPubg() *PluginPubg {
 		blueAreaRadius:        0.0,
 		safeAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
 		safeAreaRadius:        0.0,
-		phase:                 PUBG_PHASE_START,
+		phase:                 PUBG_PHASE_WAIT,
 		areaReduceRadiusSpeed: 0.0,
 		areaReduceXSpeed:      0.0,
 		areaReduceZSpeed:      0.0,
 		areaPointList:         make([]*proto.MapMarkPoint, 0),
+		playerAtkMap:          make(map[uint32]float32),
 	}
 	return p
 }
@@ -62,6 +65,7 @@ func (p *PluginPubg) OnEnable() {
 	p.ListenEvent(PluginEventIdPlayerKillAvatar, PluginEventPriorityNormal, p.EventKillAvatar)
 	p.ListenEvent(PluginEventIdMarkMap, PluginEventPriorityNormal, p.EventMarkMap)
 	p.ListenEvent(PluginEventIdAvatarDieAnimationEnd, PluginEventPriorityNormal, p.EventAvatarDieAnimationEnd)
+	p.ListenEvent(PluginEventIdGadgetInteract, PluginEventPriorityNormal, p.EventGadgetInteract)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
 	p.AddGlobalTick(PluginGlobalTickHour, p.GlobalTickHourStart)
@@ -105,8 +109,33 @@ func (p *PluginPubg) EventAvatarDieAnimationEnd(iEvent IPluginEvent) {
 	alivePlayerNum := len(p.GetAlivePlayerList())
 	info := fmt.Sprintf("『%v』死亡了，剩余%v位存活玩家。", player.NickName, alivePlayerNum)
 	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-	player.PubgRank += uint32(100 - alivePlayerNum)
 	GAME.SendMsg(cmd.AvatarDieAnimationEndRsp, player.PlayerId, player.ClientSeq, &proto.AvatarDieAnimationEndRsp{SkillId: event.Req.SkillId, DieGuid: event.Req.DieGuid})
+	event.Cancel()
+}
+
+func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventGadgetInteract)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.id != player.WorldId {
+		return
+	}
+	p.playerAtkMap[player.PlayerId] += 100.0
+	req := event.Req
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	GAME.KillEntity(player, scene, req.GadgetEntityId, proto.PlayerDieType_PLAYER_DIE_NONE)
+	rsp := &proto.GadgetInteractRsp{
+		GadgetEntityId: req.GadgetEntityId,
+		GadgetId:       req.GadgetId,
+		OpType:         req.OpType,
+		InteractType:   proto.InteractType_INTERACT_GATHER,
+	}
+	GAME.SendMsg(cmd.GadgetInteractRsp, player.PlayerId, player.ClientSeq, rsp)
 	event.Cancel()
 }
 
@@ -230,6 +259,17 @@ func (p *PluginPubg) StartPubg() {
 	}
 	world := WORLD_MANAGER.GetAiWorld()
 	p.world = world
+	for _, pubgWorldGadgetDataConfig := range gdconf.GetPubgWorldGadgetDataMap() {
+		GAME.CreateGadget(
+			p.world.GetOwner(),
+			&model.Vector{X: float64(pubgWorldGadgetDataConfig.X), Y: float64(pubgWorldGadgetDataConfig.Y), Z: float64(pubgWorldGadgetDataConfig.Z)},
+			uint32(pubgWorldGadgetDataConfig.GadgetId),
+			nil,
+		)
+	}
+	for uid := range p.world.GetAllPlayer() {
+		p.playerAtkMap[uid] = 100.0
+	}
 	p.phase = PUBG_PHASE_START
 	p.RefreshArea()
 	world.chatMsgList = make([]*proto.ChatInfo, 0)
@@ -246,7 +286,7 @@ func (p *PluginPubg) StopPubg() {
 
 // IsStartPubg pubg游戏是否开启
 func (p *PluginPubg) IsStartPubg() bool {
-	return p.world != nil && p.phase != PUBG_PHASE_WAIT && p.phase != PUBG_PHASE_END
+	return p.world != nil && p.phase != PUBG_PHASE_WAIT
 }
 
 // GetAreaPointList 获取游戏区域标点列表

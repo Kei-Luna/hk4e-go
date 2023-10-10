@@ -33,6 +33,7 @@ const (
 	PluginEventIdPlayerKillAvatar
 	PluginEventIdMarkMap
 	PluginEventIdAvatarDieAnimationEnd
+	PluginEventIdGadgetInteract
 )
 
 // PluginEventKillAvatar 角色被杀死
@@ -55,6 +56,13 @@ type PluginEventAvatarDieAnimationEnd struct {
 	*PluginEvent
 	Player *model.Player                   // 玩家
 	Req    *proto.AvatarDieAnimationEndReq // 请求
+}
+
+// PluginEventGadgetInteract gadget交互
+type PluginEventGadgetInteract struct {
+	*PluginEvent
+	Player *model.Player            // 玩家
+	Req    *proto.GadgetInteractReq // 请求
 }
 
 type PluginEventFunc func(event IPluginEvent)
@@ -266,7 +274,7 @@ func (p *PluginManager) DelPlugin(iPlugin IPlugin) {
 }
 
 // GetPlugin 获取插件实例
-func (p *PluginManager) GetPlugin(value IPlugin) (err error) {
+func (p *PluginManager) GetPlugin(value IPlugin) (plugin IPlugin, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
@@ -281,18 +289,17 @@ func (p *PluginManager) GetPlugin(value IPlugin) (err error) {
 	}()
 	refValue := reflect.ValueOf(value)
 	if refValue.Kind() != reflect.Pointer || refValue.IsNil() {
-		return errors.New("value is not pointer")
+		return nil, errors.New("value is not pointer")
 	}
 	refType := refValue.Type()
 	// 校验插件是否注册
-	plugin, exist := p.pluginMap[refType]
+	exist := false
+	plugin, exist = p.pluginMap[refType]
 	if !exist {
 		err = errors.New(fmt.Sprintf("plugin not exist, refType: %v", refType))
-		return
+		return nil, err
 	}
-	refPlugin := reflect.ValueOf(plugin)
-	refValue.Elem().Set(refPlugin.Elem())
-	return
+	return plugin, nil
 }
 
 // TriggerEvent 触发事件

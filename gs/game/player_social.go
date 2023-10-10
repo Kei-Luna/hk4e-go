@@ -39,7 +39,7 @@ func (g *Game) GetPlayerSocialDetailReq(player *model.Player, payloadMsg pb.Mess
 		WorldLevel:           targetPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
 		NameCardId:           targetPlayer.NameCard,
 		IsShowAvatar:         false,
-		FinishAchievementNum: targetPlayer.PubgRank,
+		FinishAchievementNum: 0,
 		IsFriend:             exist,
 	}
 	getPlayerSocialDetailRsp := &proto.GetPlayerSocialDetailRsp{

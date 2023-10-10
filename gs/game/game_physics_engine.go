@@ -30,19 +30,18 @@ type RigidBody struct {
 
 // PhysicsEngine 物理引擎
 type PhysicsEngine struct {
-	rigidBodyMap     map[uint32]*RigidBody      // 刚体集合
-	pathTracing      bool                       // 子弹路径追踪调试
-	acc              float32                    // 重力加速度
-	drag             float32                    // 阻力参数
-	pitchAngleOffset float32                    // 子弹俯仰角偏移
-	initSpeed        float32                    // 子弹初始速度
-	avatarYOffset    float32                    // 角色中心点位置高度偏移
-	lastUpdateTime   int64                      // 上一次更新时间
-	sceneBlockAoiMap map[uint32]*alg.AoiManager // 全局各场景地图的aoi管理器
-	world            *World                     // 世界对象
+	rigidBodyMap     map[uint32]*RigidBody // 刚体集合
+	pathTracing      bool                  // 子弹路径追踪调试
+	acc              float32               // 重力加速度
+	drag             float32               // 阻力参数
+	pitchAngleOffset float32               // 子弹俯仰角偏移
+	initSpeed        float32               // 子弹初始速度
+	avatarYOffset    float32               // 角色中心点位置高度偏移
+	lastUpdateTime   int64                 // 上一次更新时间
+	world            *World                // 世界对象
 }
 
-func (w *World) NewPhysicsEngine(sceneBlockAoiMap map[uint32]*alg.AoiManager) {
+func (w *World) NewPhysicsEngine() {
 	w.bulletPhysicsEngine = &PhysicsEngine{
 		rigidBodyMap:     make(map[uint32]*RigidBody),
 		pathTracing:      false,
@@ -52,7 +51,6 @@ func (w *World) NewPhysicsEngine(sceneBlockAoiMap map[uint32]*alg.AoiManager) {
 		initSpeed:        INIT_SPEED,
 		avatarYOffset:    AVATAR_Y_OFFSET,
 		lastUpdateTime:   0,
-		sceneBlockAoiMap: sceneBlockAoiMap,
 		world:            w,
 	}
 }
@@ -88,12 +86,7 @@ func (p *PhysicsEngine) Update(now int64) []*RigidBody {
 	hitList := make([]*RigidBody, 0)
 	dt := float32(now-p.lastUpdateTime) / 1000.0
 	for _, rigidBody := range p.rigidBodyMap {
-		aoiManager, exist := p.sceneBlockAoiMap[rigidBody.sceneId]
-		if !exist {
-			p.DestroyRigidBody(rigidBody.entityId)
-			continue
-		}
-		if !aoiManager.IsValidAoiPos(rigidBody.position.X, rigidBody.position.Y, rigidBody.position.Z) {
+		if !p.world.IsValidAiWorldPos(rigidBody.sceneId, rigidBody.position.X, rigidBody.position.Y, rigidBody.position.Z) {
 			p.DestroyRigidBody(rigidBody.entityId)
 			continue
 		}
