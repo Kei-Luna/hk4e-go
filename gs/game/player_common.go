@@ -251,6 +251,30 @@ func (g *Game) PlayerTimeNotify(world *World) {
 	}
 }
 
+func (g *Game) PlayerGameTimeNotify(world *World) {
+	for _, player := range world.GetAllPlayer() {
+		scene := world.GetSceneById(player.SceneId)
+		if scene == nil {
+			logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+			return
+		}
+		for _, scenePlayer := range scene.GetAllPlayer() {
+			playerGameTimeNotify := &proto.PlayerGameTimeNotify{
+				GameTime: scene.GetGameTime(),
+				Uid:      scenePlayer.PlayerId,
+			}
+			g.SendMsg(cmd.PlayerGameTimeNotify, scenePlayer.PlayerId, 0, playerGameTimeNotify)
+			// 设置玩家天气
+			climateType := GAME.GetWeatherAreaClimate(player.WeatherInfo.WeatherAreaId)
+			// 跳过相同的天气
+			if climateType == player.WeatherInfo.ClimateType {
+				return
+			}
+			GAME.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, climateType)
+		}
+	}
+}
+
 func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GmTalkReq)
 	logger.Info("GmTalkReq: %v", req.Msg)

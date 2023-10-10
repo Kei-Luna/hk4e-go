@@ -243,6 +243,11 @@ func (t *TickManager) onTickHour(now int64) {
 
 func (t *TickManager) onTickMinute(now int64) {
 	gdconf.LuaStateLruRemove()
+	for _, world := range WORLD_MANAGER.GetAllWorld() {
+		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
+			GAME.PlayerGameTimeNotify(world)
+		}
+	}
 }
 
 func (t *TickManager) onTick10Second(now int64) {
@@ -279,6 +284,13 @@ func (t *TickManager) onTickSecond(now int64) {
 		if world.GetOwner().SceneLoadState == model.SceneEnterDone {
 			// 世界里所有玩家的网络延迟广播
 			GAME.WorldPlayerRTTNotify(world)
+		}
+		// 每个场景时间+1
+		for _, scene := range world.sceneMap {
+			if world.GetOwner().Pause {
+				continue
+			}
+			scene.gameTime = scene.gameTime + 1%1440
 		}
 	}
 	// GCG游戏Tick

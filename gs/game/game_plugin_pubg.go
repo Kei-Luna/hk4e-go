@@ -53,6 +53,11 @@ func NewPluginPubg() *PluginPubg {
 		areaReduceZSpeed:      0.0,
 		areaPointList:         make([]*proto.MapMarkPoint, 0),
 	}
+	return p
+}
+
+// OnEnable 插件启用生命周期
+func (p *PluginPubg) OnEnable() {
 	// 监听事件
 	p.ListenEvent(PluginEventIdPlayerKillAvatar, PluginEventPriorityNormal, p.EventKillAvatar)
 	p.ListenEvent(PluginEventIdMarkMap, PluginEventPriorityNormal, p.EventMarkMap)
@@ -62,7 +67,6 @@ func NewPluginPubg() *PluginPubg {
 	p.AddGlobalTick(PluginGlobalTickHour, p.GlobalTickHourStart)
 	// 注册命令
 	p.RegCommandController(p.NewPubgCommandController())
-	return p
 }
 
 /************************************************** 事件监听 **************************************************/

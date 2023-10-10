@@ -764,7 +764,9 @@ func EnterWeatherArea(luaState *lua.LState) int {
 		return 1
 	}
 	weatherAreaId := luaState.ToInt(2)
-	GAME.SetPlayerWeatherByWeatherAreaId(player, uint32(weatherAreaId))
+	// 设置玩家天气
+	climateType := GAME.GetWeatherAreaClimate(uint32(weatherAreaId))
+	GAME.SetPlayerWeather(player, uint32(weatherAreaId), climateType)
 	luaState.Push(lua.LNumber(0))
 	return 1
 }

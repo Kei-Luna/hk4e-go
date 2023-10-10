@@ -294,15 +294,11 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	scene := world.GetSceneById(player.SceneId)
-	scene.ChangeGameTime(gameTime)
-
-	for _, scenePlayer := range scene.GetAllPlayer() {
-		playerGameTimeNotify := &proto.PlayerGameTimeNotify{
-			GameTime: scene.GetGameTime(),
-			Uid:      scenePlayer.PlayerId,
-		}
-		g.SendMsg(cmd.PlayerGameTimeNotify, scenePlayer.PlayerId, scenePlayer.ClientSeq, playerGameTimeNotify)
+	if scene == nil {
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		return
 	}
+	g.ChangeGameTime(player, scene, gameTime)
 
 	changeGameTimeRsp := &proto.ChangeGameTimeRsp{
 		CurGameTime: scene.GetGameTime(),
@@ -513,6 +509,28 @@ func (g *Game) ExitTransPointRegionNotify(player *model.Player, payloadMsg pb.Me
 }
 
 /************************************************** 游戏功能 **************************************************/
+
+// ChangeGameTime 修改游戏场景时间
+func (g *Game) ChangeGameTime(player *model.Player, scene *Scene, gameTime uint32) {
+	logger.Debug("change game time, gameTime: %v, uid: %v", gameTime, player.PlayerId)
+	scene.ChangeGameTime(gameTime)
+
+	for _, scenePlayer := range scene.GetAllPlayer() {
+		playerGameTimeNotify := &proto.PlayerGameTimeNotify{
+			GameTime: scene.GetGameTime(),
+			Uid:      scenePlayer.PlayerId,
+		}
+		g.SendMsg(cmd.PlayerGameTimeNotify, scenePlayer.PlayerId, scenePlayer.ClientSeq, playerGameTimeNotify)
+	}
+
+	// 设置玩家天气
+	climateType := GAME.GetWeatherAreaClimate(player.WeatherInfo.WeatherAreaId)
+	// 跳过相同的天气
+	if climateType == player.WeatherInfo.ClimateType {
+		return
+	}
+	GAME.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, climateType)
+}
 
 func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 	sceneGroupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))

@@ -111,6 +111,7 @@ func runPacketCaptureApi() {
 	e := gin.Default()
 	e.GET("/packet/capture/ws", packetCaptureWs)
 	e.GET("/packet/capture/list", packetCaptureList)
+	e.GET("/packet/capture/clear", packetCaptureClear)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
 	err := e.Run(addr)
@@ -154,6 +155,17 @@ func packetCaptureList(ctx *gin.Context) {
 	data, _ := json.Marshal(PacketCaptureSession.PktList)
 	PacketCaptureSession.PktLock.Unlock()
 	_, _ = ctx.Writer.WriteString(string(data))
+}
+
+func packetCaptureClear(ctx *gin.Context) {
+	if PacketCaptureSession == nil {
+		_, _ = ctx.Writer.WriteString("500")
+		return
+	}
+	PacketCaptureSession.PktLock.Lock()
+	PacketCaptureSession.PktList = make([]*net.Packet, 0)
+	PacketCaptureSession.PktLock.Unlock()
+	_, _ = ctx.Writer.WriteString("ok")
 }
 
 func runForward(messageQueue *mq.MessageQueue) {

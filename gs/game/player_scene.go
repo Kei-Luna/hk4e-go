@@ -245,8 +245,10 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.SendMsg(cmd.PlayerEnterSceneInfoNotify, player.PlayerId, player.ClientSeq, playerEnterSceneInfoNotify)
 
+		// 设置玩家天气
 		weatherAreaId := g.GetPlayerInWeatherAreaId(player, player.Pos)
-		g.SetPlayerWeatherByWeatherAreaId(player, weatherAreaId)
+		climateType := GAME.GetWeatherAreaClimate(weatherAreaId)
+		GAME.SetPlayerWeather(player, weatherAreaId, climateType)
 	}
 
 	g.UpdateWorldScenePlayerInfo(player, world)
@@ -358,7 +360,12 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
 	}
 
-	g.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, player.WeatherInfo.ClimateType)
+	// 设置玩家天气
+	sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
+		WeatherAreaId: player.WeatherInfo.WeatherAreaId,
+		ClimateType:   player.WeatherInfo.ClimateType,
+	}
+	g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
 
 	enterSceneDoneRsp := &proto.EnterSceneDoneRsp{
 		EnterSceneToken: req.EnterSceneToken,
@@ -1290,16 +1297,17 @@ func (g *Game) SceneWeatherAreaCheck(player *model.Player, oldPos *model.Vector,
 		return
 	}
 	// 设置玩家天气
-	g.SetPlayerWeatherByWeatherAreaId(player, weatherAreaId)
+	climateType := GAME.GetWeatherAreaClimate(weatherAreaId)
+	GAME.SetPlayerWeather(player, weatherAreaId, climateType)
 }
 
-// SetPlayerWeatherByWeatherAreaId 通过天气区域设置玩家天气
-func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherAreaId uint32) {
+// GetWeatherAreaClimate 获取天气区域气象
+func (g *Game) GetWeatherAreaClimate(weatherAreaId uint32) uint32 {
 	// 获取天气数据配置表
 	weatherConfig := gdconf.GetWeatherDataById(int32(weatherAreaId))
 	if weatherConfig == nil {
 		logger.Error("weather data config not exist, weatherId: %v", weatherAreaId)
-		return
+		return 0
 	}
 	// 如果指定了则使用指定的天气
 	var weatherTemplateConfig *gdconf.WeatherTemplate
@@ -1312,7 +1320,7 @@ func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherArea
 		weatherTemplateMap := gdconf.GetWeatherTemplateMap()[weatherConfig.TemplateName]
 		if weatherTemplateMap == nil {
 			logger.Error("weather template map not exist, templateName: %v", weatherConfig.TemplateName)
-			return
+			return 0
 		}
 		weatherTemplateList := make([]int32, 0, len(weatherTemplateMap))
 		for key := range weatherTemplateMap {
@@ -1324,7 +1332,7 @@ func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherArea
 	// 确保指定的天气模版存在
 	if weatherTemplateConfig == nil {
 		logger.Error("weather template config not exist, templateName: %v, weather: %v", weatherConfig.TemplateName, weather)
-		return
+		return 0
 	}
 	// 随机气象 轮盘赌选择法RWS
 	var climateType uint32
@@ -1337,6 +1345,7 @@ func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherArea
 		constant.CLIMATE_TYPE_MIST:         weatherTemplateConfig.Mist,
 		constant.CLIMATE_TYPE_DESERT:       weatherTemplateConfig.Desert,
 	}
+	logger.Debug("climate weight: %v", climateWeightMap)
 	randNum := random.GetRandomInt32(0, 100-1)
 	sumWeight := int32(0)
 	for climate, weight := range climateWeightMap {
@@ -1346,33 +1355,26 @@ func (g *Game) SetPlayerWeatherByWeatherAreaId(player *model.Player, weatherArea
 			break
 		}
 	}
-	// 设置玩家天气
-	g.SetPlayerWeather(player, weatherAreaId, climateType)
+	return climateType
 }
 
 // SetPlayerWeather 设置玩家天气
 func (g *Game) SetPlayerWeather(player *model.Player, weatherAreaId uint32, climateType uint32) {
 	logger.Debug("weather climateType: %v, weatherAreaId: %v", climateType, weatherAreaId)
 
-	// 获取天气数据配置表
-	weatherConfig := gdconf.GetWeatherDataById(int32(weatherAreaId))
-	if weatherConfig == nil {
-		logger.Error("weather data config not exist, weatherId: %v", weatherAreaId)
-		return
-	}
-
 	// 记录数据
 	player.WeatherInfo.WeatherAreaId = weatherAreaId
 	player.WeatherInfo.ClimateType = climateType
 
 	sceneAreaWeatherNotify := &proto.SceneAreaWeatherNotify{
-		WeatherAreaId:   uint32(weatherConfig.WeatherAreaId),
-		WeatherGadgetId: uint32(weatherConfig.GadgetID),
-		ClimateType:     climateType,
-		TransDuration:   0,
-		WeatherValueMap: nil,
+		WeatherAreaId: weatherAreaId,
+		ClimateType:   climateType,
 	}
-	g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
+	if player.SceneJump {
+		g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
+	} else {
+		g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, 0, sceneAreaWeatherNotify)
+	}
 }
 
 /************************************************** 打包封装 **************************************************/
