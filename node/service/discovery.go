@@ -422,7 +422,7 @@ func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerIns
 		instList = append(instList, value.(*ServerInstance))
 		return true
 	})
-	sort.SliceStable(instList, func(i, j int) bool {
+	sort.Slice(instList, func(i, j int) bool {
 		return instList[i].appId < instList[j].appId
 	})
 	index := random.GetRandomInt32(0, int32(len(instList)-1))
@@ -436,7 +436,7 @@ func (s *DiscoveryService) getMinLoadServerInstance(instMap *sync.Map) *ServerIn
 		instList = append(instList, value.(*ServerInstance))
 		return true
 	})
-	sort.SliceStable(instList, func(i, j int) bool {
+	sort.Slice(instList, func(i, j int) bool {
 		return instList[i].appId < instList[j].appId
 	})
 	minLoadInstIndex := 0

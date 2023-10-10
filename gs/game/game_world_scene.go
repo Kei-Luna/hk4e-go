@@ -651,7 +651,7 @@ func (g *GadgetClientEntity) GetPropOwnerEntityId() uint32 {
 
 type GadgetVehicleEntity struct {
 	vehicleId    uint32
-	worldId      uint32
+	worldId      uint64
 	ownerUid     uint32
 	maxStamina   float32
 	curStamina   float32

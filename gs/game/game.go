@@ -1,6 +1,7 @@
 package game
 
 import (
+	"os"
 	"runtime"
 	"strconv"
 	"time"
@@ -158,7 +159,8 @@ func (g *Game) gameMainLoopD() {
 				lastPanicTime = now
 			} else {
 				logger.Error("!!! GAME MAIN LOOP STOP !!!")
-				break
+				time.Sleep(time.Second * 10)
+				os.Exit(-1)
 			}
 		}
 	}

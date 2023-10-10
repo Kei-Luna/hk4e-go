@@ -30,6 +30,7 @@ func Logic(account string, session *net.Session) {
 	avatarEntityId := uint32(0)
 	moveRot := random.GetRandomFloat32(0.0, 359.9)
 	moveReliableSeq := uint32(0)
+	isBorn := true
 	for {
 		select {
 		case protoMsg := <-session.RecvChan:
@@ -42,11 +43,14 @@ func Logic(account string, session *net.Session) {
 					return
 				}
 				logger.Info("robot gs login ok, account: %v", account)
+				if !isBorn {
+					session.SendMsg(cmd.SetPlayerBornDataReq, &proto.SetPlayerBornDataReq{
+						AvatarId: 10000007,
+						NickName: account,
+					})
+				}
 			case cmd.DoSetPlayerBornDataNotify:
-				session.SendMsg(cmd.SetPlayerBornDataReq, &proto.SetPlayerBornDataReq{
-					AvatarId: 10000007,
-					NickName: account,
-				})
+				isBorn = false
 			case cmd.PlayerDataNotify:
 				ntf := protoMsg.PayloadMessage.(*proto.PlayerDataNotify)
 				logger.Info("player name: %v", ntf.NickName)

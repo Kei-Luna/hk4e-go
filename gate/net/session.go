@@ -41,6 +41,9 @@ const (
 
 // 转发客户端消息到其他服务器 每个连接独立协程
 func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, session *Session) {
+	if session.connState == ConnClose {
+		return
+	}
 	if protoMsg.HeadMessage == nil {
 		logger.Error("recv null head msg: %v", protoMsg)
 		return
@@ -78,52 +81,6 @@ func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, sess
 		}
 		session.sendChan <- msg
 		k.forceCloseKcpConn(protoMsg.SessionId, kcp.EnetClientClose)
-	case cmd.PingReq:
-		// ping
-		req := protoMsg.PayloadMessage.(*proto.PingReq)
-		logger.Debug("user ping req, data: %v", req.String())
-		// 返回数据到客户端
-		rsp := new(proto.PingRsp)
-		rsp.ClientTime = req.ClientTime
-		msg := &ProtoMsg{
-			SessionId:      protoMsg.SessionId,
-			CmdId:          cmd.PingRsp,
-			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
-			PayloadMessage: rsp,
-		}
-		session.sendChan <- msg
-		if session.connState != ConnActive {
-			return
-		}
-		// 通知GS玩家客户端往返时延
-		rtt := uint32(0)
-		if !session.conn.IsTcpMode() {
-			logger.Debug("sessionId: %v, KcpRTO: %v, KcpSRTT: %v, KcpRTTVar: %v",
-				protoMsg.SessionId, session.conn.GetKcpRTO(), session.conn.GetKcpSRTT(), session.conn.GetKcpSRTTVar())
-			rtt = uint32(session.conn.GetKcpSRTT())
-		} else {
-			rtt = session.tcpRtt
-		}
-		connCtrlMsg := &mq.ConnCtrlMsg{
-			UserId:     session.userId,
-			ClientRtt:  rtt,
-			ClientTime: 0,
-		}
-		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
-			MsgType:     mq.MsgTypeConnCtrl,
-			EventId:     mq.ClientRttNotify,
-			ConnCtrlMsg: connCtrlMsg,
-		})
-		// 通知GS玩家客户端的本地时钟
-		connCtrlMsg = &mq.ConnCtrlMsg{
-			UserId:     session.userId,
-			ClientTime: req.ClientTime,
-		}
-		k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
-			MsgType:     mq.MsgTypeConnCtrl,
-			EventId:     mq.ClientTimeNotify,
-			ConnCtrlMsg: connCtrlMsg,
-		})
 	case cmd.PlayerLoginReq:
 		// GS登录包
 		if session.connState != ConnWaitLogin {
@@ -193,6 +150,26 @@ func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, sess
 			EventId: mq.NormalMsg,
 			GameMsg: gameMsg,
 		})
+		// 通知GS玩家客户端往返时延
+		if protoMsg.CmdId == cmd.PingReq {
+			rtt := uint32(0)
+			if !session.conn.IsTcpMode() {
+				logger.Debug("sessionId: %v, KcpRTO: %v, KcpSRTT: %v, KcpRTTVar: %v",
+					protoMsg.SessionId, session.conn.GetKcpRTO(), session.conn.GetKcpSRTT(), session.conn.GetKcpSRTTVar())
+				rtt = uint32(session.conn.GetKcpSRTT())
+			} else {
+				rtt = session.tcpRtt
+			}
+			connCtrlMsg := &mq.ConnCtrlMsg{
+				UserId:    session.userId,
+				ClientRtt: rtt,
+			}
+			k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
+				MsgType:     mq.MsgTypeConnCtrl,
+				EventId:     mq.ClientRttNotify,
+				ConnCtrlMsg: connCtrlMsg,
+			})
+		}
 	}
 }
 
@@ -253,23 +230,29 @@ func (k *KcpConnManager) gameMsgHandle(
 			logger.Error("session is nil, sessionId: %v", protoMsg.SessionId)
 			return
 		}
+		if session.connState == ConnClose {
+			return
+		}
 		if len(session.sendChan) == SessionSendChanLen {
 			logger.Error("session send chan is full, sessionId: %v", protoMsg.SessionId)
 			return
 		}
 		if protoMsg.CmdId == cmd.PlayerLoginRsp {
-			logger.Debug("session active, sessionId: %v", protoMsg.SessionId)
-			session.connState = ConnActive
-			// 通知GS玩家各个服务器的appid
-			serverMsg := &mq.ServerMsg{
-				UserId:               session.userId,
-				AnticheatServerAppId: session.anticheatServerAppId,
+			rsp := protoMsg.PayloadMessage.(*proto.PlayerLoginRsp)
+			if rsp.Retcode == 0 {
+				logger.Debug("session active, sessionId: %v", protoMsg.SessionId)
+				session.connState = ConnActive
+				// 通知GS玩家各个服务器的appid
+				serverMsg := &mq.ServerMsg{
+					UserId:               session.userId,
+					AnticheatServerAppId: session.anticheatServerAppId,
+				}
+				k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
+					MsgType:   mq.MsgTypeServer,
+					EventId:   mq.ServerAppidBindNotify,
+					ServerMsg: serverMsg,
+				})
 			}
-			k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
-				MsgType:   mq.MsgTypeServer,
-				EventId:   mq.ServerAppidBindNotify,
-				ServerMsg: serverMsg,
-			})
 		}
 		session.sendChan <- protoMsg
 	}

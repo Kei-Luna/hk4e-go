@@ -1688,99 +1688,96 @@ const (
 
 // cmd_player
 const (
-	GetPlayerTokenReq                             = 172
-	GetPlayerTokenRsp                             = 198
-	PlayerLoginReq                                = 112
-	PlayerLoginRsp                                = 135
-	PlayerLogoutReq                               = 107
-	PlayerLogoutRsp                               = 121
-	PlayerLogoutNotify                            = 103
-	PlayerDataNotify                              = 190
-	ChangeGameTimeReq                             = 173
-	ChangeGameTimeRsp                             = 199
-	PlayerGameTimeNotify                          = 131
-	PlayerPropNotify                              = 175
-	ClientTriggerEventNotify                      = 148
-	SetPlayerPropReq                              = 197
-	SetPlayerPropRsp                              = 181
-	SetPlayerBornDataReq                          = 105
-	SetPlayerBornDataRsp                          = 182
-	DoSetPlayerBornDataNotify                     = 147
-	PlayerPropChangeNotify                        = 139
-	SetPlayerNameReq                              = 153
-	SetPlayerNameRsp                              = 122
-	SetOpenStateReq                               = 165
-	SetOpenStateRsp                               = 104
-	OpenStateUpdateNotify                         = 193
-	OpenStateChangeNotify                         = 127
-	PlayerCookReq                                 = 194
-	PlayerCookRsp                                 = 188
-	PlayerRandomCookReq                           = 126
-	PlayerRandomCookRsp                           = 163
-	CookDataNotify                                = 195
-	CookRecipeDataNotify                          = 106
-	CookGradeDataNotify                           = 134
-	PlayerCompoundMaterialReq                     = 150
-	PlayerCompoundMaterialRsp                     = 143
-	TakeCompoundOutputReq                         = 174
-	TakeCompoundOutputRsp                         = 176
-	CompoundDataNotify                            = 146
-	GetCompoundDataReq                            = 141
-	GetCompoundDataRsp                            = 149
-	PlayerTimeNotify                              = 191
-	PlayerSetPauseReq                             = 124
-	PlayerSetPauseRsp                             = 156
-	PlayerSetLanguageReq                          = 142
-	PlayerSetLanguageRsp                          = 130
-	DataResVersionNotify                          = 167
-	DailyTaskDataNotify                           = 158
-	DailyTaskProgressNotify                       = 170
-	DailyTaskScoreRewardNotify                    = 117
-	WorldOwnerDailyTaskNotify                     = 102
-	AddRandTaskInfoNotify                         = 119
-	RemoveRandTaskInfoNotify                      = 161
-	TakePlayerLevelRewardReq                      = 129
-	TakePlayerLevelRewardRsp                      = 157
-	PlayerLevelRewardUpdateNotify                 = 200
-	GivingRecordNotify                            = 116
-	GivingRecordChangeNotify                      = 187
-	ItemGivingReq                                 = 140
-	ItemGivingRsp                                 = 118
-	PlayerCookArgsReq                             = 166
-	PlayerCookArgsRsp                             = 168
-	PlayerLuaShellNotify                          = 133
-	ServerDisconnectClientNotify                  = 184
-	AntiAddictNotify                              = 180
-	PlayerForceExitReq                            = 189
-	PlayerForceExitRsp                            = 159
-	PlayerInjectFixNotify                         = 132
-	TaskVarNotify                                 = 160
-	ClientLockGameTimeNotify                      = 114
-	GetNextResourceInfoReq                        = 192
-	GetNextResourceInfoRsp                        = 120
-	AdjustWorldLevelReq                           = 164
-	AdjustWorldLevelRsp                           = 138
-	DailyTaskFilterCityReq                        = 111
-	DailyTaskFilterCityRsp                        = 144
-	DailyTaskUnlockedCitiesNotify                 = 186
-	ExclusiveRuleNotify                           = 101
-	CompoundUnlockNotify                          = 128
-	GameplayRecommendationSkillRequest            = 151
-	GameplayRecommendationReliquaryRequest        = 151
-	GameplayRecommendationElementReliquaryRequest = 151
-	GetGameplayRecommendationReq                  = 151
-	GetGameplayRecommendationRsp                  = 123
-	TakeBackGivingItemReq                         = 171
-	TakeBackGivingItemRsp                         = 145
-	PlayerNicknameAuditDataNotify                 = 108
-	PlayerNicknameNotify                          = 109
-	NicknameAuditConfigNotify                     = 152
-	ReadNicknameAuditReq                          = 177
-	ReadNicknameAuditRsp                          = 137
-	PlayerCompoundMaterialBoostReq                = 185
-	PlayerCompoundMaterialBoostRsp                = 125
-	PlayerGameTimeByLuaNotify                     = 178
-	PlayerIpRegionNotify                          = 136
+	GetPlayerTokenReq              = 172
+	GetPlayerTokenRsp              = 198
+	PlayerLoginReq                 = 112
+	PlayerLoginRsp                 = 135
+	PlayerLogoutReq                = 107
+	PlayerLogoutRsp                = 121
+	PlayerLogoutNotify             = 103
+	PlayerDataNotify               = 190
+	ChangeGameTimeReq              = 173
+	ChangeGameTimeRsp              = 199
+	PlayerGameTimeNotify           = 131
+	PlayerPropNotify               = 175
+	ClientTriggerEventNotify       = 148
+	SetPlayerPropReq               = 197
+	SetPlayerPropRsp               = 181
+	SetPlayerBornDataReq           = 105
+	SetPlayerBornDataRsp           = 182
+	DoSetPlayerBornDataNotify      = 147
+	PlayerPropChangeNotify         = 139
+	SetPlayerNameReq               = 153
+	SetPlayerNameRsp               = 122
+	SetOpenStateReq                = 165
+	SetOpenStateRsp                = 104
+	OpenStateUpdateNotify          = 193
+	OpenStateChangeNotify          = 127
+	PlayerCookReq                  = 194
+	PlayerCookRsp                  = 188
+	PlayerRandomCookReq            = 126
+	PlayerRandomCookRsp            = 163
+	CookDataNotify                 = 195
+	CookRecipeDataNotify           = 106
+	CookGradeDataNotify            = 134
+	PlayerCompoundMaterialReq      = 150
+	PlayerCompoundMaterialRsp      = 143
+	TakeCompoundOutputReq          = 174
+	TakeCompoundOutputRsp          = 176
+	CompoundDataNotify             = 146
+	GetCompoundDataReq             = 141
+	GetCompoundDataRsp             = 149
+	PlayerTimeNotify               = 191
+	PlayerSetPauseReq              = 124
+	PlayerSetPauseRsp              = 156
+	PlayerSetLanguageReq           = 142
+	PlayerSetLanguageRsp           = 130
+	DataResVersionNotify           = 167
+	DailyTaskDataNotify            = 158
+	DailyTaskProgressNotify        = 170
+	DailyTaskScoreRewardNotify     = 117
+	WorldOwnerDailyTaskNotify      = 102
+	AddRandTaskInfoNotify          = 119
+	RemoveRandTaskInfoNotify       = 161
+	TakePlayerLevelRewardReq       = 129
+	TakePlayerLevelRewardRsp       = 157
+	PlayerLevelRewardUpdateNotify  = 200
+	GivingRecordNotify             = 116
+	GivingRecordChangeNotify       = 187
+	ItemGivingReq                  = 140
+	ItemGivingRsp                  = 118
+	PlayerCookArgsReq              = 166
+	PlayerCookArgsRsp              = 168
+	PlayerLuaShellNotify           = 133
+	ServerDisconnectClientNotify   = 184
+	AntiAddictNotify               = 180
+	PlayerForceExitReq             = 189
+	PlayerForceExitRsp             = 159
+	PlayerInjectFixNotify          = 132
+	TaskVarNotify                  = 160
+	ClientLockGameTimeNotify       = 114
+	GetNextResourceInfoReq         = 192
+	GetNextResourceInfoRsp         = 120
+	AdjustWorldLevelReq            = 164
+	AdjustWorldLevelRsp            = 138
+	DailyTaskFilterCityReq         = 111
+	DailyTaskFilterCityRsp         = 144
+	DailyTaskUnlockedCitiesNotify  = 186
+	ExclusiveRuleNotify            = 101
+	CompoundUnlockNotify           = 128
+	GetGameplayRecommendationReq   = 151
+	GetGameplayRecommendationRsp   = 123
+	TakeBackGivingItemReq          = 171
+	TakeBackGivingItemRsp          = 145
+	PlayerNicknameAuditDataNotify  = 108
+	PlayerNicknameNotify           = 109
+	NicknameAuditConfigNotify      = 152
+	ReadNicknameAuditReq           = 177
+	ReadNicknameAuditRsp           = 137
+	PlayerCompoundMaterialBoostReq = 185
+	PlayerCompoundMaterialBoostRsp = 125
+	PlayerGameTimeByLuaNotify      = 178
+	PlayerIpRegionNotify           = 136
 )
 
 // cmd_property
@@ -1896,7 +1893,6 @@ const (
 
 // cmd_reputation
 const (
-	CityReputationRequestInfo          = 2872
 	GetCityReputationInfoReq           = 2872
 	GetCityReputationInfoRsp           = 2898
 	TakeCityReputationLevelRewardReq   = 2812
@@ -4082,9 +4078,6 @@ func (c *CmdProtoMap) registerAllMessage() {
 	c.regMsg(DailyTaskUnlockedCitiesNotify, func() any { return new(proto.DailyTaskUnlockedCitiesNotify) })
 	c.regMsg(ExclusiveRuleNotify, func() any { return new(proto.ExclusiveRuleNotify) })
 	c.regMsg(CompoundUnlockNotify, func() any { return new(proto.CompoundUnlockNotify) })
-	c.regMsg(GameplayRecommendationSkillRequest, func() any { return new(proto.GameplayRecommendationSkillRequest) })
-	c.regMsg(GameplayRecommendationReliquaryRequest, func() any { return new(proto.GameplayRecommendationReliquaryRequest) })
-	c.regMsg(GameplayRecommendationElementReliquaryRequest, func() any { return new(proto.GameplayRecommendationElementReliquaryRequest) })
 	c.regMsg(GetGameplayRecommendationReq, func() any { return new(proto.GetGameplayRecommendationReq) })
 	c.regMsg(GetGameplayRecommendationRsp, func() any { return new(proto.GetGameplayRecommendationRsp) })
 	c.regMsg(TakeBackGivingItemReq, func() any { return new(proto.TakeBackGivingItemReq) })
@@ -4199,7 +4192,6 @@ func (c *CmdProtoMap) registerAllMessage() {
 	c.regMsg(ServerMessageNotify, func() any { return new(proto.ServerMessageNotify) })
 
 	// cmd_reputation
-	c.regMsg(CityReputationRequestInfo, func() any { return new(proto.CityReputationRequestInfo) })
 	c.regMsg(GetCityReputationInfoReq, func() any { return new(proto.GetCityReputationInfoReq) })
 	c.regMsg(GetCityReputationInfoRsp, func() any { return new(proto.GetCityReputationInfoRsp) })
 	c.regMsg(TakeCityReputationLevelRewardReq, func() any { return new(proto.TakeCityReputationLevelRewardReq) })

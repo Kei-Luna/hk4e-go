@@ -303,6 +303,28 @@ func forwardLoop(session *net.Session, messageQueue *mq.MessageQueue, gateAppId 
 }
 
 func runRobot() {
+	if config.GetConfig().Hk4eRobot.DosEnable {
+		dosBatchNum := int(config.GetConfig().Hk4eRobot.DosBatchNum)
+		for i := 0; i < int(config.GetConfig().Hk4eRobot.DosTotalNum); i += dosBatchNum {
+			wg := new(sync.WaitGroup)
+			wg.Add(dosBatchNum)
+			for j := 0; j < dosBatchNum; j++ {
+				go httpLogin(config.GetConfig().Hk4eRobot.Account+strconv.Itoa(i+j), wg)
+			}
+			wg.Wait()
+			time.Sleep(time.Millisecond * 10)
+		}
+	} else {
+		httpLogin(config.GetConfig().Hk4eRobot.Account, nil)
+	}
+}
+
+func httpLogin(account string, wg *sync.WaitGroup) {
+	defer func() {
+		if config.GetConfig().Hk4eRobot.DosEnable {
+			wg.Done()
+		}
+	}()
 	dispatchInfo, err := login.GetDispatchInfo(config.GetConfig().Hk4eRobot.RegionListUrl,
 		config.GetConfig().Hk4eRobot.RegionListParam,
 		config.GetConfig().Hk4eRobot.CurRegionUrl,
@@ -312,27 +334,6 @@ func runRobot() {
 		logger.Error("get dispatch info error: %v", err)
 		return
 	}
-	if config.GetConfig().Hk4eRobot.DosEnable {
-		dosBatchNum := int(config.GetConfig().Hk4eRobot.DosBatchNum)
-		for i := 0; i < int(config.GetConfig().Hk4eRobot.DosTotalNum); i += dosBatchNum {
-			wg := new(sync.WaitGroup)
-			wg.Add(dosBatchNum)
-			for j := 0; j < dosBatchNum; j++ {
-				go httpLogin(config.GetConfig().Hk4eRobot.Account+"_"+strconv.Itoa(i+j), dispatchInfo, wg)
-			}
-			wg.Wait()
-		}
-	} else {
-		httpLogin(config.GetConfig().Hk4eRobot.Account, dispatchInfo, nil)
-	}
-}
-
-func httpLogin(account string, dispatchInfo *login.DispatchInfo, wg *sync.WaitGroup) {
-	defer func() {
-		if config.GetConfig().Hk4eRobot.DosEnable {
-			wg.Done()
-		}
-	}()
 	accountInfo, err := login.AccountLogin(config.GetConfig().Hk4eRobot.LoginSdkUrl, account, config.GetConfig().Hk4eRobot.Password)
 	if err != nil {
 		logger.Error("account login error: %v", err)

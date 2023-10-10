@@ -15,6 +15,7 @@ import (
 
 func (r *RouteManager) initRoute() {
 	r.handlerFuncRouteMap = map[uint16]HandlerFunc{
+		cmd.PingReq:                           GAME.PingReq,
 		cmd.SetPlayerBornDataReq:              GAME.SetPlayerBornDataReq,
 		cmd.QueryPathReq:                      GAME.QueryPathReq,
 		cmd.UnionCmdNotify:                    GAME.UnionCmdNotify,
@@ -186,8 +187,6 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 		switch netMsg.EventId {
 		case mq.ClientRttNotify:
 			GAME.ClientRttNotify(connCtrlMsg.UserId, connCtrlMsg.ClientRtt)
-		case mq.ClientTimeNotify:
-			GAME.ClientTimeNotify(connCtrlMsg.UserId, connCtrlMsg.ClientTime)
 		case mq.UserOfflineNotify:
 			GAME.OnOffline(connCtrlMsg.UserId, &ChangeGsInfo{
 				IsChangeGs: false,

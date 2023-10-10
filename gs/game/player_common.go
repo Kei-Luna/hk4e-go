@@ -16,6 +16,23 @@ import (
 	pb "google.golang.org/protobuf/proto"
 )
 
+func (g *Game) PingReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.PingReq)
+
+	player.ClientTime = req.ClientTime
+	now := uint32(time.Now().Unix())
+	// 客户端与服务器时间相差太过严重
+	if math.Abs(float64(now-player.ClientTime)) > 600.0 {
+		logger.Debug("abs of client time and server time above 600s, uid: %v", player.PlayerId)
+	}
+	player.LastKeepaliveTime = now
+
+	g.SendMsg(cmd.PingRsp, player.PlayerId, player.ClientSeq, &proto.PingRsp{
+		ClientTime: req.ClientTime,
+		Seq:        req.Seq,
+	})
+}
+
 func (g *Game) PlayerSetPauseReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerSetPauseReq)
 	isPaused := req.IsPaused
@@ -48,21 +65,6 @@ func (g *Game) ClientRttNotify(userId uint32, clientRtt uint32) {
 	}
 	// logger.Debug("client rtt notify, uid: %v, rtt: %v", userId, clientRtt)
 	player.ClientRTT = clientRtt
-}
-
-func (g *Game) ClientTimeNotify(userId uint32, clientTime uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	player.ClientTime = clientTime
-	now := uint32(time.Now().Unix())
-	// 客户端与服务器时间相差太过严重
-	if math.Abs(float64(now-player.ClientTime)) > 600.0 {
-		logger.Debug("abs of client time and server time above 600s, uid: %v", userId)
-	}
-	player.LastKeepaliveTime = now
 }
 
 func (g *Game) ServerAnnounceNotify(announceId uint32, announceMsg string) {

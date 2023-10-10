@@ -35,7 +35,6 @@ type GameMsg struct {
 
 const (
 	ClientRttNotify   = iota // 客户端网络时延上报
-	ClientTimeNotify         // 客户端本地时间上报
 	KickPlayerNotify         // 通知GATE剔除玩家
 	UserOfflineNotify        // 玩家离线通知GS
 )
@@ -43,7 +42,6 @@ const (
 type ConnCtrlMsg struct {
 	UserId     uint32
 	ClientRtt  uint32
-	ClientTime uint32
 	KickUserId uint32
 	KickReason uint32
 }

@@ -22,7 +22,7 @@ const (
 )
 
 type WorldManager struct {
-	worldMap            map[uint32]*World
+	worldMap            map[uint64]*World
 	snowflake           *alg.SnowflakeWorker
 	aiWorld             *World                     // 本服的Ai玩家世界
 	sceneBlockAoiMap    map[uint32]*alg.AoiManager // 全局各场景地图的aoi管理器
@@ -31,23 +31,23 @@ type WorldManager struct {
 
 func NewWorldManager(snowflake *alg.SnowflakeWorker) (r *WorldManager) {
 	r = new(WorldManager)
-	r.worldMap = make(map[uint32]*World)
+	r.worldMap = make(map[uint64]*World)
 	r.snowflake = snowflake
 	r.LoadSceneBlockAoiMap()
 	r.multiplayerWorldNum = 0
 	return r
 }
 
-func (w *WorldManager) GetWorldById(worldId uint32) *World {
+func (w *WorldManager) GetWorldById(worldId uint64) *World {
 	return w.worldMap[worldId]
 }
 
-func (w *WorldManager) GetAllWorld() map[uint32]*World {
+func (w *WorldManager) GetAllWorld() map[uint64]*World {
 	return w.worldMap
 }
 
 func (w *WorldManager) CreateWorld(owner *model.Player) *World {
-	worldId := uint32(w.snowflake.GenId())
+	worldId := uint64(w.snowflake.GenId())
 	world := &World{
 		id:                   worldId,
 		owner:                owner,
@@ -80,7 +80,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 	return world
 }
 
-func (w *WorldManager) DestroyWorld(worldId uint32) {
+func (w *WorldManager) DestroyWorld(worldId uint64) {
 	world := w.GetWorldById(worldId)
 	for _, player := range world.playerMap {
 		world.RemovePlayer(player)
@@ -204,7 +204,7 @@ type EnterSceneContext struct {
 
 // World 世界数据结构
 type World struct {
-	id                   uint32
+	id                   uint64
 	owner                *model.Player
 	playerMap            map[uint32]*model.Player
 	sceneMap             map[uint32]*Scene
@@ -227,7 +227,7 @@ func (w *World) GetBulletPhysicsEngine() *PhysicsEngine {
 	return w.bulletPhysicsEngine
 }
 
-func (w *World) GetId() uint32 {
+func (w *World) GetId() uint64 {
 	return w.id
 }
 

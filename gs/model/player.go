@@ -59,7 +59,7 @@ type Player struct {
 	// 在线数据 请随意 记得加忽略字段的tag
 	LastSaveTime              uint32                                   `bson:"-" msgpack:"-"` // 上一次存档保存时间
 	DbState                   int                                      `bson:"-" msgpack:"-"` // 数据库存档状态
-	WorldId                   uint32                                   `bson:"-" msgpack:"-"` // 所在的世界id
+	WorldId                   uint64                                   `bson:"-" msgpack:"-"` // 所在的世界id
 	GameObjectGuidCounter     uint64                                   `bson:"-" msgpack:"-"` // 游戏对象guid计数器
 	LastKeepaliveTime         uint32                                   `bson:"-" msgpack:"-"` // 上一次保持活跃时间
 	ClientTime                uint32                                   `bson:"-" msgpack:"-"` // 客户端本地时钟

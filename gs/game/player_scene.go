@@ -902,7 +902,7 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
 	group := scene.GetGroupById(uint32(groupConfig.Id))
 	if group == nil {
-		logger.Error("group not exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerId)
+		// logger.Error("group not exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerId)
 		return
 	}
 	for suiteId := range group.GetAllSuite() {
