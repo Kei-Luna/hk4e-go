@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math"
 
@@ -25,36 +26,41 @@ const (
 	PUBG_FIRST_AREA_REDUCE_TIME = 600.0
 )
 
+const (
+	PUBG_ATK = 100.0
+	PUBG_HP  = 1000.0
+)
+
 // PluginPubg pubg游戏插件
 type PluginPubg struct {
 	*Plugin
-	world                 *World                // 世界对象
-	blueAreaCenterPos     *model.Vector         // 蓝区中心点
-	blueAreaRadius        float64               // 蓝区半径
-	safeAreaCenterPos     *model.Vector         // 安全区中心点
-	safeAreaRadius        float64               // 安全区半径
-	phase                 int                   // 阶段
-	areaReduceRadiusSpeed float64               // 缩圈半径速度
-	areaReduceXSpeed      float64               // 缩圈X速度
-	areaReduceZSpeed      float64               // 缩圈Z速度
-	areaPointList         []*proto.MapMarkPoint // 客户端区域地图坐标列表
-	playerAtkMap          map[uint32]float32    // 玩家攻击力集合
+	world                    *World                // 世界对象
+	blueAreaCenterPos        *model.Vector         // 蓝区中心点
+	blueAreaRadius           float64               // 蓝区半径
+	safeAreaCenterPos        *model.Vector         // 安全区中心点
+	safeAreaRadius           float64               // 安全区半径
+	phase                    int                   // 阶段
+	areaReduceRadiusSpeed    float64               // 缩圈半径速度
+	areaReduceXSpeed         float64               // 缩圈X速度
+	areaReduceZSpeed         float64               // 缩圈Z速度
+	areaPointList            []*proto.MapMarkPoint // 客户端区域地图坐标列表
+	entityIdWorldGadgetIdMap map[uint32]int32      // 实体id世界物件id映射集合
 }
 
 func NewPluginPubg() *PluginPubg {
 	p := &PluginPubg{
-		Plugin:                NewPlugin(),
-		world:                 nil,
-		blueAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
-		blueAreaRadius:        0.0,
-		safeAreaCenterPos:     &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
-		safeAreaRadius:        0.0,
-		phase:                 PUBG_PHASE_WAIT,
-		areaReduceRadiusSpeed: 0.0,
-		areaReduceXSpeed:      0.0,
-		areaReduceZSpeed:      0.0,
-		areaPointList:         make([]*proto.MapMarkPoint, 0),
-		playerAtkMap:          make(map[uint32]float32),
+		Plugin:                   NewPlugin(),
+		world:                    nil,
+		blueAreaCenterPos:        &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
+		blueAreaRadius:           0.0,
+		safeAreaCenterPos:        &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
+		safeAreaRadius:           0.0,
+		phase:                    PUBG_PHASE_WAIT,
+		areaReduceRadiusSpeed:    0.0,
+		areaReduceXSpeed:         0.0,
+		areaReduceZSpeed:         0.0,
+		areaPointList:            make([]*proto.MapMarkPoint, 0),
+		entityIdWorldGadgetIdMap: make(map[uint32]int32),
 	}
 	return p
 }
@@ -66,6 +72,7 @@ func (p *PluginPubg) OnEnable() {
 	p.ListenEvent(PluginEventIdMarkMap, PluginEventPriorityNormal, p.EventMarkMap)
 	p.ListenEvent(PluginEventIdAvatarDieAnimationEnd, PluginEventPriorityNormal, p.EventAvatarDieAnimationEnd)
 	p.ListenEvent(PluginEventIdGadgetInteract, PluginEventPriorityNormal, p.EventGadgetInteract)
+	p.ListenEvent(PluginEventIdPostEnterScene, PluginEventPriorityNormal, p.EventPostEnterScene)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
 	p.AddGlobalTick(PluginGlobalTickHour, p.GlobalTickHourStart)
@@ -120,8 +127,28 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	if !p.IsStartPubg() || p.world.id != player.WorldId {
 		return
 	}
-	p.playerAtkMap[player.PlayerId] += 100.0
 	req := event.Req
+	worldGadgetId, exist := p.entityIdWorldGadgetIdMap[req.GadgetEntityId]
+	if exist {
+		dbAvatar := player.GetDbAvatar()
+		avatarId := p.world.GetPlayerActiveAvatarId(player)
+		avatar := dbAvatar.AvatarMap[avatarId]
+		pubgWorldGadgetDataConfig := gdconf.GetPubgWorldGadgetDataById(worldGadgetId)
+		switch pubgWorldGadgetDataConfig.Type {
+		case gdconf.PubgWorldGadgetTypeIncAtk:
+			avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
+			avatar.FightPropMap[constant.FIGHT_PROP_CUR_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
+		case gdconf.PubgWorldGadgetTypeIncHp:
+			avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] += float32(pubgWorldGadgetDataConfig.Param[0])
+			if avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] > avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP] {
+				avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP]
+			}
+		}
+		GAME.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
+			AvatarGuid:   avatar.Guid,
+			FightPropMap: avatar.FightPropMap,
+		})
+	}
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
@@ -137,6 +164,33 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	}
 	GAME.SendMsg(cmd.GadgetInteractRsp, player.PlayerId, player.ClientSeq, rsp)
 	event.Cancel()
+}
+
+func (p *PluginPubg) EventPostEnterScene(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventPostEnterScene)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.id != player.WorldId {
+		return
+	}
+	// 开启GM按钮 隐藏多人世界玩家位置地图标记
+	// local btnGm = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMainPage/GrpMainPage/GrpMainBtn/GrpMainToggle/GrpTopPanel/BtnGm")
+	// btnGm:SetActive(true)
+	// local miniMapMarkLayer3 = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMainPage/GrpMainPage/MapInfo/GrpMiniMap/GrpMap/MarkContainer/Layer3")
+	// miniMapMarkLayer3:SetActive(false)
+	// local mapMarkLayer3 = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMapPage/GrpMap/MarkContainer/Layer3")
+	// mapMarkLayer3:SetActive(false)
+	luac, err := base64.StdEncoding.DecodeString("G0x1YVMBGZMNChoKBAQICHhWAAAAAAAAAAAAAAAod0ABDkBhaV93b3JsZC5sdWEAAAAAAAAAAAABBhwAAAAkAEAAKUBAACmAQAApwEAAVgABACyAAAFdQEEA2ACAAGxAgAFkAEAAaUDAAGmAwABpwMAAloABAGyAAAGdQMEAGAEAAKxAgAGkAEAAqUBAAamAQAGpwEAB1sABAKyAAAHdQEEBWAEAAOxAgAEZAIAACAAAAAQDQ1MEDFVuaXR5RW5naW5lBAtHYW1lT2JqZWN0BAVGaW5kFFUvQ2FudmFzL1BhZ2VzL0luTGV2ZWxNYWluUGFnZS9HcnBNYWluUGFnZS9HcnBNYWluQnRuL0dycE1haW5Ub2dnbGUvR3JwVG9wUGFuZWwvQnRuR20EClNldEFjdGl2ZRRZL0NhbnZhcy9QYWdlcy9JbkxldmVsTWFpblBhZ2UvR3JwTWFpblBhZ2UvTWFwSW5mby9HcnBNaW5pTWFwL0dycE1hcC9NYXJrQ29udGFpbmVyL0xheWVyMxQ5L0NhbnZhcy9QYWdlcy9JbkxldmVsTWFwUGFnZS9HcnBNYXAvTWFya0NvbnRhaW5lci9MYXllcjMBAAAAAQAAAAAAHAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAIAAAACAAAAAgAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAQAAAAEAAAABAAAAAUAAAAFAAAABQAAAAUAAAAFAAAABQAAAAYAAAAGAAAABgAAAAYAAAADAAAABmJ0bkdtBgAAABwAAAASbWluaU1hcE1hcmtMYXllcjMPAAAAHAAAAA5tYXBNYXJrTGF5ZXIzGAAAABwAAAABAAAABV9FTlY=")
+	if err != nil {
+		logger.Error("decode luac error: %v", err)
+		return
+	}
+	GAME.SendMsg(cmd.PlayerLuaShellNotify, player.PlayerId, 0, &proto.PlayerLuaShellNotify{
+		ShellType: proto.LuaShellType_LUASHELL_NORMAL,
+		Id:        1,
+		LuaShell:  luac,
+		UseType:   1,
+	})
 }
 
 /************************************************** 全局定时器 **************************************************/
@@ -260,19 +314,38 @@ func (p *PluginPubg) StartPubg() {
 	world := WORLD_MANAGER.GetAiWorld()
 	p.world = world
 	for _, pubgWorldGadgetDataConfig := range gdconf.GetPubgWorldGadgetDataMap() {
-		GAME.CreateGadget(
+		rn := random.GetRandomInt32(1, 100)
+		if rn > pubgWorldGadgetDataConfig.Probability {
+			continue
+		}
+		entityId := GAME.CreateGadget(
 			p.world.GetOwner(),
 			&model.Vector{X: float64(pubgWorldGadgetDataConfig.X), Y: float64(pubgWorldGadgetDataConfig.Y), Z: float64(pubgWorldGadgetDataConfig.Z)},
 			uint32(pubgWorldGadgetDataConfig.GadgetId),
 			nil,
 		)
-	}
-	for uid := range p.world.GetAllPlayer() {
-		p.playerAtkMap[uid] = 100.0
+		p.entityIdWorldGadgetIdMap[entityId] = pubgWorldGadgetDataConfig.WorldGadgetId
 	}
 	p.phase = PUBG_PHASE_START
 	p.RefreshArea()
 	world.chatMsgList = make([]*proto.ChatInfo, 0)
+	for _, player := range world.GetAllPlayer() {
+		dbAvatar := player.GetDbAvatar()
+		avatarId := p.world.GetPlayerActiveAvatarId(player)
+		avatar := dbAvatar.AvatarMap[avatarId]
+		for k := range avatar.FightPropMap {
+			avatar.FightPropMap[k] = 0.0
+		}
+		avatar.FightPropMap[constant.FIGHT_PROP_BASE_HP] = PUBG_HP
+		avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP] = PUBG_HP
+		avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = PUBG_HP
+		avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK] = PUBG_ATK
+		avatar.FightPropMap[constant.FIGHT_PROP_CUR_ATTACK] = PUBG_ATK
+		GAME.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
+			AvatarGuid:   avatar.Guid,
+			FightPropMap: avatar.FightPropMap,
+		})
+	}
 }
 
 // StopPubg 结束pubg游戏

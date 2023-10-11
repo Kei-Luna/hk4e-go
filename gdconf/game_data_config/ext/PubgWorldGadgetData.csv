@@ -1,4 +1,6 @@
-Id,GadgetId,X,Y,Z
-int32,int32,float32,float32,float32
-ID,物件ID,X坐标,Y坐标,Z坐标
-1,70520009,396.491,201.000,-353.049
+WorldGadgetId,GadgetId,X,Y,Z,Probability,Type,Param
+int32,int32,float32,float32,float32,int32,int32,[]int32
+ID,物件ID,X坐标,Y坐标,Z坐标,概率,类型,参数
+1,70520009,396.491,201.211,-353.049,100,1,100
+2,70520009,395.491,201.211,-353.049,80,1,500
+3,70520009,394.491,201.211,-353.049,60,2,300

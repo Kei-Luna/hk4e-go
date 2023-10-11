@@ -34,6 +34,7 @@ const (
 	PluginEventIdMarkMap
 	PluginEventIdAvatarDieAnimationEnd
 	PluginEventIdGadgetInteract
+	PluginEventIdPostEnterScene
 )
 
 // PluginEventKillAvatar 角色被杀死
@@ -63,6 +64,13 @@ type PluginEventGadgetInteract struct {
 	*PluginEvent
 	Player *model.Player            // 玩家
 	Req    *proto.GadgetInteractReq // 请求
+}
+
+// PluginEventPostEnterScene 进入场景后
+type PluginEventPostEnterScene struct {
+	*PluginEvent
+	Player *model.Player            // 玩家
+	Req    *proto.PostEnterSceneReq // 请求
 }
 
 type PluginEventFunc func(event IPluginEvent)

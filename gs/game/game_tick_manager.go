@@ -327,15 +327,8 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		scene := world.GetSceneById(rigidBody.sceneId)
 		defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
 		defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
-		iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
-		if err != nil {
-			logger.Error("get plugin pubg error: %v", err)
-			return
-		}
-		pluginPubg := iPlugin.(*PluginPubg)
 		entity := scene.GetEntity(rigidBody.avatarEntityId)
-		avatarEntity := entity.GetAvatarEntity()
-		atk := pluginPubg.playerAtkMap[avatarEntity.GetUid()]
+		atk := entity.fightProp[constant.FIGHT_PROP_CUR_ATTACK]
 		GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
 			AttackResult: &proto.AttackResult{
 				AttackerId: rigidBody.avatarEntityId,

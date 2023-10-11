@@ -1,7 +1,6 @@
 package game
 
 import (
-	"encoding/base64"
 	"math"
 	"strconv"
 	"time"
@@ -29,6 +28,7 @@ const (
 
 /************************************************** 接口请求 **************************************************/
 
+// EnterSceneReadyReq 准备进入场景
 func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EnterSceneReadyReq)
 	logger.Debug("player enter scene ready, uid: %v", player.PlayerId)
@@ -105,6 +105,7 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.EnterSceneReadyRsp, player.PlayerId, player.ClientSeq, enterSceneReadyRsp)
 }
 
+// SceneInitFinishReq 场景初始化完成
 func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.SceneInitFinishReq)
 	logger.Debug("player scene init finish, uid: %v", player.PlayerId)
@@ -288,6 +289,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 	player.SceneLoadState = model.SceneInitFinish
 }
 
+// EnterSceneDoneReq 进入场景完成
 func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.EnterSceneDoneReq)
 	logger.Debug("player enter scene done, uid: %v", player.PlayerId)
@@ -386,6 +388,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 }
 
+// PostEnterSceneReq 进入场景后
 func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PostEnterSceneReq)
 	logger.Debug("player post enter scene, uid: %v", player.PlayerId)
@@ -410,25 +413,13 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	g.SendMsg(cmd.PostEnterSceneRsp, player.PlayerId, player.ClientSeq, postEnterSceneRsp)
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		// 开启GM按钮 隐藏多人世界玩家位置地图标记
-		// local btnGm = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMainPage/GrpMainPage/GrpMainBtn/GrpMainToggle/GrpTopPanel/BtnGm")
-		// btnGm:SetActive(true)
-		// local miniMapMarkLayer3 = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMainPage/GrpMainPage/MapInfo/GrpMiniMap/GrpMap/MarkContainer/Layer3")
-		// miniMapMarkLayer3:SetActive(false)
-		// local mapMarkLayer3 = CS.UnityEngine.GameObject.Find("/Canvas/Pages/InLevelMapPage/GrpMap/MarkContainer/Layer3")
-		// mapMarkLayer3:SetActive(false)
-		luac, err := base64.StdEncoding.DecodeString("G0x1YVMBGZMNChoKBAQICHhWAAAAAAAAAAAAAAAod0ABDkBhaV93b3JsZC5sdWEAAAAAAAAAAAABBhwAAAAkAEAAKUBAACmAQAApwEAAVgABACyAAAFdQEEA2ACAAGxAgAFkAEAAaUDAAGmAwABpwMAAloABAGyAAAGdQMEAGAEAAKxAgAGkAEAAqUBAAamAQAGpwEAB1sABAKyAAAHdQEEBWAEAAOxAgAEZAIAACAAAAAQDQ1MEDFVuaXR5RW5naW5lBAtHYW1lT2JqZWN0BAVGaW5kFFUvQ2FudmFzL1BhZ2VzL0luTGV2ZWxNYWluUGFnZS9HcnBNYWluUGFnZS9HcnBNYWluQnRuL0dycE1haW5Ub2dnbGUvR3JwVG9wUGFuZWwvQnRuR20EClNldEFjdGl2ZRRZL0NhbnZhcy9QYWdlcy9JbkxldmVsTWFpblBhZ2UvR3JwTWFpblBhZ2UvTWFwSW5mby9HcnBNaW5pTWFwL0dycE1hcC9NYXJrQ29udGFpbmVyL0xheWVyMxQ5L0NhbnZhcy9QYWdlcy9JbkxldmVsTWFwUGFnZS9HcnBNYXAvTWFya0NvbnRhaW5lci9MYXllcjMBAAAAAQAAAAAAHAAAAAEAAAABAAAAAQAAAAEAAAABAAAAAQAAAAIAAAACAAAAAgAAAAMAAAADAAAAAwAAAAMAAAADAAAAAwAAAAQAAAAEAAAABAAAAAUAAAAFAAAABQAAAAUAAAAFAAAABQAAAAYAAAAGAAAABgAAAAYAAAADAAAABmJ0bkdtBgAAABwAAAASbWluaU1hcE1hcmtMYXllcjMPAAAAHAAAAA5tYXBNYXJrTGF5ZXIzGAAAABwAAAABAAAABV9FTlY=")
-		if err != nil {
-			logger.Error("decode luac error: %v", err)
-			return
-		}
-		g.SendMsg(cmd.PlayerLuaShellNotify, player.PlayerId, 0, &proto.PlayerLuaShellNotify{
-			ShellType: proto.LuaShellType_LUASHELL_NORMAL,
-			Id:        1,
-			LuaShell:  luac,
-			UseType:   1,
-		})
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdPostEnterScene, &PluginEventPostEnterScene{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Req:         req,
+	}) {
+		return
 	}
 }
 
@@ -1184,7 +1175,7 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 }
 
 // CreateGadget 创建物件实体
-func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId uint32, normalEntity *GadgetNormalEntity) {
+func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId uint32, normalEntity *GadgetNormalEntity) uint32 {
 	if normalEntity == nil {
 		normalEntity = &GadgetNormalEntity{
 			isDrop: false,
@@ -1194,7 +1185,7 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 	}
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		return
+		return 0
 	}
 	scene := world.GetSceneById(player.SceneId)
 	if pos == nil {
@@ -1212,6 +1203,7 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 		0, 0,
 	)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
+	return entityId
 }
 
 // CreateDropGadget 创建掉落物的物件实体

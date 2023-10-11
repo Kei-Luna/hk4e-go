@@ -497,6 +497,12 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil || WORLD_MANAGER.IsAiWorld(world) {
+		return
+	}
+
 	dbAvatar := player.GetDbAvatar()
 	avatar, ok := dbAvatar.AvatarMap[avatarId]
 	if !ok {
