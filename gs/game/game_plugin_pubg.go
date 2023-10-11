@@ -75,7 +75,7 @@ func (p *PluginPubg) OnEnable() {
 	p.ListenEvent(PluginEventIdPostEnterScene, PluginEventPriorityNormal, p.EventPostEnterScene)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
-	p.AddGlobalTick(PluginGlobalTickHour, p.GlobalTickHourStart)
+	p.AddGlobalTick(PluginGlobalTickHourChange, p.GlobalTickHourStart)
 	// 注册命令
 	p.RegCommandController(p.NewPubgCommandController())
 }

@@ -7,7 +7,7 @@ forward_mode_enable = false # 是否开启网关到机器人的转发功能
 version = "300,310,315,320" # 支持的客户端协议版本号 三位数字 多个以逗号分隔 如300,310,315,320
 gate_tcp_mq_addr = "127.0.0.1" # 访问网关tcp直连消息队列的地址 填网关的内网地址
 gate_tcp_mq_port = 33333 # tcp消息队列端口号
-login_sdk_url = "http://127.0.0.1:8080" # 网关登录验证token的sdk服务器地址 目前填dispatch的内网地址
+login_sdk_url = "http://127.0.0.1:8080/gate/token/verify" # 网关登录验证token的sdk服务器地址 目前填dispatch的内网地址
 login_sdk_account_key = "" # sdk服务器账号验证的签名密钥
 
 [logger]

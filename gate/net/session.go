@@ -478,7 +478,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	signData := signHash.Sum(nil)
 	sign := hex.EncodeToString(signData)
 	tokenVerifyRsp, err := httpclient.PostJson[controller.TokenVerifyRsp](
-		config.GetConfig().Hk4e.LoginSdkUrl+"/gate/token/verify",
+		config.GetConfig().Hk4e.LoginSdkUrl,
 		&controller.TokenVerifyReq{
 			AppID:      1,
 			ChannelID:  1,

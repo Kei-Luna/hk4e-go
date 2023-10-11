@@ -138,6 +138,9 @@ const (
 	PluginGlobalTick10Second
 	PluginGlobalTickMinute
 	PluginGlobalTickHour
+	PluginGlobalTickHourChange
+	PluginGlobalTickDayChange
+	PluginGlobalTickMonthChange
 )
 
 // PluginUserTimerFunc 用户timer处理函数

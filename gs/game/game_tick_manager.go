@@ -215,12 +215,15 @@ func (t *TickManager) OnGameServerTick() {
 	}
 	if tm.Hour() != t.tm.Hour() {
 		t.onHourChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHourChange)
 	}
 	if tm.Day() != t.tm.Day() {
 		t.onDayChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickDayChange)
 	}
 	if tm.Month() != t.tm.Month() {
 		t.onMonthChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMonthChange)
 	}
 	t.tm = tm
 }
