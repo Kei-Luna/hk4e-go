@@ -8,6 +8,7 @@ import (
 	"hk4e/gs/dao"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
+	"hk4e/protocol/proto"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -90,16 +91,16 @@ func (u *UserManager) DeleteUser(userId uint32) {
 }
 
 type PlayerLoginInfo struct {
-	UserId         uint32
-	Player         *model.Player
-	ClientSeq      uint32
-	GateAppId      string
-	JoinHostUserId uint32
-	Ok             bool
+	UserId    uint32
+	Player    *model.Player
+	ClientSeq uint32
+	GateAppId string
+	Req       *proto.PlayerLoginReq
+	Ok        bool
 }
 
 // OnlineUser 玩家上线
-func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId string, joinHostUserId uint32) {
+func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId string, req *proto.PlayerLoginReq) {
 	_, exist := u.playerMap[userId]
 	// 正常登录
 	if exist {
@@ -148,12 +149,12 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: LoadLoginUserFromDbFinish,
 			Msg: &PlayerLoginInfo{
-				UserId:         userId,
-				Player:         player,
-				ClientSeq:      clientSeq,
-				GateAppId:      gateAppId,
-				JoinHostUserId: joinHostUserId,
-				Ok:             true,
+				UserId:    userId,
+				Player:    player,
+				ClientSeq: clientSeq,
+				GateAppId: gateAppId,
+				Req:       req,
+				Ok:        true,
 			},
 		}
 		// 解离线玩家数据分布式锁

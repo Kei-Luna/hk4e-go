@@ -124,19 +124,19 @@ func (g *Game) ObstacleModifyNotify(player *model.Player, payloadMsg pb.Message)
 
 // WorldPlayerRTTNotify 世界里所有玩家的网络延迟广播
 func (g *Game) WorldPlayerRTTNotify(world *World) {
-	worldPlayerRTTNotify := &proto.WorldPlayerRTTNotify{
+	ntf := &proto.WorldPlayerRTTNotify{
 		PlayerRttList: make([]*proto.PlayerRTTInfo, 0),
 	}
 	for _, worldPlayer := range world.GetAllPlayer() {
 		playerRTTInfo := &proto.PlayerRTTInfo{Uid: worldPlayer.PlayerId, Rtt: worldPlayer.ClientRTT}
-		worldPlayerRTTNotify.PlayerRttList = append(worldPlayerRTTNotify.PlayerRttList, playerRTTInfo)
+		ntf.PlayerRttList = append(ntf.PlayerRttList, playerRTTInfo)
 	}
-	g.SendToWorldA(world, cmd.WorldPlayerRTTNotify, 0, worldPlayerRTTNotify)
+	g.SendToWorldA(world, cmd.WorldPlayerRTTNotify, 0, ntf, 0)
 }
 
 // WorldPlayerLocationNotify 多人世界其他玩家的坐标位置广播
 func (g *Game) WorldPlayerLocationNotify(world *World) {
-	worldPlayerLocationNotify := &proto.WorldPlayerLocationNotify{
+	ntf := &proto.WorldPlayerLocationNotify{
 		PlayerWorldLocList: make([]*proto.PlayerWorldLocationInfo, 0),
 	}
 	for _, worldPlayer := range world.GetAllPlayer() {
@@ -162,14 +162,14 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 			playerWorldLocationInfo.PlayerLoc.Rot = new(proto.Vector)
 		}
 
-		worldPlayerLocationNotify.PlayerWorldLocList = append(worldPlayerLocationNotify.PlayerWorldLocList, playerWorldLocationInfo)
+		ntf.PlayerWorldLocList = append(ntf.PlayerWorldLocList, playerWorldLocationInfo)
 	}
-	g.SendToWorldA(world, cmd.WorldPlayerLocationNotify, 0, worldPlayerLocationNotify)
+	g.SendToWorldA(world, cmd.WorldPlayerLocationNotify, 0, ntf, 0)
 }
 
 func (g *Game) ScenePlayerLocationNotify(world *World) {
 	for _, scene := range world.GetAllScene() {
-		scenePlayerLocationNotify := &proto.ScenePlayerLocationNotify{
+		ntf := &proto.ScenePlayerLocationNotify{
 			SceneId:        scene.id,
 			PlayerLocList:  make([]*proto.PlayerLocationInfo, 0),
 			VehicleLocList: make([]*proto.VehicleLocationInfo, 0),
@@ -195,7 +195,7 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 				playerLocationInfo.Rot = new(proto.Vector)
 			}
 
-			scenePlayerLocationNotify.PlayerLocList = append(scenePlayerLocationNotify.PlayerLocList, playerLocationInfo)
+			ntf.PlayerLocList = append(ntf.PlayerLocList, playerLocationInfo)
 			// 载具位置
 			for _, entityId := range scenePlayer.VehicleInfo.CreateEntityIdMap {
 				entity := scene.GetEntity(entityId)
@@ -222,11 +222,11 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 					for _, p := range entity.gadgetEntity.gadgetVehicleEntity.memberMap {
 						vehicleLocationInfo.UidList = append(vehicleLocationInfo.UidList, p.PlayerId)
 					}
-					scenePlayerLocationNotify.VehicleLocList = append(scenePlayerLocationNotify.VehicleLocList, vehicleLocationInfo)
+					ntf.VehicleLocList = append(ntf.VehicleLocList, vehicleLocationInfo)
 				}
 			}
 		}
-		g.SendToSceneA(scene, cmd.ScenePlayerLocationNotify, 0, scenePlayerLocationNotify)
+		g.SendToSceneA(scene, cmd.ScenePlayerLocationNotify, 0, ntf, 0)
 	}
 }
 

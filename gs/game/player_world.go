@@ -693,7 +693,7 @@ func (g *Game) TeleportPlayer(
 	oldScene := world.GetSceneById(oldSceneId)
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	avatarEntityId := world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
-	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{avatarEntityId}, false, 0)
+	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{avatarEntityId})
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()

@@ -173,7 +173,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	}
 	// 删除已创建的载具
 	scene.DestroyEntity(entity.GetId())
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()}, false, 0)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()})
 	// 删除玩家载具在线数据
 	delete(player.VehicleInfo.CreateEntityIdMap, vehicleId)
 	// 删除房主的载具存档

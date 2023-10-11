@@ -361,7 +361,7 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 				ForwardType:  proto.ForwardType_FORWARD_TO_ALL,
 				ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
 			}},
-		})
+		}, 0)
 
 	}
 }
@@ -376,6 +376,6 @@ func (t *TickManager) onTick50MilliSecond(now int64) {
 			Param1:    []uint32{1, <-AUDIO_CHAN},
 			Param2:    nil,
 			Param3:    nil,
-		})
+		}, 0)
 	}
 }

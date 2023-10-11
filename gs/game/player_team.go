@@ -180,7 +180,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	world.SetPlayerAvatarIndex(player, newAvatarIndex)
 
 	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
-	g.SendToWorldA(world, cmd.SceneTeamUpdateNotify, player.ClientSeq, sceneTeamUpdateNotify)
+	g.SendToWorldA(world, cmd.SceneTeamUpdateNotify, player.ClientSeq, sceneTeamUpdateNotify, 0)
 
 	changeMpTeamAvatarRsp := &proto.ChangeMpTeamAvatarRsp{
 		CurAvatarGuid:  req.CurAvatarGuid,
@@ -314,7 +314,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 		DisappearType: proto.VisionType_VISION_REPLACE,
 		EntityList:    []uint32{oldAvatarEntity.GetId()},
 	}
-	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify)
+	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify, 0)
 
 	newAvatarId := world.GetPlayerActiveAvatarId(player)
 	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, newAvatarId)
@@ -323,7 +323,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 		Param:      oldAvatarEntity.GetId(),
 		EntityList: []*proto.SceneEntityInfo{newAvatarEntity},
 	}
-	g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, player.ClientSeq, sceneEntityAppearNotify)
+	g.SendToSceneA(scene, cmd.SceneEntityAppearNotify, player.ClientSeq, sceneEntityAppearNotify, 0)
 }
 
 /************************************************** 打包封装 **************************************************/

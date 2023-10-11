@@ -110,7 +110,7 @@ func (g *Game) GetAi() *model.Player {
 }
 
 func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
-	g.OnLogin(uid, 0, "", nil, 0, true)
+	g.OnLogin(uid, 0, "", nil, new(proto.PlayerLoginReq), true)
 	robot := USER_MANAGER.GetOnlineUser(uid)
 	robot.DbState = model.DbNormal
 	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
@@ -395,14 +395,7 @@ func (g *Game) SendSucc(cmdId uint16, player *model.Player, rsp pb.Message) {
 }
 
 // SendToWorldA 给世界内所有玩家发消息
-func (g *Game) SendToWorldA(world *World, cmdId uint16, seq uint32, msg pb.Message) {
-	for _, v := range world.GetAllPlayer() {
-		g.SendMsg(cmdId, v.PlayerId, seq, msg)
-	}
-}
-
-// SendToWorldAEC 给世界内除某玩家(一般是自己)以外的所有玩家发消息
-func (g *Game) SendToWorldAEC(world *World, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
+func (g *Game) SendToWorldA(world *World, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
 	for _, v := range world.GetAllPlayer() {
 		if aecUid == v.PlayerId {
 			continue
@@ -417,23 +410,7 @@ func (g *Game) SendToWorldH(world *World, cmdId uint16, seq uint32, msg pb.Messa
 }
 
 // SendToSceneA 给场景内所有玩家发消息
-func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Message) {
-	world := scene.GetWorld()
-	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
-		aiWorldAoi := world.GetAiWorldAoi()
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
-		for uid := range otherWorldAvatarMap {
-			g.SendMsg(cmdId, uint32(uid), seq, msg)
-		}
-	} else {
-		for _, v := range scene.GetAllPlayer() {
-			g.SendMsg(cmdId, v.PlayerId, seq, msg)
-		}
-	}
-}
-
-// SendToSceneAEC 给场景内除某玩家(一般是自己)以外的所有玩家发消息
-func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
+func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32) {
 	world := scene.GetWorld()
 	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
 		aiWorldAoi := world.GetAiWorldAoi()
@@ -447,6 +424,35 @@ func (g *Game) SendToSceneAEC(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 	} else {
 		for _, v := range scene.GetAllPlayer() {
 			if aecUid == v.PlayerId {
+				continue
+			}
+			g.SendMsg(cmdId, v.PlayerId, seq, msg)
+		}
+	}
+}
+
+// SendToSceneACV 给场景内所有指定客户端版本的玩家发消息
+func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Message, aecUid uint32, clientVersion int) {
+	world := scene.GetWorld()
+	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
+		aiWorldAoi := world.GetAiWorldAoi()
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
+		for uid := range otherWorldAvatarMap {
+			player := USER_MANAGER.GetOnlineUser(uint32(uid))
+			if aecUid == player.PlayerId {
+				continue
+			}
+			if player.ClientVersion != clientVersion {
+				continue
+			}
+			g.SendMsg(cmdId, uint32(uid), seq, msg)
+		}
+	} else {
+		for _, v := range scene.GetAllPlayer() {
+			if aecUid == v.PlayerId {
+				continue
+			}
+			if v.ClientVersion != clientVersion {
 				continue
 			}
 			g.SendMsg(cmdId, v.PlayerId, seq, msg)

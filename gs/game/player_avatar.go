@@ -274,17 +274,17 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 	// 设置角色风之翼
 	avatar.FlyCloak = req.FlycloakId
 
-	avatarFlycloakChangeNotify := &proto.AvatarFlycloakChangeNotify{
+	ntf := &proto.AvatarFlycloakChangeNotify{
 		AvatarGuid: req.AvatarGuid,
 		FlycloakId: req.FlycloakId,
 	}
-	g.SendToSceneA(scene, cmd.AvatarFlycloakChangeNotify, player.ClientSeq, avatarFlycloakChangeNotify)
+	g.SendToSceneA(scene, cmd.AvatarFlycloakChangeNotify, player.ClientSeq, ntf, 0)
 
-	avatarWearFlycloakRsp := &proto.AvatarWearFlycloakRsp{
+	rsp := &proto.AvatarWearFlycloakRsp{
 		AvatarGuid: req.AvatarGuid,
 		FlycloakId: req.FlycloakId,
 	}
-	g.SendMsg(cmd.AvatarWearFlycloakRsp, player.PlayerId, player.ClientSeq, avatarWearFlycloakRsp)
+	g.SendMsg(cmd.AvatarWearFlycloakRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // AvatarChangeCostumeReq 角色更换时装请求
@@ -327,24 +327,24 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 	avatar.Costume = req.CostumeId
 
 	// 角色更换时装通知
-	avatarChangeCostumeNotify := new(proto.AvatarChangeCostumeNotify)
+	ntf := new(proto.AvatarChangeCostumeNotify)
 	// 要更换时装的角色实体不存在代表更换的是仓库内的角色
 	if scene.GetWorld().GetPlayerWorldAvatarEntityId(player, avatar.AvatarId) == 0 {
-		avatarChangeCostumeNotify.EntityInfo = &proto.SceneEntityInfo{
+		ntf.EntityInfo = &proto.SceneEntityInfo{
 			Entity: &proto.SceneEntityInfo_Avatar{
 				Avatar: g.PacketSceneAvatarInfo(scene, player, avatar.AvatarId),
 			},
 		}
 	} else {
-		avatarChangeCostumeNotify.EntityInfo = g.PacketSceneEntityInfoAvatar(scene, player, avatar.AvatarId)
+		ntf.EntityInfo = g.PacketSceneEntityInfoAvatar(scene, player, avatar.AvatarId)
 	}
-	g.SendToSceneA(scene, cmd.AvatarChangeCostumeNotify, player.ClientSeq, avatarChangeCostumeNotify)
+	g.SendToSceneA(scene, cmd.AvatarChangeCostumeNotify, player.ClientSeq, ntf, 0)
 
-	avatarChangeCostumeRsp := &proto.AvatarChangeCostumeRsp{
+	rsp := &proto.AvatarChangeCostumeRsp{
 		AvatarGuid: req.AvatarGuid,
 		CostumeId:  req.CostumeId,
 	}
-	g.SendMsg(cmd.AvatarChangeCostumeRsp, player.PlayerId, player.ClientSeq, avatarChangeCostumeRsp)
+	g.SendMsg(cmd.AvatarChangeCostumeRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 /************************************************** 游戏功能 **************************************************/

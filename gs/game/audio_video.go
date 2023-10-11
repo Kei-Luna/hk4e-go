@@ -306,7 +306,7 @@ func UpdateFrame(rgb bool) {
 	for _, v := range SCREEN_ENTITY_ID_LIST {
 		scene.DestroyEntity(v)
 	}
-	GAME.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, SCREEN_ENTITY_ID_LIST, false, 0)
+	GAME.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, SCREEN_ENTITY_ID_LIST)
 	SCREEN_ENTITY_ID_LIST = make([]uint32, 0)
 	leftTopPos := &model.Vector{
 		X: BASE_POS.X + float64(SCREEN_WIDTH)*SCREEN_DPI/2,

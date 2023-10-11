@@ -84,6 +84,7 @@ type Player struct {
 	LastSceneBlockAoiMoveTime uint64                                   `bson:"-" msgpack:"-"` // 上一次移动处理场景区块aoi的时间
 	CommandAssignUid          uint32                                   `bson:"-" msgpack:"-"` // 命令指定uid
 	WeatherInfo               *WeatherInfo                             `bson:"-" msgpack:"-"` // 天气信息
+	ClientVersion             int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 }

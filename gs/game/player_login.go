@@ -6,6 +6,7 @@ import (
 
 	"hk4e/common/constant"
 	"hk4e/common/mq"
+	"hk4e/common/region"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -19,7 +20,7 @@ func (g *Game) PlayerLoginReq(userId uint32, clientSeq uint32, gateAppId string,
 	logger.Info("player login req, uid: %v, gateAppId: %v", userId, gateAppId)
 	req := payloadMsg.(*proto.PlayerLoginReq)
 	logger.Debug("login data: %v", req)
-	USER_MANAGER.OnlineUser(userId, clientSeq, gateAppId, req.TargetUid)
+	USER_MANAGER.OnlineUser(userId, clientSeq, gateAppId, req)
 }
 
 func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message) {
@@ -75,7 +76,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
 }
 
-func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player *model.Player, joinHostUserId uint32, ok bool) {
+func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player *model.Player, req *proto.PlayerLoginReq, ok bool) {
 	if !ok {
 		g.SendMsgToGate(cmd.PlayerLoginRsp, userId, clientSeq, gateAppId, &proto.PlayerLoginRsp{Retcode: int32(proto.Retcode_RET_LOGIN_INIT_FAIL)})
 		return
@@ -111,12 +112,12 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 
 	if player.IsBorn {
 		g.LoginNotify(userId, clientSeq, player)
-		if joinHostUserId != 0 {
-			hostPlayer := USER_MANAGER.GetOnlineUser(joinHostUserId)
+		if req.TargetUid != 0 {
+			hostPlayer := USER_MANAGER.GetOnlineUser(req.TargetUid)
 			if hostPlayer != nil {
 				g.JoinOtherWorld(player, hostPlayer)
 			} else {
-				logger.Error("player is nil, uid: %v", joinHostUserId)
+				logger.Error("player is nil, uid: %v", req.TargetUid)
 			}
 		} else {
 			// 创建世界
@@ -132,6 +133,9 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	} else {
 		g.SendMsg(cmd.DoSetPlayerBornDataNotify, userId, clientSeq, new(proto.DoSetPlayerBornDataNotify))
 	}
+
+	clientVersion, _ := region.GetClientVersionByName(req.ChecksumClientVersion)
+	player.ClientVersion = clientVersion
 
 	playerLoginRsp := &proto.PlayerLoginRsp{
 		IsUseAbilityHash:        true,

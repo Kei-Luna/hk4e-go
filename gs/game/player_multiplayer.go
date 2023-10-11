@@ -438,7 +438,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerId, player.ClientSeq, playerQuitFromMpNotify)
 
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)}, false, 0)
+		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)})
 	}
 
 	world.RemovePlayer(player)

@@ -169,11 +169,11 @@ func (g *Game) PlayerChatReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	world.AddChat(sendChatInfo)
 
-	playerChatNotify := &proto.PlayerChatNotify{
+	ntf := &proto.PlayerChatNotify{
 		ChannelId: channelId,
 		ChatInfo:  sendChatInfo,
 	}
-	g.SendToWorldA(world, cmd.PlayerChatNotify, player.ClientSeq, playerChatNotify)
+	g.SendToWorldA(world, cmd.PlayerChatNotify, player.ClientSeq, ntf, 0)
 
 	g.SendMsg(cmd.PlayerChatRsp, player.PlayerId, player.ClientSeq, new(proto.PlayerChatRsp))
 }
