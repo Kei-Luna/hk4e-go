@@ -138,11 +138,17 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 		case gdconf.PubgWorldGadgetTypeIncAtk:
 			avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
 			avatar.FightPropMap[constant.FIGHT_PROP_CUR_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
+			// 提示玩家
+			info := fmt.Sprintf("你的角色攻击力增加：%v，增加后的攻击力：%v。", pubgWorldGadgetDataConfig.Param[0], avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK])
+			GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		case gdconf.PubgWorldGadgetTypeIncHp:
 			avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] += float32(pubgWorldGadgetDataConfig.Param[0])
 			if avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] > avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP] {
 				avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP]
 			}
+			// 提示玩家
+			info := fmt.Sprintf("你的角色生命值增加：%v，目前为：%v。", pubgWorldGadgetDataConfig.Param[0], avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP])
+			GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		}
 		GAME.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
 			AvatarGuid:   avatar.Guid,

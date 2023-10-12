@@ -507,7 +507,7 @@ func (c *CommandManager) ExecCommand(cmd *CommandMessage) {
 	controller, ok := c.commandControllerMap[content.Name]
 	if !ok {
 		// 玩家可能会执行一些没有的命令仅做调试输出
-		content.SendFailMessage(content.Executor, "命令不存在，输入 help 查看帮助。")
+		content.SendFailMessage(content.Executor, "命令 %v 不存在，输入 help 查看帮助。", cmd.Text)
 		return
 	}
 	// 设置控制器
