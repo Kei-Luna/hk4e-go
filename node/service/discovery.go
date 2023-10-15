@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,14 +27,16 @@ var _ api.DiscoveryNATSRPCServer = (*DiscoveryService)(nil)
 type ServerInstance struct {
 	serverType        string   // 服务器类型
 	appId             string   // appid
+	appVersion        string   // app版本
 	gateServerKcpAddr string   // 网关kcp地址
 	gateServerKcpPort uint32   // 网关kcp端口
 	gateServerMqAddr  string   // 网关tcp直连消息队列地址
 	gateServerMqPort  uint32   // 网关tcp直连消息队列端口
-	version           []string // 网关支持的客户端协议版本
+	gameVersionList   []string // 网关支持的客户端协议版本
 	lastAliveTime     int64    // 最后保活时间
 	gsId              uint32   // 游戏服务器编号
 	loadCount         uint32   // 负载数
+	dispatchCancel    bool     // 是否取消调度
 }
 
 // StopServerInfo 停服信息
@@ -93,11 +94,33 @@ func NewDiscoveryService(db *dao.Dao, messageQueue *mq.MessageQueue) (*Discovery
 	r.serverInstanceMap[api.DISPATCH] = new(sync.Map)
 	r.serverAppIdMap = new(sync.Map)
 	r.globalGsOnlineMap = new(sync.Map)
+	stopServerInfo, err := r.db.QueryStopServerInfo()
+	if err != nil {
+		logger.Error("load stop server info from db error: %v", err)
+		return nil, err
+	}
+	if stopServerInfo == nil {
+		logger.Info("init stop server info")
+		stopServerInfo = &dao.StopServerInfo{
+			StopServer:      true,
+			StartTime:       uint32(time.Now().Unix()),
+			EndTime:         uint32(time.Now().AddDate(10, 0, 0).Unix()),
+			IpAddrWhiteList: make([]string, 0),
+		}
+		err := r.db.InsertStopServerInfo(stopServerInfo)
+		if err != nil {
+			logger.Error("save stop server info to db error: %v", err)
+			return nil, err
+		}
+	}
 	r.stopServerInfo = &StopServerInfo{
-		stopServer:      false,
-		startTime:       0,
-		endTime:         0,
+		stopServer:      stopServerInfo.StopServer,
+		startTime:       stopServerInfo.StartTime,
+		endTime:         stopServerInfo.EndTime,
 		ipAddrWhiteList: make(map[string]struct{}),
+	}
+	for _, ipAddr := range stopServerInfo.IpAddrWhiteList {
+		r.stopServerInfo.ipAddrWhiteList[ipAddr] = struct{}{}
 	}
 	r.messageQueue = messageQueue
 	go r.removeDeadServer()
@@ -113,7 +136,20 @@ func (s *DiscoveryService) close() {
 	err := s.db.UpdateRegion(region)
 	if err != nil {
 		logger.Error("save region to db error: %v", err)
-		return
+	}
+	ipAddrWhiteList := make([]string, 0)
+	for ipAddr := range s.stopServerInfo.ipAddrWhiteList {
+		ipAddrWhiteList = append(ipAddrWhiteList, ipAddr)
+	}
+	stopServerInfo := &dao.StopServerInfo{
+		StopServer:      s.stopServerInfo.stopServer,
+		StartTime:       s.stopServerInfo.startTime,
+		EndTime:         s.stopServerInfo.endTime,
+		IpAddrWhiteList: ipAddrWhiteList,
+	}
+	err = s.db.UpdateStopServerInfo(stopServerInfo)
+	if err != nil {
+		logger.Error("save stop server info to db error: %v", err)
 	}
 }
 
@@ -155,10 +191,12 @@ func (s *DiscoveryService) RegisterServer(ctx context.Context, req *api.Register
 		}
 	}
 	inst := &ServerInstance{
-		serverType:    req.ServerType,
-		appId:         appId,
-		lastAliveTime: time.Now().Unix(),
-		loadCount:     0,
+		serverType:     req.ServerType,
+		appId:          appId,
+		appVersion:     req.AppVersion,
+		lastAliveTime:  time.Now().Unix(),
+		loadCount:      0,
+		dispatchCancel: false,
 	}
 	if req.ServerType == api.GATE {
 		logger.Info("register new gate server, ip: %v, port: %v", req.GateServerAddr.KcpAddr, req.GateServerAddr.KcpPort)
@@ -166,7 +204,7 @@ func (s *DiscoveryService) RegisterServer(ctx context.Context, req *api.Register
 		inst.gateServerKcpPort = req.GateServerAddr.KcpPort
 		inst.gateServerMqAddr = req.GateServerAddr.MqAddr
 		inst.gateServerMqPort = req.GateServerAddr.MqPort
-		inst.version = req.Version
+		inst.gameVersionList = req.GameVersionList
 	}
 	instMap.Store(appId, inst)
 	logger.Info("new server appid is: %v", appId)
@@ -232,6 +270,7 @@ func (s *DiscoveryService) KeepaliveServer(ctx context.Context, req *api.Keepali
 	serverInstance := inst.(*ServerInstance)
 	serverInstance.lastAliveTime = time.Now().Unix()
 	serverInstance.loadCount = req.LoadCount
+	logger.Debug("server instance: %+v", serverInstance)
 	return &api.NullMsg{}, nil
 }
 
@@ -250,6 +289,9 @@ func (s *DiscoveryService) GetServerAppId(ctx context.Context, req *api.GetServe
 		inst = s.getMinLoadServerInstance(instMap)
 	} else {
 		inst = s.getRandomServerInstance(instMap)
+	}
+	if inst == nil {
+		return nil, errors.New("no server found")
 	}
 	logger.Debug("get server appid is: %v", inst.appId)
 	return &api.GetServerAppIdRsp{
@@ -278,8 +320,8 @@ func (s *DiscoveryService) GetGateServerAddr(ctx context.Context, req *api.GetGa
 	versionInstMap := sync.Map{}
 	instMap.Range(func(key, value any) bool {
 		serverInstance := value.(*ServerInstance)
-		for _, version := range serverInstance.version {
-			if version == req.Version {
+		for _, gameVersion := range serverInstance.gameVersionList {
+			if gameVersion == req.GameVersion {
 				versionInstMap.Store(key, serverInstance)
 				return true
 			}
@@ -290,6 +332,9 @@ func (s *DiscoveryService) GetGateServerAddr(ctx context.Context, req *api.GetGa
 		return nil, errors.New("no gate server found")
 	}
 	inst := s.getMinLoadServerInstance(&versionInstMap)
+	if inst == nil {
+		return nil, errors.New("no gate server found")
+	}
 	logger.Debug("get gate server addr is, ip: %v, port: %v", inst.gateServerKcpAddr, inst.gateServerKcpPort)
 	return &api.GateServerAddr{
 		KcpAddr: inst.gateServerKcpAddr,
@@ -363,14 +408,9 @@ func (s *DiscoveryService) GetGlobalGsOnlineMap(ctx context.Context, req *api.Nu
 }
 
 // GetStopServerInfo 获取停服维护信息
-func (s *DiscoveryService) GetStopServerInfo(ctx context.Context, req *api.GetStopServerInfoReq) (*api.StopServerInfo, error) {
-	stopServer := s.stopServerInfo.stopServer
-	_, exist := s.stopServerInfo.ipAddrWhiteList[req.ClientIpAddr]
-	if exist {
-		stopServer = false
-	}
+func (s *DiscoveryService) GetStopServerInfo(ctx context.Context, req *api.NullMsg) (*api.StopServerInfo, error) {
 	return &api.StopServerInfo{
-		StopServer: stopServer,
+		StopServer: s.stopServerInfo.stopServer,
 		StartTime:  s.stopServerInfo.startTime,
 		EndTime:    s.stopServerInfo.endTime,
 	}, nil
@@ -416,15 +456,33 @@ func (s *DiscoveryService) GetNextUid(ctx context.Context, req *api.NullMsg) (*a
 	}, nil
 }
 
+// ServerDispatchCancel 取消调度指定app版本的所有服务器
+func (s *DiscoveryService) ServerDispatchCancel(ctx context.Context, req *api.ServerDispatchCancelReq) (*api.NullMsg, error) {
+	for _, instMap := range s.serverInstanceMap {
+		instMap.Range(func(appid, inst any) bool {
+			serverInstance := inst.(*ServerInstance)
+			if serverInstance.appVersion == req.AppVersion {
+				serverInstance.dispatchCancel = true
+			}
+			return true
+		})
+	}
+	return &api.NullMsg{}, nil
+}
+
 func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerInstance {
 	instList := make([]*ServerInstance, 0)
 	instMap.Range(func(key, value any) bool {
-		instList = append(instList, value.(*ServerInstance))
+		serverInstance := value.(*ServerInstance)
+		if serverInstance.dispatchCancel {
+			return true
+		}
+		instList = append(instList, serverInstance)
 		return true
 	})
-	sort.Slice(instList, func(i, j int) bool {
-		return instList[i].appId < instList[j].appId
-	})
+	if len(instList) == 0 {
+		return nil
+	}
 	index := random.GetRandomInt32(0, int32(len(instList)-1))
 	inst := instList[index]
 	return inst
@@ -433,12 +491,16 @@ func (s *DiscoveryService) getRandomServerInstance(instMap *sync.Map) *ServerIns
 func (s *DiscoveryService) getMinLoadServerInstance(instMap *sync.Map) *ServerInstance {
 	instList := make([]*ServerInstance, 0)
 	instMap.Range(func(key, value any) bool {
-		instList = append(instList, value.(*ServerInstance))
+		serverInstance := value.(*ServerInstance)
+		if serverInstance.dispatchCancel {
+			return true
+		}
+		instList = append(instList, serverInstance)
 		return true
 	})
-	sort.Slice(instList, func(i, j int) bool {
-		return instList[i].appId < instList[j].appId
-	})
+	if len(instList) == 0 {
+		return nil
+	}
 	minLoadInstIndex := 0
 	minLoadInstCount := math.MaxUint32
 	for index, inst := range instList {

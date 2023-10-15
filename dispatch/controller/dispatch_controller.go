@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"hk4e/common/config"
 	"hk4e/common/mq"
@@ -144,6 +145,11 @@ func GetRegionCurr(ec2b *random.Ec2b, gateServerAddr *api.GateServerAddr, stopSe
 	return regionCurr
 }
 
+type GateServerInfo struct {
+	addr      *api.GateServerAddr
+	timestamp int64
+}
+
 // dispatch请求错误响应
 func (c *Controller) dispatchReqErrorRsp(ctx *gin.Context, dispatchLevel uint8) {
 	if dispatchLevel == 1 {
@@ -191,24 +197,45 @@ func (c *Controller) queryCurRegion(ctx *gin.Context) {
 		c.dispatchReqErrorRsp(ctx, 2)
 		return
 	}
-	gateServerAddr, err := c.discovery.GetGateServerAddr(ctx.Request.Context(), &api.GetGateServerAddrReq{
-		Version: versionStr,
-	})
-	if err != nil {
-		logger.Error("get gate server addr error: %v", err)
-		c.dispatchReqErrorRsp(ctx, 2)
-		return
-	}
-	var regionCurr *proto.QueryCurrRegionHttpRsp = nil
-	if !config.GetConfig().Hk4e.ForwardModeEnable {
-		clientIp := ctx.ClientIP()
-		stopServerInfo, err := c.discovery.GetStopServerInfo(ctx.Request.Context(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
+	var gateServerAddr *api.GateServerAddr = nil
+	var err error = nil
+	now := time.Now().Unix()
+	inst, exist := c.gateServerMap.Load(versionStr)
+	if !exist || (exist && now-inst.(*GateServerInfo).timestamp > 60) {
+		gateServerAddr, err = c.discoveryClient.GetGateServerAddr(ctx.Request.Context(), &api.GetGateServerAddrReq{
+			GameVersion: versionStr,
+		})
 		if err != nil {
-			logger.Error("get stop server info error: %v", err)
+			logger.Error("get gate server addr error: %v", err)
 			c.dispatchReqErrorRsp(ctx, 2)
 			return
 		}
-		regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, stopServerInfo)
+		c.gateServerMap.Store(versionStr, &GateServerInfo{
+			addr:      gateServerAddr,
+			timestamp: now,
+		})
+	} else {
+		gateServerAddr = inst.(*GateServerInfo).addr
+	}
+	var regionCurr *proto.QueryCurrRegionHttpRsp = nil
+	if !config.GetConfig().Hk4e.ForwardModeEnable {
+		if !c.stopServerInfo.StopServer {
+			regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, &api.StopServerInfo{StopServer: false})
+		} else {
+			clientIp := ctx.ClientIP()
+			isWhiteList := false
+			for _, ipAddr := range c.whiteList.IpAddrList {
+				if ipAddr == clientIp {
+					isWhiteList = true
+					break
+				}
+			}
+			if isWhiteList {
+				regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, &api.StopServerInfo{StopServer: false})
+			} else {
+				regionCurr = GetRegionCurr(c.ec2b, gateServerAddr, c.stopServerInfo)
+			}
+		}
 	} else {
 		regionCurr, err = c.queryCurRegionForwardMode(version, gateServerAddr)
 		if err != nil {
@@ -438,7 +465,7 @@ func (c *Controller) queryCurRegionForwardMode(version int, gateServerAddr *api.
 		return nil, err
 	}
 	logger.Debug("QueryCurrRegionHttpRsp: %+v", queryCurrRegionHttpRsp)
-	robotServerAppId, err := c.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+	robotServerAppId, err := c.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
 		ServerType: api.ROBOT,
 	})
 	if err != nil {

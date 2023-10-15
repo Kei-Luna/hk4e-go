@@ -62,6 +62,7 @@ func (c *Controller) registerRouter() {
 	engine.GET("/server/white/list", c.serverWhiteList)
 	engine.POST("/server/white/add", c.serverWhiteAdd)
 	engine.POST("/server/white/del", c.serverWhiteDel)
+	engine.POST("/server/dispatch/cancel", c.serverDispatchCancel)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
 	err := engine.Run(addr)

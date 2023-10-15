@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
+	"time"
 
 	"hk4e/common/config"
 	"hk4e/common/mq"
@@ -19,21 +21,24 @@ import (
 )
 
 type Controller struct {
-	db           *dao.Dao
-	discovery    *rpc.DiscoveryClient
-	signRsaKey   []byte
-	encRsaKeyMap map[string][]byte
-	pwdRsaKey    []byte
-	ec2b         *random.Ec2b
-	messageQueue *mq.MessageQueue
+	db              *dao.Dao
+	discoveryClient *rpc.DiscoveryClient
+	signRsaKey      []byte
+	encRsaKeyMap    map[string][]byte
+	pwdRsaKey       []byte
+	ec2b            *random.Ec2b
+	messageQueue    *mq.MessageQueue
+	gateServerMap   *sync.Map
+	stopServerInfo  *api.StopServerInfo
+	whiteList       *api.GetWhiteListRsp
 }
 
 func NewController(db *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq.MessageQueue) (r *Controller) {
 	r = new(Controller)
 	r.db = db
-	r.discovery = discovery
+	r.discoveryClient = discovery
 	r.signRsaKey, r.encRsaKeyMap, r.pwdRsaKey = region.LoadRegionRsaKey()
-	rsp, err := r.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
+	rsp, err := r.discoveryClient.GetRegionEc2B(context.TODO(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get region ec2b error: %v", err)
 		return nil
@@ -45,7 +50,14 @@ func NewController(db *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq
 	}
 	r.ec2b = ec2b
 	r.messageQueue = messageQueue
+	r.gateServerMap = new(sync.Map)
+	r.stopServerInfo = nil
+	r.whiteList = nil
 	go r.registerRouter()
+	r.syncWhiteList()
+	go r.autoSyncWhiteList()
+	r.syncStopServerInfo()
+	go r.autoSyncStopServerInfo()
 	return r
 }
 
@@ -174,4 +186,38 @@ func (c *Controller) registerRouter() {
 	if err != nil {
 		logger.Error("gin run error: %v", err)
 	}
+}
+
+func (c *Controller) autoSyncStopServerInfo() {
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		c.syncStopServerInfo()
+	}
+}
+
+func (c *Controller) syncStopServerInfo() {
+	stopServerInfo, err := c.discoveryClient.GetStopServerInfo(context.TODO(), &api.NullMsg{})
+	if err != nil {
+		logger.Error("get stop server info error: %v", err)
+		return
+	}
+	c.stopServerInfo = stopServerInfo
+}
+
+func (c *Controller) autoSyncWhiteList() {
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		c.syncWhiteList()
+	}
+}
+
+func (c *Controller) syncWhiteList() {
+	whiteList, err := c.discoveryClient.GetWhiteList(context.TODO(), &api.NullMsg{})
+	if err != nil {
+		logger.Error("get white list error: %v", err)
+		return
+	}
+	c.whiteList = whiteList
 }

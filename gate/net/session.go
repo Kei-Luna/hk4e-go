@@ -502,7 +502,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	}
 	if account == nil {
 		// 注册账号与uid关联
-		getNextUidRsp, err := k.discovery.GetNextUid(context.TODO(), &api.NullMsg{})
+		getNextUidRsp, err := k.discoveryClient.GetNextUid(context.TODO(), &api.NullMsg{})
 		if err != nil {
 			logger.Error("get next uid error: %v, openId: %v", err, req.AccountUid)
 			return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
@@ -527,13 +527,17 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	addr := session.conn.RemoteAddr()
 	addrSplit := strings.Split(addr, ":")
 	clientIp := addrSplit[0]
-	stopServerInfo, err := k.discovery.GetStopServerInfo(context.TODO(), &api.GetStopServerInfoReq{ClientIpAddr: clientIp})
-	if err != nil {
-		logger.Error("get stop server info error: %v, uid: %v", err, uid)
-		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
-	}
-	if stopServerInfo.StopServer {
-		return k.loginFailRsp(uid, proto.Retcode_RET_STOP_SERVER, false, 0)
+	if k.stopServerInfo.StopServer {
+		isWhiteList := false
+		for _, ipAddr := range k.whiteList.IpAddrList {
+			if ipAddr == clientIp {
+				isWhiteList = true
+				break
+			}
+		}
+		if !isWhiteList {
+			return k.loginFailRsp(uid, proto.Retcode_RET_STOP_SERVER, false, 0)
+		}
 	}
 	clientConnNum := atomic.LoadInt32(&CLIENT_CONN_NUM)
 	if clientConnNum > MaxClientConnNumLimit {
@@ -595,28 +599,12 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 	k.SetSession(session, session.sessionId, session.userId)
 	k.createSessionChan <- session
 	// 绑定各个服务器appid
-	gsServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
-		ServerType: api.GS,
-	})
-	if err != nil {
-		logger.Error("get gs server appid error: %v, uid: %v", err, uid)
+	if k.minLoadGsServerAppId == "" {
 		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
-	session.gsServerAppId = gsServerAppId.AppId
-	anticheatServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
-		ServerType: api.ANTICHEAT,
-	})
-	if err != nil {
-		logger.Error("get anticheat server appid error: %v, uid: %v", err, uid)
-	}
-	session.anticheatServerAppId = anticheatServerAppId.AppId
-	pathfindingServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
-		ServerType: api.PATHFINDING,
-	})
-	if err != nil {
-		logger.Error("get pathfinding server appid error: %v, uid: %v", err, uid)
-	}
-	session.pathfindingServerAppId = pathfindingServerAppId.AppId
+	session.gsServerAppId = k.minLoadGsServerAppId
+	session.anticheatServerAppId = k.minLoadAnticheatServerAppId
+	session.pathfindingServerAppId = k.minLoadPathfindingServerAppId
 	logger.Debug("session gs appid: %v, uid: %v", session.gsServerAppId, uid)
 	logger.Debug("session anticheat appid: %v, uid: %v", session.anticheatServerAppId, uid)
 	logger.Debug("session pathfinding appid: %v, uid: %v", session.pathfindingServerAppId, uid)

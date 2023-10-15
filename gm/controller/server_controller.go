@@ -10,7 +10,7 @@ import (
 )
 
 func (c *Controller) serverStopState(ctx *gin.Context) {
-	stopServerInfo, err := c.discoveryClient.GetStopServerInfo(ctx.Request.Context(), &api.GetStopServerInfoReq{ClientIpAddr: ""})
+	stopServerInfo, err := c.discoveryClient.GetStopServerInfo(ctx.Request.Context(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get stop server info error: %v", err)
 		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
@@ -95,6 +95,28 @@ func (c *Controller) serverWhiteDel(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("set white list error: %v", err)
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		return
+	}
+	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
+}
+
+type ServerDispatchCancel struct {
+	AppVersion string `json:"app_version"`
+}
+
+func (c *Controller) serverDispatchCancel(ctx *gin.Context) {
+	req := new(ServerDispatchCancel)
+	err := ctx.ShouldBindJSON(req)
+	if err != nil {
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		return
+	}
+	_, err = c.discoveryClient.ServerDispatchCancel(ctx.Request.Context(), &api.ServerDispatchCancelReq{
+		AppVersion: req.AppVersion,
+	})
+	if err != nil {
+		logger.Error("server dispatch cancel error: %v", err)
 		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
 		return
 	}

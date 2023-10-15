@@ -10,6 +10,7 @@ import (
 
 func GSCmd() *cobra.Command {
 	var cfg string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
 		Use:   "gs",
 		Short: "game server",

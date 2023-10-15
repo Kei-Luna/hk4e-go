@@ -10,6 +10,7 @@ import (
 
 func AnticheatCmd() *cobra.Command {
 	var cfg string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
 		Use:   "anticheat",
 		Short: "anticheat server",

@@ -25,7 +25,7 @@ service Discovery {
     // 获取全服玩家GS在线列表
     rpc GetGlobalGsOnlineMap (NullMsg) returns (GlobalGsOnlineMap) {}
     // 获取停服维护信息
-    rpc GetStopServerInfo (GetStopServerInfoReq) returns (StopServerInfo) {}
+    rpc GetStopServerInfo (NullMsg) returns (StopServerInfo) {}
     // 修改停服维护信息
     rpc SetStopServerInfo (StopServerInfo) returns (NullMsg) {}
     // 获取停服维护白名单
@@ -34,6 +34,8 @@ service Discovery {
     rpc SetWhiteList (SetWhiteListReq) returns (NullMsg) {}
     // 获取下一个自增uid
     rpc GetNextUid (NullMsg) returns (GetNextUidRsp) {}
+    // 取消调度指定app版本的所有服务器
+    rpc ServerDispatchCancel (ServerDispatchCancelReq) returns (NullMsg) {}
 }
 
 message NullMsg {
@@ -49,8 +51,9 @@ message GetServerAppIdRsp {
 
 message RegisterServerReq {
     string server_type = 1;
-    GateServerAddr gate_server_addr = 2;
-    repeated string version = 3;
+    string app_version = 2;
+    GateServerAddr gate_server_addr = 3;
+    repeated string game_version_list = 4;
 }
 
 message RegisterServerRsp {
@@ -70,7 +73,7 @@ message KeepaliveServerReq {
 }
 
 message GetGateServerAddrReq {
-    string version = 1;
+    string game_version = 1;
 }
 
 message GetMainGameServerAppIdRsp {
@@ -102,10 +105,6 @@ message GlobalGsOnlineMap {
     map<uint32, string> online_map = 1;
 }
 
-message GetStopServerInfoReq {
-    string client_ip_addr = 1;
-}
-
 message StopServerInfo {
     bool stop_server = 1;
     uint32 start_time = 2;
@@ -123,4 +122,8 @@ message SetWhiteListReq {
 
 message GetNextUidRsp {
     uint32 uid = 1;
+}
+
+message ServerDispatchCancelReq {
+    string app_version = 1;
 }

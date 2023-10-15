@@ -23,6 +23,7 @@ import (
 )
 
 var APPID string
+var APPVERSION string
 var GSID uint32
 
 func Run(ctx context.Context, configFile string) error {
@@ -37,6 +38,7 @@ func Run(ctx context.Context, configFile string) error {
 	// 注册到节点服务器
 	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
 		ServerType: api.GS,
+		AppVersion: APPVERSION,
 	})
 	if err != nil {
 		return err

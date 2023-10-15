@@ -13,6 +13,8 @@ var (
 	config = flag.String("config", "application.toml", "config file")
 )
 
+var VERSION = "UNKNOWN"
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:          "hk4e",

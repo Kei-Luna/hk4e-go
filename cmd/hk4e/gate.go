@@ -10,6 +10,7 @@ import (
 
 func GateCmd() *cobra.Command {
 	var cfg string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
 		Use:   "gate",
 		Short: "gate server",

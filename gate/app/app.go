@@ -20,6 +20,7 @@ import (
 )
 
 var APPID string
+var APPVERSION string
 
 func Run(ctx context.Context, configFile string) error {
 	config.InitConfig(configFile)
@@ -33,13 +34,14 @@ func Run(ctx context.Context, configFile string) error {
 	// 注册到节点服务器
 	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
 		ServerType: api.GATE,
+		AppVersion: APPVERSION,
 		GateServerAddr: &api.GateServerAddr{
 			KcpAddr: config.GetConfig().Hk4e.KcpAddr,
 			KcpPort: uint32(config.GetConfig().Hk4e.KcpPort),
 			MqAddr:  config.GetConfig().Hk4e.GateTcpMqAddr,
 			MqPort:  uint32(config.GetConfig().Hk4e.GateTcpMqPort),
 		},
-		Version: strings.Split(config.GetConfig().Hk4e.Version, ","),
+		GameVersionList: strings.Split(config.GetConfig().Hk4e.Version, ","),
 	})
 	if err != nil {
 		return err

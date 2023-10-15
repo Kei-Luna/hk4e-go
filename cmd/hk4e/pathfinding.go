@@ -10,6 +10,7 @@ import (
 
 func PathfindingCmd() *cobra.Command {
 	var cfg string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
 		Use:   "pathfinding",
 		Short: "pathfinding server",

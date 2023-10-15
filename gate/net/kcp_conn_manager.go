@@ -51,12 +51,17 @@ type KcpEvent struct {
 }
 
 type KcpConnManager struct {
-	kcpListener           *kcp.Listener
-	db                    *dao.Dao
-	discovery             *rpc.DiscoveryClient // 节点服务器rpc客户端
-	messageQueue          *mq.MessageQueue     // 消息队列
-	globalGsOnlineMap     map[uint32]string    // 全服玩家在线表
-	globalGsOnlineMapLock sync.RWMutex
+	kcpListener                   *kcp.Listener
+	db                            *dao.Dao
+	discoveryClient               *rpc.DiscoveryClient // 节点服务器rpc客户端
+	messageQueue                  *mq.MessageQueue     // 消息队列
+	globalGsOnlineMap             map[uint32]string    // 全服玩家在线表
+	globalGsOnlineMapLock         sync.RWMutex
+	minLoadGsServerAppId          string
+	minLoadAnticheatServerAppId   string
+	minLoadPathfindingServerAppId string
+	stopServerInfo                *api.StopServerInfo
+	whiteList                     *api.GetWhiteListRsp
 	// 会话
 	sessionIdCounter uint32
 	sessionMap       map[uint32]*Session
@@ -80,9 +85,14 @@ func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rp
 	r := new(KcpConnManager)
 	r.kcpListener = nil
 	r.db = db
-	r.discovery = discovery
+	r.discoveryClient = discovery
 	r.messageQueue = messageQueue
 	r.globalGsOnlineMap = make(map[uint32]string)
+	r.minLoadGsServerAppId = ""
+	r.minLoadAnticheatServerAppId = ""
+	r.minLoadPathfindingServerAppId = ""
+	r.stopServerInfo = nil
+	r.whiteList = nil
 	r.sessionIdCounter = 0
 	r.sessionMap = make(map[uint32]*Session)
 	r.sessionUserIdMap = make(map[uint32]*Session)
@@ -105,7 +115,7 @@ func (k *KcpConnManager) run() error {
 	// 读取密钥相关文件
 	k.signRsaKey, k.encRsaKeyMap, _ = region.LoadRegionRsaKey()
 	// key
-	rsp, err := k.discovery.GetRegionEc2B(context.TODO(), &api.NullMsg{})
+	rsp, err := k.discoveryClient.GetRegionEc2B(context.TODO(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get region ec2b error: %v", err)
 		return err
@@ -151,6 +161,12 @@ func (k *KcpConnManager) run() error {
 	}
 	k.syncGlobalGsOnlineMap()
 	go k.autoSyncGlobalGsOnlineMap()
+	k.syncMinLoadServerAppid()
+	go k.autoSyncMinLoadServerAppid()
+	k.syncWhiteList()
+	go k.autoSyncWhiteList()
+	k.syncStopServerInfo()
+	go k.autoSyncStopServerInfo()
 	go func() {
 		for {
 			kcpEvent := <-k.kcpEventChan
@@ -263,7 +279,7 @@ func (k *KcpConnManager) acceptHandle(tcpMode bool, kcpListener *kcp.Listener, t
 			tcpRttLastSendTime:     0,
 		}
 		if config.GetConfig().Hk4e.ForwardModeEnable {
-			robotServerAppId, err := k.discovery.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+			robotServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
 				ServerType: api.ROBOT,
 			})
 			if err != nil {
@@ -656,7 +672,7 @@ func (k *KcpConnManager) autoSyncGlobalGsOnlineMap() {
 }
 
 func (k *KcpConnManager) syncGlobalGsOnlineMap() {
-	rsp, err := k.discovery.GetGlobalGsOnlineMap(context.TODO(), nil)
+	rsp, err := k.discoveryClient.GetGlobalGsOnlineMap(context.TODO(), nil)
 	if err != nil {
 		logger.Error("get global gs online map error: %v", err)
 		return
@@ -670,4 +686,71 @@ func (k *KcpConnManager) syncGlobalGsOnlineMap() {
 	k.globalGsOnlineMap = copyMap
 	k.globalGsOnlineMapLock.Unlock()
 	logger.Info("sync global gs online map finish, len: %v", copyMapLen)
+}
+
+func (k *KcpConnManager) autoSyncMinLoadServerAppid() {
+	ticker := time.NewTicker(time.Second * 15)
+	for {
+		<-ticker.C
+		k.syncMinLoadServerAppid()
+	}
+}
+
+func (k *KcpConnManager) syncMinLoadServerAppid() {
+	gsServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+		ServerType: api.GS,
+	})
+	if err != nil {
+		logger.Error("get gs server appid error: %v", err)
+		return
+	}
+	k.minLoadGsServerAppId = gsServerAppId.AppId
+	anticheatServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+		ServerType: api.ANTICHEAT,
+	})
+	if err != nil {
+		return
+	}
+	k.minLoadAnticheatServerAppId = anticheatServerAppId.AppId
+	pathfindingServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+		ServerType: api.PATHFINDING,
+	})
+	if err != nil {
+		return
+	}
+	k.minLoadPathfindingServerAppId = pathfindingServerAppId.AppId
+}
+
+func (k *KcpConnManager) autoSyncStopServerInfo() {
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		k.syncStopServerInfo()
+	}
+}
+
+func (k *KcpConnManager) syncStopServerInfo() {
+	stopServerInfo, err := k.discoveryClient.GetStopServerInfo(context.TODO(), &api.NullMsg{})
+	if err != nil {
+		logger.Error("get stop server info error: %v", err)
+		return
+	}
+	k.stopServerInfo = stopServerInfo
+}
+
+func (k *KcpConnManager) autoSyncWhiteList() {
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		k.syncWhiteList()
+	}
+}
+
+func (k *KcpConnManager) syncWhiteList() {
+	whiteList, err := k.discoveryClient.GetWhiteList(context.TODO(), &api.NullMsg{})
+	if err != nil {
+		logger.Error("get white list error: %v", err)
+		return
+	}
+	k.whiteList = whiteList
 }

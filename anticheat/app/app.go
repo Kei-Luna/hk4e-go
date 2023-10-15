@@ -18,6 +18,7 @@ import (
 )
 
 var APPID string
+var APPVERSION string
 
 func Run(ctx context.Context, configFile string) error {
 	config.InitConfig(configFile)
@@ -31,6 +32,7 @@ func Run(ctx context.Context, configFile string) error {
 	// 注册到节点服务器
 	rsp, err := discoveryClient.RegisterServer(context.TODO(), &api.RegisterServerReq{
 		ServerType: api.ANTICHEAT,
+		AppVersion: APPVERSION,
 	})
 	if err != nil {
 		return err

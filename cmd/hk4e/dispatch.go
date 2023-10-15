@@ -10,6 +10,7 @@ import (
 
 func DispatchCmd() *cobra.Command {
 	var cfg string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
 		Use:   "dispatch",
 		Short: "dispatch server",

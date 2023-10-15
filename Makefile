@@ -1,6 +1,8 @@
 CUR_DIR=$(shell pwd)
 
-VERSION=1.0.0
+ifeq ($(VERSION),)
+	VERSION=1.0.0
+endif
 
 .PHONY: all
 all: build
@@ -16,7 +18,7 @@ clean:
 # 构建服务器二进制文件
 .PHONY: build
 build:
-	mkdir -p bin && go build -ldflags "-X main.Version=$(VERSION)" -o ./bin/ ./cmd/...
+	mkdir -p bin && go build -ldflags "-X main.VERSION=$(VERSION)" -o ./bin/ ./cmd/...
 
 # 清理镜像
 .PHONY: docker_clean
