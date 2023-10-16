@@ -232,11 +232,11 @@ func (g *GMCmd) GMKillMonster(userId uint32, entityId uint32) {
 		return
 	}
 	// 确保为怪物
-	if entity.entityType != constant.ENTITY_TYPE_MONSTER {
+	if entity.GetEntityType() != constant.ENTITY_TYPE_MONSTER {
 		return
 	}
 	// 杀死怪物
-	GAME.KillEntity(player, scene, entity.id, proto.PlayerDieType_PLAYER_DIE_GM)
+	GAME.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 }
 
 // GMKillAllMonster 杀死所有怪物
@@ -257,13 +257,13 @@ func (g *GMCmd) GMKillAllMonster(userId uint32) {
 		return
 	}
 	// 杀死所有怪物实体
-	for _, entity := range scene.entityMap {
+	for _, entity := range scene.GetAllEntity() {
 		// 确保为怪物
-		if entity.entityType != constant.ENTITY_TYPE_MONSTER {
+		if entity.GetEntityType() != constant.ENTITY_TYPE_MONSTER {
 			continue
 		}
 		// 杀死怪物
-		GAME.KillEntity(player, scene, entity.id, proto.PlayerDieType_PLAYER_DIE_GM)
+		GAME.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 	}
 }
 
@@ -477,7 +477,7 @@ func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32) {
 		AvatarId: avatarId,
 	})
 	GAME.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
-		TargetUid: aiWorld.owner.PlayerId,
+		TargetUid: aiWorld.GetOwner().PlayerId,
 	})
 	GAME.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
 		EnterSceneToken: aiWorld.GetEnterSceneToken(),
@@ -562,7 +562,6 @@ func (g *GMCmd) StartPubg(v bool) {
 		return
 	}
 	pluginPubg := iPlugin.(*PluginPubg)
-	logger.Error("plugin: %v", pluginPubg)
 	pluginPubg.StartPubg()
 }
 

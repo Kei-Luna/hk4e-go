@@ -59,6 +59,7 @@ const (
 	ServerForwardModeServerCloseNotify        // 转发模式服务器断开连接通知
 	ServerForwardDispatchInfoNotify           // 转发模式区服信息通知
 	ServerStopNotify                          // 停服通知
+	ServerDispatchCancelNotify                // 服务器取消调度通知
 )
 
 type ServerMsg struct {
@@ -71,6 +72,7 @@ type ServerMsg struct {
 	ChatMsgInfo          *ChatMsgInfo
 	AddFriendInfo        *AddFriendInfo
 	ForwardDispatchInfo  *ForwardDispatchInfo
+	AppVersion           string
 }
 
 type OriginInfo struct {

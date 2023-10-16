@@ -44,17 +44,18 @@ var ONLINE_PLAYER_NUM int32 = 0 // 当前在线玩家数
 var SELF *model.Player
 
 type Game struct {
-	discovery   *rpc.DiscoveryClient // node节点服务器的natsrpc客户端
-	db          *dao.Dao
-	snowflake   *alg.SnowflakeWorker
-	gsId        uint32
-	gsAppid     string
-	mainGsAppid string
-	ai          *model.Player // 本服的Ai玩家对象
-	isStop      bool
+	discovery      *rpc.DiscoveryClient // node节点服务器的natsrpc客户端
+	db             *dao.Dao
+	snowflake      *alg.SnowflakeWorker
+	gsId           uint32
+	gsAppid        string
+	gsAppVersion   string
+	ai             *model.Player // 本服的Ai玩家对象
+	isStop         bool
+	dispatchCancel bool
 }
 
-func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, mainGsAppid string, discovery *rpc.DiscoveryClient) (r *Game) {
+func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, gsAppVersion string, discovery *rpc.DiscoveryClient) (r *Game) {
 	r = new(Game)
 	r.discovery = discovery
 	r.db = db
@@ -62,7 +63,7 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	r.snowflake = alg.NewSnowflakeWorker(int64(gsId))
 	r.gsId = gsId
 	r.gsAppid = gsAppid
-	r.mainGsAppid = mainGsAppid
+	r.gsAppVersion = gsAppVersion
 	GAME = r
 	LOCAL_EVENT_MANAGER = NewLocalEventManager()
 	ROUTE_MANAGER = NewRouteManager()
@@ -84,6 +85,7 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	PLUGIN_MANAGER.InitPlugin()
 	r.run()
 	r.isStop = false
+	r.dispatchCancel = false
 	return r
 }
 
@@ -93,15 +95,6 @@ func (g *Game) GetGsId() uint32 {
 
 func (g *Game) GetGsAppid() string {
 	return g.gsAppid
-}
-
-func (g *Game) GetMainGsAppid() string {
-	return g.mainGsAppid
-}
-
-func (g *Game) IsMainGs() bool {
-	// 目前的实现逻辑是当前GsId最小的Gs做MainGs
-	return g.gsAppid == g.mainGsAppid
 }
 
 // GetAi 获取本服的Ai玩家对象
@@ -264,6 +257,19 @@ func (g *Game) gameMainLoop() {
 
 var EXIT_SAVE_FIN_CHAN chan bool
 
+func (g *Game) ServerStopNotify() {
+	go func() {
+		info := "服务器即将关闭。"
+		GAME.ServerAnnounceNotify(1, info)
+		logger.Warn("stop game server last 1 minute")
+		time.Sleep(time.Minute)
+		delay := GAME.GetGsId()
+		logger.Warn("stop game server last %v second", delay)
+		time.Sleep(time.Second * time.Duration(delay))
+		GAME.Close()
+	}()
+}
+
 func (g *Game) Close() {
 	if g.isStop {
 		return
@@ -289,10 +295,19 @@ func (g *Game) Close() {
 				IsOnline: false,
 			},
 		})
+		time.Sleep(time.Millisecond * 100)
 	}
 	// 卸载插件
 	PLUGIN_MANAGER.DelAllPlugin()
 	logger.Warn("stop game server finish")
+}
+
+func (g *Game) ServerDispatchCancelNotify(appVersion string) {
+	if appVersion != g.gsAppVersion {
+		return
+	}
+	logger.Warn("game server dispatch cancel")
+	g.dispatchCancel = true
 }
 
 // SendMsgToGate 发送消息给客户端 指定网关

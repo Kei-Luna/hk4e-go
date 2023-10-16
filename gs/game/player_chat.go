@@ -201,8 +201,10 @@ func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content a
 		chatMsg.Icon = content.(uint32)
 	}
 
-	// 写入db
-	go USER_MANAGER.SaveUserChatMsgToDbSync(chatMsg)
+	if player.PlayerId != COMMAND_MANAGER.system.PlayerId && targetUid != COMMAND_MANAGER.system.PlayerId {
+		// 写入db
+		go USER_MANAGER.SaveUserChatMsgToDbSync(chatMsg)
+	}
 
 	// 消息加入自己的队列
 	msgList, exist := player.ChatMsgMap[targetUid]

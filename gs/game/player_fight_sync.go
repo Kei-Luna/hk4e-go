@@ -239,8 +239,9 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 	}
 	if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 		// 玩家实体在移动
-		g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
-		if WORLD_MANAGER.IsAiWorld(world) {
+		if !WORLD_MANAGER.IsAiWorld(world) {
+			g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
+		} else {
 			g.AiWorldAoiPlayerMove(player, world, scene, player.Pos, pos)
 		}
 		// 更新玩家的位置信息
@@ -248,8 +249,8 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
 	}
 	// 更新场景实体的位置信息
-	entity.pos.X, entity.pos.Y, entity.pos.Z = pos.X, pos.Y, pos.Z
-	entity.rot.X, entity.rot.Y, entity.rot.Z = rot.X, rot.Y, rot.Z
+	entity.SetPos(pos)
+	entity.SetRot(rot)
 	if !force {
 		motionInfo := moveInfo.MotionInfo
 		switch entity.GetEntityType() {
@@ -288,10 +289,6 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 }
 
 func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, avatarEntityId uint32) {
-	if WORLD_MANAGER.IsAiWorld(world) {
-		return
-	}
-
 	if !world.IsValidSceneBlockPos(scene.GetId(), float32(newPos.X), 0.0, float32(newPos.Z)) {
 		return
 	}
@@ -487,7 +484,10 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
-	for entityId := range oldVisionEntityMap {
+	for entityId, entity := range oldVisionEntityMap {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+			continue
+		}
 		_, exist := newVisionEntityMap[entityId]
 		if exist {
 			continue
@@ -496,7 +496,10 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
 	addEntityIdList := make([]uint32, 0)
-	for entityId := range newVisionEntityMap {
+	for entityId, entity := range newVisionEntityMap {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+			continue
+		}
 		_, exist := oldVisionEntityMap[entityId]
 		if exist {
 			continue

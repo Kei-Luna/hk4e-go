@@ -106,13 +106,13 @@ func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("world is nil, worldId: %v, uid: %v", world.id, player.PlayerId)
+		logger.Error("world is nil, worldId: %v, uid: %v", world.GetId(), player.PlayerId)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
 	owner := world.GetOwner()
 	if owner == nil {
-		logger.Error("owner is nil, worldId: %v", world.id)
+		logger.Error("owner is nil, worldId: %v", world.GetId())
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}

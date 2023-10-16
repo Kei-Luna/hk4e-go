@@ -702,23 +702,26 @@ func (k *KcpConnManager) syncMinLoadServerAppid() {
 	})
 	if err != nil {
 		logger.Error("get gs server appid error: %v", err)
-		return
+		k.minLoadGsServerAppId = ""
+	} else {
+		k.minLoadGsServerAppId = gsServerAppId.AppId
 	}
-	k.minLoadGsServerAppId = gsServerAppId.AppId
 	anticheatServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
 		ServerType: api.ANTICHEAT,
 	})
 	if err != nil {
-		return
+		k.minLoadAnticheatServerAppId = ""
+	} else {
+		k.minLoadAnticheatServerAppId = anticheatServerAppId.AppId
 	}
-	k.minLoadAnticheatServerAppId = anticheatServerAppId.AppId
 	pathfindingServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
 		ServerType: api.PATHFINDING,
 	})
 	if err != nil {
-		return
+		k.minLoadPathfindingServerAppId = ""
+	} else {
+		k.minLoadPathfindingServerAppId = pathfindingServerAppId.AppId
 	}
-	k.minLoadPathfindingServerAppId = pathfindingServerAppId.AppId
 }
 
 func (k *KcpConnManager) autoSyncStopServerInfo() {

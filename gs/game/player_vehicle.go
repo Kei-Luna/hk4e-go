@@ -177,7 +177,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	// 删除玩家载具在线数据
 	delete(player.VehicleInfo.CreateEntityIdMap, vehicleId)
 	// 删除房主的载具存档
-	world := scene.world
+	world := scene.GetWorld()
 	owner := world.GetOwner()
 	if owner == player {
 		dbWorld := owner.GetDbWorld()
@@ -191,9 +191,9 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 func (g *Game) EnterVehicle(player *model.Player, entity *Entity, avatarGuid uint64) {
 	gadgetEntity := entity.GetGadgetEntity()
 	// 获取载具配置表
-	vehicleDataConfig := gdconf.GetVehicleDataById(int32(gadgetEntity.GetGadgetVehicleEntity().vehicleId))
+	vehicleDataConfig := gdconf.GetVehicleDataById(int32(gadgetEntity.GetGadgetVehicleEntity().GetVehicleId()))
 	if vehicleDataConfig == nil {
-		logger.Error("vehicle config error, vehicleId: %v", gadgetEntity.GetGadgetVehicleEntity().vehicleId)
+		logger.Error("vehicle config error, vehicleId: %v", gadgetEntity.GetGadgetVehicleEntity().GetVehicleId())
 		return
 	}
 	maxSlot := int(vehicleDataConfig.ConfigGadgetVehicle.Vehicle.MaxSeatCount)

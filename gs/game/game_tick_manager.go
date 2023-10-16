@@ -289,11 +289,11 @@ func (t *TickManager) onTickSecond(now int64) {
 			GAME.WorldPlayerRTTNotify(world)
 		}
 		// 每个场景时间+1
-		for _, scene := range world.sceneMap {
+		for _, scene := range world.GetAllScene() {
 			if world.GetOwner().Pause {
 				continue
 			}
-			scene.gameTime = scene.gameTime + 1%1440
+			scene.ChangeGameTime(scene.GetGameTime() + 1)
 		}
 	}
 	// GCG游戏Tick
@@ -323,6 +323,16 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 			}
 		}
 	}
+
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
+		return
+	}
+	pluginPubg := iPlugin.(*PluginPubg)
+	if !pluginPubg.IsStartPubg() {
+		return
+	}
 	world := WORLD_MANAGER.GetAiWorld()
 	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
 	hitList := bulletPhysicsEngine.Update(now)
@@ -330,12 +340,12 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		scene := world.GetSceneById(rigidBody.sceneId)
 		defAvatarEntity := scene.GetEntity(rigidBody.hitAvatarEntityId)
 		defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
-		entity := scene.GetEntity(rigidBody.avatarEntityId)
-		atk := entity.fightProp[constant.FIGHT_PROP_CUR_ATTACK]
+		atkAvatarEntity := scene.GetEntity(rigidBody.avatarEntityId)
+		atk := atkAvatarEntity.GetFightProp()[constant.FIGHT_PROP_CUR_ATTACK]
 		GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
 			AttackResult: &proto.AttackResult{
-				AttackerId: rigidBody.avatarEntityId,
-				DefenseId:  rigidBody.hitAvatarEntityId,
+				AttackerId: atkAvatarEntity.GetId(),
+				DefenseId:  defAvatarEntity.GetId(),
 				Damage:     atk,
 			},
 		})
@@ -347,8 +357,8 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 			AttackResult: attackResultTemplate,
 			FrameNum:     0,
 		}
-		evtBeingHitInfo.AttackResult.AttackerId = rigidBody.avatarEntityId
-		evtBeingHitInfo.AttackResult.DefenseId = rigidBody.hitAvatarEntityId
+		evtBeingHitInfo.AttackResult.AttackerId = atkAvatarEntity.GetId()
+		evtBeingHitInfo.AttackResult.DefenseId = defAvatarEntity.GetId()
 		evtBeingHitInfo.AttackResult.Damage = atk
 		if evtBeingHitInfo.AttackResult.HitCollision == nil {
 			return
@@ -375,7 +385,7 @@ func (t *TickManager) onTick50MilliSecond(now int64) {
 		world := WORLD_MANAGER.GetAiWorld()
 		GAME.SendToWorldA(world, cmd.SceneAudioNotify, 0, &proto.SceneAudioNotify{
 			Type:      5,
-			SourceUid: world.owner.PlayerId,
+			SourceUid: world.GetOwner().PlayerId,
 			Param1:    []uint32{1, <-AUDIO_CHAN},
 			Param2:    nil,
 			Param3:    nil,

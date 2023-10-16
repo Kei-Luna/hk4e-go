@@ -382,9 +382,11 @@ func (p *PluginManager) HandleUserTimer(player *model.Player, data []any) {
 		// 获取插件用户timer处理函数列表
 		timerFunc, exist := plugin.userTimerMap[userTimerId]
 		if !exist {
+			logger.Error("plugin timer not exist, id: %v", userTimerId)
 			continue
 		}
 		timerFunc(player, data)
+		delete(plugin.userTimerMap, userTimerId)
 		// 只需要执行一次
 		break
 	}

@@ -179,10 +179,10 @@ func (s *Scene) CreateEntityNpc(pos, rot *model.Vector, npcId, roomId, parentQue
 		},
 		entityType: constant.ENTITY_TYPE_NPC,
 		npcEntity: &NpcEntity{
-			NpcId:         npcId,
-			RoomId:        roomId,
-			ParentQuestId: parentQuestId,
-			BlockId:       blockId,
+			npcId:         npcId,
+			roomId:        roomId,
+			parentQuestId: parentQuestId,
+			blockId:       blockId,
 		},
 		configId: configId,
 		groupId:  groupId,
@@ -435,12 +435,13 @@ type Entity struct {
 	fightProp           map[uint32]float32 // 战斗属性
 	level               uint8              // 等级
 	entityType          uint8              // 实体类型
-	avatarEntity        *AvatarEntity
-	monsterEntity       *MonsterEntity
-	npcEntity           *NpcEntity
-	gadgetEntity        *GadgetEntity
-	configId            uint32 // LUA配置相关
-	groupId             uint32
+	// TODO 这堆东西变得有点答辩了 我觉得之后需要重构 做面向对象继承多态接口的设计
+	avatarEntity  *AvatarEntity
+	monsterEntity *MonsterEntity
+	npcEntity     *NpcEntity
+	gadgetEntity  *GadgetEntity
+	configId      uint32 // LUA配置相关
+	groupId       uint32
 }
 
 func (e *Entity) GetId() uint32 {
@@ -455,16 +456,32 @@ func (e *Entity) GetLifeState() uint16 {
 	return e.lifeState
 }
 
+func (e *Entity) SetLifeState(lifeState uint16) {
+	e.lifeState = lifeState
+}
+
 func (e *Entity) GetLastDieType() int32 {
 	return e.lastDieType
+}
+
+func (e *Entity) SetLastDieType(lastDieType int32) {
+	e.lastDieType = lastDieType
 }
 
 func (e *Entity) GetPos() *model.Vector {
 	return &model.Vector{X: e.pos.X, Y: e.pos.Y, Z: e.pos.Z}
 }
 
+func (e *Entity) SetPos(pos *model.Vector) {
+	e.pos.X, e.pos.Y, e.pos.Z = pos.X, pos.Y, pos.Z
+}
+
 func (e *Entity) GetRot() *model.Vector {
 	return &model.Vector{X: e.rot.X, Y: e.rot.Y, Z: e.rot.Z}
+}
+
+func (e *Entity) SetRot(rot *model.Vector) {
+	e.rot.X, e.rot.Y, e.rot.Z = rot.X, rot.Y, rot.Z
 }
 
 func (e *Entity) GetMoveState() uint16 {
@@ -549,10 +566,26 @@ func (m *MonsterEntity) GetMonsterId() uint32 {
 }
 
 type NpcEntity struct {
-	NpcId         uint32
-	RoomId        uint32
-	ParentQuestId uint32
-	BlockId       uint32
+	npcId         uint32
+	roomId        uint32
+	parentQuestId uint32
+	blockId       uint32
+}
+
+func (n *NpcEntity) GetNpcId() uint32 {
+	return n.npcId
+}
+
+func (n *NpcEntity) GetRoomId() uint32 {
+	return n.roomId
+}
+
+func (n *NpcEntity) GetParentQuestId() uint32 {
+	return n.parentQuestId
+}
+
+func (n *NpcEntity) GetBlockId() uint32 {
+	return n.blockId
 }
 
 const (
@@ -661,6 +694,10 @@ type GadgetVehicleEntity struct {
 
 func (g *GadgetVehicleEntity) GetVehicleId() uint32 {
 	return g.vehicleId
+}
+
+func (g *GadgetVehicleEntity) GetWorldId() uint64 {
+	return g.worldId
 }
 
 func (g *GadgetVehicleEntity) GetOwnerUid() uint32 {

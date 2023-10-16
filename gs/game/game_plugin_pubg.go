@@ -27,13 +27,15 @@ const (
 )
 
 const (
-	PUBG_ATK = 100.0
-	PUBG_HP  = 1000.0
+	PUBG_ATK     = 100.0
+	PUBG_HP      = 1000.0
+	PUBG_HP_LOST = 10.0
 )
 
 // PluginPubg pubg游戏插件
 type PluginPubg struct {
 	*Plugin
+	seq                      uint32
 	world                    *World                // 世界对象
 	blueAreaCenterPos        *model.Vector         // 蓝区中心点
 	blueAreaRadius           float64               // 蓝区半径
@@ -50,6 +52,7 @@ type PluginPubg struct {
 func NewPluginPubg() *PluginPubg {
 	p := &PluginPubg{
 		Plugin:                   NewPlugin(),
+		seq:                      0,
 		world:                    nil,
 		blueAreaCenterPos:        &model.Vector{X: 0.0, Y: 0.0, Z: 0.0},
 		blueAreaRadius:           0.0,
@@ -75,7 +78,7 @@ func (p *PluginPubg) OnEnable() {
 	p.ListenEvent(PluginEventIdPostEnterScene, PluginEventPriorityNormal, p.EventPostEnterScene)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
-	p.AddGlobalTick(PluginGlobalTickHourChange, p.GlobalTickHourStart)
+	p.AddGlobalTick(PluginGlobalTickHourChange, p.GlobalTickHourChange)
 	// 注册命令
 	p.RegCommandController(p.NewPubgCommandController())
 }
@@ -87,10 +90,10 @@ func (p *PluginPubg) EventKillAvatar(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventKillAvatar)
 	player := event.Player
 	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.id != player.WorldId {
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
 		return
 	}
-	p.CreateUserTimer(player.PlayerId, 10, p.UserTimerPubgDieExit)
+	p.CreateUserTimer(player.PlayerId, 10, p.UserTimerPubgDieExit, p.world.GetId())
 }
 
 // EventMarkMap 地图标点事件
@@ -98,7 +101,7 @@ func (p *PluginPubg) EventMarkMap(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventMarkMap)
 	player := event.Player
 	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.id != player.WorldId {
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
 		return
 	}
 	GAME.SendMsg(cmd.MarkMapRsp, player.PlayerId, player.ClientSeq, &proto.MarkMapRsp{MarkList: p.GetAreaPointList()})
@@ -110,7 +113,7 @@ func (p *PluginPubg) EventAvatarDieAnimationEnd(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventAvatarDieAnimationEnd)
 	player := event.Player
 	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.id != player.WorldId {
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
 		return
 	}
 	alivePlayerNum := len(p.GetAlivePlayerList())
@@ -124,7 +127,7 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventGadgetInteract)
 	player := event.Player
 	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.id != player.WorldId {
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
 		return
 	}
 	req := event.Req
@@ -176,7 +179,7 @@ func (p *PluginPubg) EventPostEnterScene(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventPostEnterScene)
 	player := event.Player
 	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.id != player.WorldId {
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
 		return
 	}
 	// 开启GM按钮 隐藏多人世界玩家位置地图标记
@@ -219,7 +222,7 @@ func (p *PluginPubg) GlobalTickPubg() {
 				AttackResult: &proto.AttackResult{
 					AttackerId: 0,
 					DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
-					Damage:     10,
+					Damage:     PUBG_HP_LOST,
 				},
 			})
 		}
@@ -234,8 +237,8 @@ func (p *PluginPubg) GlobalTickPubg() {
 	}
 }
 
-// GlobalTickHourStart 每小时开启pubg游戏
-func (p *PluginPubg) GlobalTickHourStart() {
+// GlobalTickHourChange 每小时开启pubg游戏
+func (p *PluginPubg) GlobalTickHourChange() {
 	p.StartPubg()
 }
 
@@ -243,29 +246,34 @@ func (p *PluginPubg) GlobalTickHourStart() {
 
 // UserTimerPubgEnd pubg游戏结束后执行定时器
 func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
-	logger.Debug("PubgEnd")
-	world := p.world
-	if world == nil {
+	logger.Debug("UserTimerPubgEnd, seq: %v", p.seq)
+	oldWorld := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if oldWorld == nil {
 		return
 	}
-	for _, worldPlayer := range world.GetAllPlayer() {
-		if worldPlayer.PlayerId == world.GetOwner().PlayerId {
-			continue
-		}
-		GAME.ReLoginPlayer(worldPlayer.PlayerId, true)
-	}
+	GAME.WorldRemovePlayer(oldWorld, player)
+	newWorld := WORLD_MANAGER.CreateWorld(player)
+	GAME.WorldAddPlayer(newWorld, player)
+	WORLD_MANAGER.InitAiWorld(player)
 }
 
 // UserTimerPubgUpdateArea 更新游戏区域
 func (p *PluginPubg) UserTimerPubgUpdateArea(player *model.Player, data []any) {
-	logger.Debug("PubgUpdateArea")
+	logger.Debug("UserTimerPubgUpdateArea, seq: %v", p.seq)
+	if !p.IsStartPubg() {
+		return
+	}
 	p.phase++
 	p.RefreshArea()
 }
 
 // UserTimerPubgDieExit pubg死亡离开
 func (p *PluginPubg) UserTimerPubgDieExit(player *model.Player, data []any) {
-	logger.Debug("PubgDieExit")
+	logger.Debug("UserTimerPubgDieExit, seq: %v", p.seq)
+	pubgWorldId := data[0].(uint64)
+	if player.WorldId != pubgWorldId {
+		return
+	}
 	GAME.ReLoginPlayer(player.PlayerId, true)
 }
 
@@ -281,7 +289,7 @@ func (p *PluginPubg) NewPubgCommandController() *CommandController {
 		UsageList: []string{
 			"{alias} <start/stop> 开始或关闭pubg游戏",
 		},
-		Perm: CommandPermNormal,
+		Perm: CommandPermGM,
 		Func: p.PubgCommand,
 	}
 }
@@ -317,6 +325,8 @@ func (p *PluginPubg) StartPubg() {
 	if p.IsStartPubg() {
 		return
 	}
+	p.seq++
+	logger.Debug("StartPubg, seq: %v", p.seq)
 	world := WORLD_MANAGER.GetAiWorld()
 	p.world = world
 	for _, pubgWorldGadgetDataConfig := range gdconf.GetPubgWorldGadgetDataMap() {
@@ -334,7 +344,6 @@ func (p *PluginPubg) StartPubg() {
 	}
 	p.phase = PUBG_PHASE_START
 	p.RefreshArea()
-	world.chatMsgList = make([]*proto.ChatInfo, 0)
 	for _, player := range world.GetAllPlayer() {
 		dbAvatar := player.GetDbAvatar()
 		avatarId := p.world.GetPlayerActiveAvatarId(player)
@@ -359,13 +368,25 @@ func (p *PluginPubg) StopPubg() {
 	if !p.IsStartPubg() {
 		return
 	}
+	logger.Debug("StopPubg, seq: %v", p.seq)
+	world := p.world
+	p.world = nil
+	p.blueAreaCenterPos = &model.Vector{X: 0.0, Y: 0.0, Z: 0.0}
+	p.blueAreaRadius = 0.0
+	p.safeAreaCenterPos = &model.Vector{X: 0.0, Y: 0.0, Z: 0.0}
+	p.safeAreaRadius = 0.0
 	p.phase = PUBG_PHASE_WAIT
-	p.CreateUserTimer(p.world.GetOwner().PlayerId, 60, p.UserTimerPubgEnd)
+	p.areaReduceRadiusSpeed = 0.0
+	p.areaReduceXSpeed = 0.0
+	p.areaReduceZSpeed = 0.0
+	p.areaPointList = make([]*proto.MapMarkPoint, 0)
+	p.entityIdWorldGadgetIdMap = make(map[uint32]int32)
+	p.CreateUserTimer(world.GetOwner().PlayerId, 60, p.UserTimerPubgEnd)
 }
 
 // IsStartPubg pubg游戏是否开启
 func (p *PluginPubg) IsStartPubg() bool {
-	return p.world != nil && p.phase != PUBG_PHASE_WAIT
+	return p.phase != PUBG_PHASE_WAIT
 }
 
 // GetAreaPointList 获取游戏区域标点列表

@@ -425,7 +425,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 	g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerId, player.ClientSeq, delTeamEntityNotify)
 
 	// 清除其他玩家的载具
-	if world.owner != player {
+	if world.GetOwner().PlayerId != player.PlayerId {
 		for vehicleId, entityId := range player.VehicleInfo.CreateEntityIdMap {
 			g.DestroyVehicleEntity(player, scene, vehicleId, entityId)
 		}
@@ -568,6 +568,10 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 					},
 				},
 			})
+		}
+		if g.dispatchCancel {
+			applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
+			return
 		}
 		hostPlayer := USER_MANAGER.GetOnlineUser(playerMpInfo.HostUserId)
 		if hostPlayer == nil {

@@ -740,7 +740,7 @@ func (c *CommandManager) NewXLuaDebugCommandController() *CommandController {
 		UsageList: []string{
 			"{alias} 开关xLua调试",
 		},
-		Perm: CommandPermNormal,
+		Perm: CommandPermGM,
 		Func: c.XLuaDebugCommand,
 	}
 }
@@ -769,7 +769,7 @@ func (c *CommandManager) NewGcgCommandController() *CommandController {
 		UsageList: []string{
 			"{alias} 测试七圣召唤",
 		},
-		Perm: CommandPermNormal,
+		Perm: CommandPermGM,
 		Func: c.GcgCommand,
 	}
 }

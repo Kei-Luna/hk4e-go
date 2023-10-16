@@ -124,8 +124,8 @@ func (p *PhysicsEngine) Update(now int64) []*RigidBody {
 			hitList = append(hitList, rigidBody)
 			p.DestroyRigidBody(rigidBody.entityId)
 		}
-		logger.Debug("[PhysicsEngineUpdate] e: %v, s: %v, p: %v, v: %v", rigidBody.entityId, rigidBody.sceneId, rigidBody.position, rigidBody.velocity)
 		if p.pathTracing {
+			logger.Debug("[PhysicsEngineUpdate] e: %v, s: %v, p: %v, v: %v", rigidBody.entityId, rigidBody.sceneId, rigidBody.position, rigidBody.velocity)
 			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{
 				X: float64(rigidBody.position.X),
 				Y: float64(rigidBody.position.Y),

@@ -125,6 +125,7 @@ func NewDiscoveryService(db *dao.Dao, messageQueue *mq.MessageQueue) (*Discovery
 	r.messageQueue = messageQueue
 	go r.removeDeadServer()
 	go r.broadcastReceiver()
+	go r.serverState()
 	return r, nil
 }
 
@@ -418,15 +419,19 @@ func (s *DiscoveryService) GetStopServerInfo(ctx context.Context, req *api.NullM
 
 // SetStopServerInfo 修改停服维护信息
 func (s *DiscoveryService) SetStopServerInfo(ctx context.Context, req *api.StopServerInfo) (*api.NullMsg, error) {
+	shutdown := false
 	if s.stopServerInfo.stopServer == false && req.StopServer == true {
+		shutdown = true
+	}
+	s.stopServerInfo.stopServer = req.StopServer
+	s.stopServerInfo.startTime = req.StartTime
+	s.stopServerInfo.endTime = req.EndTime
+	if shutdown {
 		s.messageQueue.SendToAll(&mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerStopNotify,
 		})
 	}
-	s.stopServerInfo.stopServer = req.StopServer
-	s.stopServerInfo.startTime = req.StartTime
-	s.stopServerInfo.endTime = req.EndTime
 	return &api.NullMsg{}, nil
 }
 
@@ -467,6 +472,13 @@ func (s *DiscoveryService) ServerDispatchCancel(ctx context.Context, req *api.Se
 			return true
 		})
 	}
+	s.messageQueue.SendToAll(&mq.NetMsg{
+		MsgType: mq.MsgTypeServer,
+		EventId: mq.ServerDispatchCancelNotify,
+		ServerMsg: &mq.ServerMsg{
+			AppVersion: req.AppVersion,
+		},
+	})
 	return &api.NullMsg{}, nil
 }
 
@@ -551,5 +563,28 @@ func (s *DiscoveryService) handleServerDead(serverInstance *ServerInstance) {
 			}
 			return true
 		})
+	}
+}
+
+func (s *DiscoveryService) serverState() {
+	ticker := time.NewTicker(time.Minute * 1)
+	for {
+		<-ticker.C
+		totalGateLoad := uint32(0)
+		totalGsLoad := uint32(0)
+		for _, instMap := range s.serverInstanceMap {
+			instMap.Range(func(appid, inst any) bool {
+				serverInstance := inst.(*ServerInstance)
+				logger.Info("server state, type: %v, appid: %v, load: %v", serverInstance.serverType, serverInstance.appId, serverInstance.loadCount)
+				switch serverInstance.serverType {
+				case api.GATE:
+					totalGateLoad += serverInstance.loadCount
+				case api.GS:
+					totalGsLoad += serverInstance.loadCount
+				}
+				return true
+			})
+		}
+		logger.Info("total gate load: %v, total gs load: %v", totalGateLoad, totalGsLoad)
 	}
 }

@@ -65,10 +65,6 @@ func Run(ctx context.Context, configFile string) error {
 			AppId:      APPID,
 		})
 	}()
-	mainGsAppid, err := discoveryClient.GetMainGameServerAppId(context.TODO(), &api.NullMsg{})
-	if err != nil {
-		return err
-	}
 
 	logger.InitLogger("gs_" + APPID)
 	logger.Warn("gs start, appid: %v, gsid: %v", APPID, GSID)
@@ -87,7 +83,7 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.GS, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	gameCore := game.NewGameCore(db, messageQueue, GSID, APPID, mainGsAppid.AppId, discoveryClient)
+	gameCore := game.NewGameCore(db, messageQueue, GSID, APPID, APPVERSION, discoveryClient)
 	defer gameCore.Close()
 
 	// natsrpc server

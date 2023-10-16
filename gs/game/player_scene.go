@@ -346,7 +346,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
 	// 加载该场景的载具
-	if world.owner == player {
+	if world.GetOwner().PlayerId == player.PlayerId {
 		vehicleEntityIdList := g.CreateSceneVehicle(scene)
 		g.AddSceneEntityNotify(player, visionType, vehicleEntityIdList, false, false)
 	}
@@ -667,8 +667,8 @@ func (g *Game) RevivePlayerAvatar(player *model.Player, avatarId uint32) {
 	}
 	g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf, 0)
 
-	entity.lifeState = constant.LIFE_STATE_ALIVE
-	entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 100
+	entity.SetLifeState(constant.LIFE_STATE_ALIVE)
+	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 100
 }
 
 // KillEntity 杀死实体
@@ -678,9 +678,9 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 		return
 	}
 	// 设置血量
-	entity.lastDieType = int32(dieType)
-	entity.lifeState = constant.LIFE_STATE_DEAD
-	entity.fightProp[constant.FIGHT_PROP_CUR_HP] = 0
+	entity.SetLastDieType(int32(dieType))
+	entity.SetLifeState(constant.LIFE_STATE_DEAD)
+	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 0
 	ntf := &proto.LifeStateChangeNotify{
 		EntityId:        entity.GetId(),
 		LifeState:       uint32(entity.GetLifeState()),
@@ -1812,10 +1812,10 @@ func (g *Game) PacketSceneMonsterInfo(entity *Entity) *proto.SceneMonsterInfo {
 
 func (g *Game) PacketSceneNpcInfo(entity *NpcEntity) *proto.SceneNpcInfo {
 	sceneNpcInfo := &proto.SceneNpcInfo{
-		NpcId:         entity.NpcId,
-		RoomId:        entity.RoomId,
-		ParentQuestId: entity.ParentQuestId,
-		BlockId:       entity.BlockId,
+		NpcId:         entity.GetNpcId(),
+		RoomId:        entity.GetRoomId(),
+		ParentQuestId: entity.GetParentQuestId(),
+		BlockId:       entity.GetBlockId(),
 	}
 	return sceneNpcInfo
 }
@@ -1880,14 +1880,14 @@ func (g *Game) PacketSceneGadgetInfoClient(gadgetClientEntity *GadgetClientEntit
 }
 
 func (g *Game) PacketSceneGadgetInfoVehicle(gadgetVehicleEntity *GadgetVehicleEntity) *proto.SceneGadgetInfo {
-	player := USER_MANAGER.GetOnlineUser(gadgetVehicleEntity.ownerUid)
+	player := USER_MANAGER.GetOnlineUser(gadgetVehicleEntity.GetOwnerUid())
 	if player == nil {
-		logger.Error("player is nil, userId: %v", gadgetVehicleEntity.ownerUid)
+		logger.Error("player is nil, userId: %v", gadgetVehicleEntity.GetOwnerUid())
 		return new(proto.SceneGadgetInfo)
 	}
 	sceneGadgetInfo := &proto.SceneGadgetInfo{
 		GadgetId:         gadgetVehicleEntity.GetVehicleId(),
-		AuthorityPeerId:  WORLD_MANAGER.GetWorldById(gadgetVehicleEntity.worldId).GetPlayerPeerId(player),
+		AuthorityPeerId:  WORLD_MANAGER.GetWorldById(gadgetVehicleEntity.GetWorldId()).GetPlayerPeerId(player),
 		IsEnableInteract: true,
 		Content: &proto.SceneGadgetInfo_VehicleInfo{
 			VehicleInfo: &proto.VehicleInfo{
