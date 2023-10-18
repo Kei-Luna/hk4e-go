@@ -40,20 +40,22 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 		return
 	}
 	// TODO aoi漏移除玩家的bug解决了就删掉
-	aiWorldAoi := world.GetAiWorldAoi()
-	gid := aiWorldAoi.GetGidByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
-	if gid == math.MaxUint32 {
-		return
-	}
-	gridList := aiWorldAoi.GetSurrGridListByGid(gid)
-	for _, grid := range gridList {
-		objectList := grid.GetObjectList()
-		for uid, wa := range objectList {
-			playerMap := world.GetAllPlayer()
-			_, exist := playerMap[uint32(uid)]
-			if !exist {
-				logger.Error("remove not in world player cause by aoi bug, niw uid: %v, niw wa: %+v, uid: %v", uid, wa, player.PlayerId)
-				delete(objectList, uid)
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		gid := aiWorldAoi.GetGidByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		if gid == math.MaxUint32 {
+			return
+		}
+		gridList := aiWorldAoi.GetSurrGridListByGid(gid)
+		for _, grid := range gridList {
+			objectList := grid.GetObjectList()
+			for uid, wa := range objectList {
+				playerMap := world.GetAllPlayer()
+				_, exist := playerMap[uint32(uid)]
+				if !exist {
+					logger.Error("remove not in world player cause by aoi bug, niw uid: %v, niw wa: %+v, uid: %v", uid, wa, player.PlayerId)
+					delete(objectList, uid)
+				}
 			}
 		}
 	}
