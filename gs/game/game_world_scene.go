@@ -115,14 +115,14 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 	return entity.id
 }
 
-func (s *Scene) CreateEntityWeapon() uint32 {
+func (s *Scene) CreateEntityWeapon(pos, rot *model.Vector) uint32 {
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_WEAPON)
 	entity := &Entity{
 		id:                  entityId,
 		scene:               s,
 		lifeState:           constant.LIFE_STATE_ALIVE,
-		pos:                 new(model.Vector),
-		rot:                 new(model.Vector),
+		pos:                 &model.Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
+		rot:                 &model.Vector{X: rot.X, Y: rot.Y, Z: rot.Z},
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,

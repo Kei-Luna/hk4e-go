@@ -524,7 +524,7 @@ func (w *World) InitPlayerWorldAvatar(player *model.Player) {
 		scene.DestroyEntity(worldAvatar.avatarEntityId)
 		scene.DestroyEntity(worldAvatar.weaponEntityId)
 		worldAvatar.avatarEntityId = scene.CreateEntityAvatar(player, worldAvatar.avatarId)
-		worldAvatar.weaponEntityId = scene.CreateEntityWeapon()
+		worldAvatar.weaponEntityId = scene.CreateEntityWeapon(player.Pos, player.Rot)
 	}
 }
 

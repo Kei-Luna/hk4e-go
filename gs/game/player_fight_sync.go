@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -38,6 +39,25 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	if invokeHandler.AllLen() == 0 && invokeHandler.AllExceptCurLen() == 0 && invokeHandler.HostLen() == 0 {
 		return
 	}
+	// TODO aoi漏移除玩家的bug解决了就删掉
+	aiWorldAoi := world.GetAiWorldAoi()
+	gid := aiWorldAoi.GetGidByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+	if gid == math.MaxUint32 {
+		return
+	}
+	gridList := aiWorldAoi.GetSurrGridListByGid(gid)
+	for _, grid := range gridList {
+		objectList := grid.GetObjectList()
+		for uid, wa := range objectList {
+			playerMap := world.GetAllPlayer()
+			_, exist := playerMap[uint32(uid)]
+			if !exist {
+				logger.Error("remove not in world player cause by aoi bug, niw uid: %v, niw wa: %+v, uid: %v", uid, wa, player.PlayerId)
+				delete(objectList, uid)
+			}
+		}
+	}
+	// TODO aoi漏移除玩家的bug解决了就删掉
 	if WORLD_MANAGER.IsAiWorld(world) && cmdId != cmd.CombatInvocationsNotify {
 		if invokeHandler.AllLen() > 0 {
 			reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardAll)
@@ -239,6 +259,14 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 	}
 	if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 		// 玩家实体在移动
+		avatarEntity := entity.GetAvatarEntity()
+		if avatarEntity.GetUid() != player.PlayerId {
+			logger.Error("can not move other player avatar entity, entityId: %v, uid: %v", entity.GetId(), player.PlayerId)
+			return
+		}
+		aoiDebug := player.GetAoiDebug()
+		aoiDebug.AddHistoryPos(pos)
+		aoiDebug.CheckPlayerPosPtr(player)
 		if !WORLD_MANAGER.IsAiWorld(world) {
 			g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
 		} else {
@@ -397,6 +425,15 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		// 玩家跨越了格子
 		logger.Debug("player cross ai world aoi grid, oldGid: %v, oldPos: %+v, newGid: %v, newPos: %+v, uid: %v",
 			oldGid, oldPos, newGid, newPos, player.PlayerId)
+		aoiDebug := player.GetAoiDebug()
+		if aoiDebug.LastGid == 0 {
+			aoiDebug.LastGid = oldGid
+		}
+		if aoiDebug.LastGid != oldGid {
+			logger.Error("aoi bug move skip grid, last gid: %v, old gid: %v, uid: %v", aoiDebug.LastGid, oldGid, player.PlayerId)
+			aoiDebug.PrintHistoryPosList()
+		}
+		aoiDebug.LastGid = newGid
 		// 找出本次移动所带来的消失和出现的格子
 		oldGridList := aiWorldAoi.GetSurrGridListByGid(oldGid)
 		newGridList := aiWorldAoi.GetSurrGridListByGid(newGid)
