@@ -312,6 +312,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
+		logger.Debug("ai world aoi add player, newPos: %+v, uid: %v", player.Pos, player.PlayerId)
 		ok := aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
 		if !ok {
 			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)

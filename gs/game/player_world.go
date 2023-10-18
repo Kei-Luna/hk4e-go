@@ -677,8 +677,7 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 
-	if WORLD_MANAGER.IsAiWorld(world) && sceneId != 3 {
-		logger.Error("ai world scene not support now, sceneId: %v, uid: %v", sceneId, player.PlayerId)
+	if WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
 
@@ -697,9 +696,10 @@ func (g *Game) TeleportPlayer(
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		logger.Debug("ai world aoi remove player, oldPos: %+v, uid: %v", oldPos, player.PlayerId)
+		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
 		if !ok {
-			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, oldPos)
 		}
 	}
 

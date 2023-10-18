@@ -270,12 +270,18 @@ func (t *TickManager) onTick5Second(now int64) {
 			GAME.ScenePlayerLocationNotify(world)
 		}
 	}
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
+		return
+	}
+	pluginPubg := iPlugin.(*PluginPubg)
+	if pluginPubg.IsStartPubg() {
+		return
+	}
 	aiWorld := WORLD_MANAGER.GetAiWorld()
-	if WORLD_MANAGER.IsAiWorld(aiWorld) {
-		// todo pubg允许超过100人
-		if len(aiWorld.GetAllPlayer()) >= 100 {
-			return
-		}
+	if aiWorld.GetWorldPlayerNum() >= 100 {
+		return
 	}
 	for applyUid := range aiWorld.GetOwner().CoopApplyMap {
 		GAME.PlayerDealEnterWorld(aiWorld.GetOwner(), applyUid, true)
