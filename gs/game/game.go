@@ -454,6 +454,10 @@ func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
 		for uid := range otherWorldAvatarMap {
 			player := USER_MANAGER.GetOnlineUser(uint32(uid))
+			if player == nil {
+				logger.Error("player not exist, uid: %v, stack: %v", uid, logger.Stack())
+				continue
+			}
 			if aecUid == player.PlayerId {
 				continue
 			}

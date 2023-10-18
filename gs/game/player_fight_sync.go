@@ -431,7 +431,10 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 		// 老格子移除玩家
-		aiWorldAoi.RemoveObjectFromGrid(int64(player.PlayerId), oldGid)
+		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
+		if !ok {
+			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+		}
 		// 处理消失的格子
 		for _, delGridId := range delGridIdList {
 			// 通知自己 老格子里的其它玩家消失
@@ -478,7 +481,10 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 			}
 		}
 		// 新格子添加玩家
-		aiWorldAoi.AddObjectToGrid(int64(player.PlayerId), activeWorldAvatar, newGid)
+		ok = aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
+		if !ok {
+			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+		}
 	}
 	// 消失和出现的场景实体
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)

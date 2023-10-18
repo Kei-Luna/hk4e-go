@@ -244,15 +244,20 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 		return
 	}
 	targetWorld := WORLD_MANAGER.GetWorldById(targetPlayer.WorldId)
+	if targetWorld == nil {
+		logger.Error("target world is nil, target worldId: %v, uid: %v", targetPlayer.WorldId, player.PlayerId)
+		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
+		return
+	}
 	if targetWorld.GetMultiplayer() && targetWorld.GetOwner().PlayerId != targetPlayer.PlayerId {
 		// 向同一世界内的非房主玩家申请时直接拒绝
-		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_NOT_IN_PLAYER_WORLD)
+		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
 	mpSetting := targetPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]
 	if mpSetting == 0 {
 		// 房主玩家没开权限
-		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_SCENE_CANNOT_ENTER)
+		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	} else if mpSetting == 1 {
 		g.PlayerDealEnterWorld(targetPlayer, player.PlayerId, true)
@@ -445,7 +450,10 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		if !ok {
+			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+		}
 	}
 
 	player.WorldId = 0

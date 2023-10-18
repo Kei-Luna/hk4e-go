@@ -586,3 +586,20 @@ func (g *GMCmd) ShowAvatarCollider(v bool) {
 	engine := world.GetBulletPhysicsEngine()
 	engine.ShowAvatarCollider()
 }
+
+func (g *GMCmd) AiWorldAoiDebug(v bool) {
+	aiWorld := WORLD_MANAGER.GetAiWorld()
+	if aiWorld == nil {
+		return
+	}
+	aiWorldAoi := aiWorld.GetAiWorldAoi()
+	gridMap := aiWorldAoi.Debug()
+	for _, grid := range gridMap {
+		logger.Debug("================================================== GRID gid:%v ==================================================", grid.GetGid())
+		objectMap := grid.GetObjectList()
+		for objectId, object := range objectMap {
+			wa := object.(*WorldAvatar)
+			logger.Debug("uid: %v, wa.uid: %v, wa.avatarId: %v, wa.entityId: %v", objectId, wa.uid, wa.avatarId, wa.avatarEntityId)
+		}
+	}
+}

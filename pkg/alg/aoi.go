@@ -269,6 +269,10 @@ func (a *AoiManager) RemoveObjectFromGridByPos(objectId int64, x, y, z float32) 
 	return a.RemoveObjectFromGrid(objectId, gid)
 }
 
+func (a *AoiManager) Debug() map[uint32]*Grid {
+	return a.gridMap
+}
+
 // Grid 地图格子
 type Grid struct {
 	gid       uint32        // 格子id

@@ -364,7 +364,7 @@ func (g *Game) PacketQuest(player *model.Player, questId uint32) *proto.Quest {
 	}
 	quest := dbQuest.GetQuestById(questId)
 	if quest == nil {
-		logger.Error("get quest is nil, questId: %v", quest.QuestId)
+		logger.Error("get quest is nil, questId: %v", questId)
 		return nil
 	}
 	pbQuest := &proto.Quest{
