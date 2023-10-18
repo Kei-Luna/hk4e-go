@@ -272,6 +272,8 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		} else {
 			g.AiWorldAoiPlayerMove(player, world, scene, player.Pos, pos)
 		}
+		// 场景天气区域变更检测
+		g.SceneWeatherAreaCheck(player, player.Pos, pos)
 		// 更新玩家的位置信息
 		player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
 		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
@@ -410,8 +412,6 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	}
 	// 场景区域触发器检测
 	g.SceneRegionTriggerCheck(player, oldPos, newPos, avatarEntityId)
-	// 场景天气区域变更检测
-	g.SceneWeatherAreaCheck(player, oldPos, newPos)
 }
 
 func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
