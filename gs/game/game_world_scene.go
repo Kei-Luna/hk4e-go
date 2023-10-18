@@ -99,16 +99,9 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 		id:        entityId,
 		scene:     s,
 		lifeState: avatar.LifeState,
-		pos: &model.Vector{
-			X: player.Pos.X,
-			Y: player.Pos.Y,
-			Z: player.Pos.Z,
-		}, // 所有角色实体暂时公用玩家的位置信息
-		rot: &model.Vector{
-			X: player.Rot.X,
-			Y: player.Rot.Y,
-			Z: player.Rot.Z,
-		},
+		// 所有角色实体暂时公用玩家的位置指针
+		pos:                 player.Pos,
+		rot:                 player.Rot,
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
