@@ -1151,12 +1151,15 @@ func (g *Game) SceneGroupCreateEntity(player *model.Player, groupId uint32, conf
 }
 
 // CreateMonster 创建怪物实体
-func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId uint32) {
+func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId uint32, level uint8) uint32 {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		return
+		return 0
 	}
 	scene := world.GetSceneById(player.SceneId)
+	if scene == nil {
+		return 0
+	}
 	if pos == nil {
 		pos = &model.Vector{
 			X: player.Pos.X + random.GetRandomFloat64(1.0, 10.0),
@@ -1171,7 +1174,13 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 		monsterId, uint8(random.GetRandomInt32(1, 90)), getTempFightPropMap(),
 		0, 0,
 	)
+	entity := scene.GetEntity(entityId)
+	if entity == nil {
+		return 0
+	}
+	entity.level = level
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
+	return entityId
 }
 
 // CreateGadget 创建物件实体

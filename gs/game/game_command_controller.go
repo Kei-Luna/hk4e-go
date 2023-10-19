@@ -24,9 +24,7 @@ type CommandController struct {
 // InitController 初始化命令控制器
 func (c *CommandManager) InitController() {
 	controllerList := []*CommandController{
-		// 权限等级 1: GM 1级
 		c.NewAssignCommandController(),
-		// 权限等级 0: 普通玩家
 		c.NewHelpCommandController(),
 		c.NewGotoCommandController(),
 		c.NewJumpCommandController(),
@@ -35,6 +33,8 @@ func (c *CommandManager) InitController() {
 		c.NewAvatarCommandController(),
 		c.NewGiveCommandController(),
 		c.NewKillCommandController(),
+		c.NewMonsterCommandController(),
+		c.NewGadgetCommandController(),
 		c.NewQuestCommandController(),
 		c.NewPointCommandController(),
 		c.NewXLuaDebugCommandController(),
@@ -619,6 +619,88 @@ func (c *CommandManager) KillCommand(content *CommandContent) bool {
 		default:
 			return false
 		}
+		return true
+	})
+}
+
+// 生成怪物命令
+
+func (c *CommandManager) NewMonsterCommandController() *CommandController {
+	return &CommandController{
+		Name:        "生成怪物",
+		AliasList:   []string{"monster"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>生成原魔</color>",
+		UsageList: []string{
+			"{alias} <怪物ID> [数量] [等级] [姿势 (暂时无效)] [坐标X] [坐标Y] [坐标Z] 生成怪物",
+		},
+		Perm: CommandPermNormal,
+		Func: c.MonsterCommand,
+	}
+}
+
+func (c *CommandManager) MonsterCommand(content *CommandContent) bool {
+	var monsterId uint32 // 怪物id
+	var count uint32 = 1 // 数量
+	var level uint8 = 1  // 等级
+	// var pose uint32      // 姿势
+	var posX = content.AssignPlayer.Pos.X // 坐标x
+	var posY = content.AssignPlayer.Pos.Y // 坐标y
+	var posZ = content.AssignPlayer.Pos.Z // 坐标z
+
+	return content.Dynamic("uint32", func(param any) bool {
+		monsterId = param.(uint32)
+		return true
+	}).Option("uint32", func(param any) bool {
+		count = param.(uint32)
+		return true
+	}).Option("uint8", func(param any) bool {
+		level = param.(uint8)
+		return true
+	}).Option("uint32", func(param any) bool {
+		// pose = param.(uint32)
+		return true
+	}).Option("float64", func(param any) bool {
+		posX = param.(float64)
+		return true
+	}).Option("float64", func(param any) bool {
+		posY = param.(float64)
+		return true
+	}).Option("float64", func(param any) bool {
+		posZ = param.(float64)
+		return true
+	}).Execute(func() bool {
+		c.gmCmd.GMCreateMonster(content.AssignPlayer.PlayerId, monsterId, posX, posY, posZ, count, level)
+		return true
+	})
+}
+
+// 生成物件命令
+
+func (c *CommandManager) NewGadgetCommandController() *CommandController {
+	return &CommandController{
+		Name:        "生成物件",
+		AliasList:   []string{"gadget"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>生成物件</color>",
+		UsageList: []string{
+			"{alias} <物件ID> [数量] 附近生成物件",
+		},
+		Perm: CommandPermNormal,
+		Func: c.GadgetCommand,
+	}
+}
+
+func (c *CommandManager) GadgetCommand(content *CommandContent) bool {
+	var gadgetId uint32  // 物件id
+	var count uint32 = 1 // 数量
+
+	return content.Dynamic("uint32", func(param any) bool {
+		gadgetId = param.(uint32)
+		return true
+	}).Option("uint32", func(param any) bool {
+		count = param.(uint32)
+		return true
+	}).Execute(func() bool {
+		c.gmCmd.GMCreateGadget(content.AssignPlayer.PlayerId, gadgetId, count)
 		return true
 	})
 }

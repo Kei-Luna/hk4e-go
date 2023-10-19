@@ -378,23 +378,41 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 }
 
 // GMCreateMonster 在玩家附近创建怪物
-func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32) {
+func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32, posX, posY, posZ float64, count uint32, level uint8) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	GAME.CreateMonster(player, nil, monsterId)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	if scene == nil {
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		return
+	}
+	for i := 0; i < int(count); i++ {
+		GAME.CreateMonster(player, &model.Vector{
+			X: posX,
+			Y: posY,
+			Z: posZ,
+		}, monsterId, level)
+	}
 }
 
 // GMCreateGadget 在玩家附近创建物件
-func (g *GMCmd) GMCreateGadget(userId uint32, gadgetId uint32) {
+func (g *GMCmd) GMCreateGadget(userId uint32, gadgetId uint32, count uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	GAME.CreateGadget(player, nil, gadgetId, nil)
+	for i := 0; i < int(count); i++ {
+		GAME.CreateGadget(player, nil, gadgetId, nil)
+	}
 }
 
 // 系统级GM指令

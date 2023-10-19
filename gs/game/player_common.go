@@ -292,6 +292,11 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 			g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "GM函数解析失败", Msg: req.Msg})
 			return
 		}
+		// 判断玩家权限是否足够
+		if CommandPerm(player.CmdPerm) < CommandPermGM {
+			g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "权限不足", Msg: req.Msg})
+			return
+		}
 		funcName := commandText[:beginIndex]
 		paramList := strings.Split(commandText[beginIndex+1:endIndex], ",")
 		commandMessageInput <- &CommandMessage{
