@@ -817,7 +817,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	if ntf.InitPos == nil {
 		return
 	}
-	scene.CreateEntityGadgetClient(&model.Vector{
+	ok := scene.CreateEntityGadgetClient(&model.Vector{
 		X: float64(ntf.InitPos.X),
 		Y: float64(ntf.InitPos.Y),
 		Z: float64(ntf.InitPos.Z),
@@ -826,6 +826,9 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 		Y: float64(ntf.InitEulerAngles.Y),
 		Z: float64(ntf.InitEulerAngles.Z),
 	}, ntf.EntityId, ntf.ConfigId, ntf.CampId, ntf.CampType, ntf.OwnerEntityId, ntf.TargetEntityId, ntf.PropOwnerEntityId)
+	if !ok {
+		return
+	}
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{ntf.EntityId}, true, true)
 
 	if WORLD_MANAGER.IsAiWorld(world) {

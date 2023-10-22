@@ -112,8 +112,7 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 			avatarId: avatarId,
 		},
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
 func (s *Scene) CreateEntityWeapon(pos, rot *model.Vector) uint32 {
@@ -134,8 +133,7 @@ func (s *Scene) CreateEntityWeapon(pos, rot *model.Vector) uint32 {
 		},
 		entityType: constant.ENTITY_TYPE_WEAPON,
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
 func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, level uint8, fightProp map[uint32]float32, configId, groupId uint32) uint32 {
@@ -158,8 +156,7 @@ func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, le
 		configId: configId,
 		groupId:  groupId,
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
 func (s *Scene) CreateEntityNpc(pos, rot *model.Vector, npcId, roomId, parentQuestId, blockId, configId, groupId uint32) uint32 {
@@ -188,8 +185,7 @@ func (s *Scene) CreateEntityNpc(pos, rot *model.Vector, npcId, roomId, parentQue
 		configId: configId,
 		groupId:  groupId,
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
 func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadgetState uint32, gadgetNormalEntity *GadgetNormalEntity, configId, groupId uint32) uint32 {
@@ -218,11 +214,10 @@ func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadge
 		configId: configId,
 		groupId:  groupId,
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, configId, campId, campType, ownerEntityId, targetEntityId, propOwnerEntityId uint32) {
+func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, configId, campId, campType, ownerEntityId, targetEntityId, propOwnerEntityId uint32) bool {
 	entity := &Entity{
 		id:                  entityId,
 		scene:               s,
@@ -250,7 +245,10 @@ func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, confi
 			},
 		},
 	}
-	s.CreateEntity(entity)
+	if s.CreateEntity(entity) == 0 {
+		return false
+	}
+	return true
 }
 
 func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vector, vehicleId uint32) uint32 {
@@ -290,16 +288,16 @@ func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vecto
 			},
 		},
 	}
-	s.CreateEntity(entity)
-	return entity.id
+	return s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntity(entity *Entity) {
+func (s *Scene) CreateEntity(entity *Entity) uint32 {
 	if len(s.entityMap) >= ENTITY_MAX_SEND_NUM && !ENTITY_NUM_UNLIMIT {
 		logger.Error("above max scene entity num limit: %v, id: %v, pos: %v", ENTITY_MAX_SEND_NUM, entity.id, entity.pos)
-		return
+		return 0
 	}
 	s.entityMap[entity.id] = entity
+	return entity.id
 }
 
 func (s *Scene) DestroyEntity(entityId uint32) {
