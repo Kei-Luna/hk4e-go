@@ -783,7 +783,6 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	if WORLD_MANAGER.IsAiWorld(world) {
 		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
 		if bulletPhysicsEngine.IsRigidBody(ntf.EntityId) {
-			logger.Debug("[FPS] EvtBulletHitNotify: %+v", ntf)
 			bulletPhysicsEngine.DestroyRigidBody(ntf.EntityId)
 			_ = ntf.HitPoint
 		}

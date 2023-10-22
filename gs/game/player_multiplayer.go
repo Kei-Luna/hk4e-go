@@ -101,7 +101,7 @@ func (g *Game) PlayerGetForceQuitBanInfoReq(player *model.Player, payloadMsg pb.
 
 func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
 	// 其他玩家
-	ok := g.PlayerLeaveWorld(player)
+	ok := g.PlayerLeaveWorld(player, false)
 
 	if !ok {
 		g.SendError(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
@@ -112,7 +112,7 @@ func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) ChangeWorldToSingleModeReq(player *model.Player, payloadMsg pb.Message) {
 	// 房主
-	ok := g.PlayerLeaveWorld(player)
+	ok := g.PlayerLeaveWorld(player, false)
 
 	if !ok {
 		g.SendError(cmd.ChangeWorldToSingleModeRsp, player, &proto.ChangeWorldToSingleModeRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
@@ -138,7 +138,7 @@ func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("player is nil, uid: %v", targetUid)
 		return
 	}
-	ok := g.PlayerLeaveWorld(targetPlayer)
+	ok := g.PlayerLeaveWorld(targetPlayer, false)
 	if !ok {
 		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
 		return
@@ -375,7 +375,11 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 	g.RemoveSceneEntityNotifyToPlayer(hostPlayer, proto.VisionType_VISION_MISS, entityIdList)
 }
 
-func (g *Game) PlayerLeaveWorld(player *model.Player) bool {
+func (g *Game) PlayerLeaveWorld(player *model.Player, force bool) bool {
+	if force {
+		g.ReLoginPlayer(player.PlayerId, true)
+		return true
+	}
 	oldWorld := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if oldWorld == nil {
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
@@ -415,9 +419,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 			if worldPlayer.PlayerId == world.GetOwner().PlayerId {
 				continue
 			}
-			if ok := g.PlayerLeaveWorld(worldPlayer); !ok {
-				return
-			}
+			g.PlayerLeaveWorld(worldPlayer, true)
 		}
 	}
 	scene := world.GetSceneById(player.SceneId)

@@ -101,7 +101,6 @@ func (q *DbQuest) AddQuestProgress(questId uint32, index int, progress uint32) {
 		return
 	}
 	if quest.State != constant.QUEST_STATE_UNFINISHED {
-		logger.Error("invalid quest state, questId: %v, state: %v", questId, quest.State)
 		return
 	}
 	questDataConfig := gdconf.GetQuestDataById(int32(questId))

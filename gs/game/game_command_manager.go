@@ -350,6 +350,12 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 	if targetUid != c.system.PlayerId {
 		return
 	}
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world != nil && WORLD_MANAGER.IsAiWorld(world) {
+		return
+	}
+
 	// 输入的命令将在主协程中处理
 	c.commandMessageInput <- &CommandMessage{
 		GMType:   PlayerChatGM,

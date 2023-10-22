@@ -321,7 +321,6 @@ func (g *GMCmd) GMForceFinishAllQuest(userId uint32) {
 		ntf.QuestList = append(ntf.QuestList, pbQuest)
 	}
 	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
-	GAME.AcceptQuest(player, true)
 }
 
 // GMUnlockPoint 解锁场景某个锚点

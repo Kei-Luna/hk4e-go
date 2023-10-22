@@ -19,11 +19,8 @@ import (
 // AddQuestContentProgressReq 添加任务内容进度请求
 func (g *Game) AddQuestContentProgressReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.AddQuestContentProgressReq)
-	logger.Debug("AddQuestContentProgressReq: %v", req)
 
 	g.TriggerQuest(player, int32(req.ContentType), "", int32(req.Param))
-
-	// g.AddQuestProgress(player, req)
 
 	rsp := &proto.AddQuestContentProgressRsp{
 		ContentType: req.ContentType,
