@@ -67,7 +67,7 @@ func NewMessageQueue(serverType string, appId string, discoveryClient *rpc.Disco
 	r.discoveryClient = discoveryClient
 	if serverType == api.GATE {
 		go r.runGateTcpMqServer()
-	} else if serverType == api.GS || serverType == api.ANTICHEAT || serverType == api.PATHFINDING || serverType == api.ROBOT {
+	} else if serverType == api.GS || serverType == api.MULTI || serverType == api.ROBOT {
 		go r.runGateTcpMqClient()
 	}
 	go r.natsMsgRecvHandler()
@@ -170,11 +170,10 @@ func (m *MessageQueue) parseNetMsg(rawData []byte) *NetMsg {
 func (m *MessageQueue) sendHandler() {
 	// 网关tcp连接消息收发快速通道 key1:服务器类型 key2:服务器appid value:连接实例
 	gateTcpMqInstMap := map[string]map[string]*GateTcpMqInst{
-		api.GATE:        make(map[string]*GateTcpMqInst),
-		api.GS:          make(map[string]*GateTcpMqInst),
-		api.ANTICHEAT:   make(map[string]*GateTcpMqInst),
-		api.PATHFINDING: make(map[string]*GateTcpMqInst),
-		api.ROBOT:       make(map[string]*GateTcpMqInst),
+		api.GATE:  make(map[string]*GateTcpMqInst),
+		api.GS:    make(map[string]*GateTcpMqInst),
+		api.MULTI: make(map[string]*GateTcpMqInst),
+		api.ROBOT: make(map[string]*GateTcpMqInst),
 	}
 	for {
 		select {
@@ -320,10 +319,8 @@ func (m *MessageQueue) gateTcpMqHandshake(conn *net.TCPConn) {
 		inst.serverType = api.GATE
 	case api.GS:
 		inst.serverType = api.GS
-	case api.ANTICHEAT:
-		inst.serverType = api.ANTICHEAT
-	case api.PATHFINDING:
-		inst.serverType = api.PATHFINDING
+	case api.MULTI:
+		inst.serverType = api.MULTI
 	case api.ROBOT:
 		inst.serverType = api.ROBOT
 	default:

@@ -10,7 +10,7 @@
 
 [Download version 3.2.0 from miHoYo](https://autopatchhk.yuanshen.com/client_app/download/pc_zip/20221024103618_h2e3o3zijYKEqHnQ/GenshinImpact_3.2.0.zip)
 
-#### You need to use an https proxy and a patch to use it. Grasscutter is a good example.
+#### You need to use a https proxy and a patch to use it. Grasscutter is a good example.
 
 #### You can use a newer patch to avoid using https proxies. It supports custom keys and multiple servers. Special thanks to [Jx2f/mhypbase](https://github.com/Jx2f/mhypbase)
 
@@ -18,7 +18,7 @@
 
 * Native high-availability cluster architecture. Crashes on any node servers won't affect the whole system. So it is
   highly extendable
-* Player-level non-status game server. Non-lock single thread structure. Easy to develope. And fully-featured player
+* Player-level non-status game server. Non-lock single thread structure. Easy to develop. And fully-featured player
   data exchanger(`Memory<->Cache<->Database`), say goodbye to
 * synchronization-blocked database access
 * Grand new cross-server player migration
@@ -48,7 +48,7 @@ make dev_tool
 ```shell
 make gen_natsrpc      # Generate natsrpc protocol
 make gen_proto        # Generate client protocol
-make gen_client_proto # Generate client proxy protocol(not very necessary, for further informations: gate/client_proto/README.md)
+make gen_client_proto # Generate client proxy protocol(not very necessary, for further information: gate/client_proto/README.md)
 ```
 
 * Compile
@@ -78,10 +78,9 @@ docker-compose up -d # Launch server
 * `node` Node server (Single node, with status)
 * `dispatch` Login server (Multi nodes, without status)
 * `gate` Gateway server (Multi nodes, with status)
-* `anticheat` Anti-cheat server (Multi nodes, with status **STILL UNDER CONSTRUCTION**)
-* `pathfinding` Path-finding server (Multi nodes, without status **STILL UNDER CONSTRUCTION**)
+* `multi` Multi-function server (Multi nodes, with status **STILL UNDER CONSTRUCTION**)
 * `gs` Game server (Multi nodes, with status)
-* `gm` Game menagement server (Single node, without status)
+* `gm` Game management server (Single node, without status)
 
 #### Misc
 

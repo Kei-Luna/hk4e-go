@@ -26,15 +26,13 @@ docker_clean:
 	rm -rf ./docker/node/bin/node
 	rm -rf ./docker/dispatch/bin/dispatch
 	rm -rf ./docker/gate/bin/gate
-	rm -rf ./docker/anticheat/bin/anticheat
-	rm -rf ./docker/pathfinding/bin/pathfinding
+	rm -rf ./docker/multi/bin/multi
 	rm -rf ./docker/gs/bin/gs
 	rm -rf ./docker/gm/bin/gm
 	docker rmi flswld/node:$(VERSION)
 	docker rmi flswld/dispatch:$(VERSION)
 	docker rmi flswld/gate:$(VERSION)
-	docker rmi flswld/anticheat:$(VERSION)
-	docker rmi flswld/pathfinding:$(VERSION)
+	docker rmi flswld/multi:$(VERSION)
 	docker rmi flswld/gs:$(VERSION)
 	docker rmi flswld/gm:$(VERSION)
 
@@ -45,8 +43,7 @@ docker_config:
 	mkdir -p ./docker/node/bin && cp -rf ./cmd/node/* ./docker/node/bin/ && rm -rf ./docker/node/bin/*.go
 	mkdir -p ./docker/dispatch/bin && cp -rf ./cmd/dispatch/* ./docker/dispatch/bin/ && rm -rf ./docker/dispatch/bin/*.go
 	mkdir -p ./docker/gate/bin && cp -rf ./cmd/gate/* ./docker/gate/bin/ && rm -rf ./docker/gate/bin/*.go
-	mkdir -p ./docker/anticheat/bin && cp -rf ./cmd/anticheat/* ./docker/anticheat/bin/ && rm -rf ./docker/anticheat/bin/*.go
-	mkdir -p ./docker/pathfinding/bin && cp -rf ./cmd/pathfinding/* ./docker/pathfinding/bin/ && rm -rf ./docker/pathfinding/bin/*.go
+	mkdir -p ./docker/multi/bin && cp -rf ./cmd/multi/* ./docker/multi/bin/ && rm -rf ./docker/multi/bin/*.go
 	mkdir -p ./docker/gs/bin && cp -rf ./cmd/gs/* ./docker/gs/bin/ && rm -rf ./docker/gs/bin/*.go
 	mkdir -p ./docker/gm/bin && cp -rf ./cmd/gm/* ./docker/gm/bin/ && rm -rf ./docker/gm/bin/*.go
 
@@ -56,15 +53,13 @@ docker_build:
 	mkdir -p ./docker/node/bin && cp -rf ./bin/node ./docker/node/bin/
 	mkdir -p ./docker/dispatch/bin && cp -rf ./bin/dispatch ./docker/dispatch/bin/
 	mkdir -p ./docker/gate/bin && cp -rf ./bin/gate ./docker/gate/bin/
-	mkdir -p ./docker/anticheat/bin && cp -rf ./bin/anticheat ./docker/anticheat/bin/
-	mkdir -p ./docker/pathfinding/bin && cp -rf ./bin/pathfinding ./docker/pathfinding/bin/
+	mkdir -p ./docker/multi/bin && cp -rf ./bin/multi ./docker/multi/bin/
 	mkdir -p ./docker/gs/bin && cp -rf ./bin/gs ./docker/gs/bin/
 	mkdir -p ./docker/gm/bin && cp -rf ./bin/gm ./docker/gm/bin/
 	docker build -t flswld/node:$(VERSION) ./docker/node
 	docker build -t flswld/dispatch:$(VERSION) ./docker/dispatch
 	docker build -t flswld/gate:$(VERSION) ./docker/gate
-	docker build -t flswld/anticheat:$(VERSION) ./docker/anticheat
-	docker build -t flswld/pathfinding:$(VERSION) ./docker/pathfinding
+	docker build -t flswld/multi:$(VERSION) ./docker/multi
 	docker build -t flswld/gs:$(VERSION) ./docker/gs
 	docker build -t flswld/gm:$(VERSION) ./docker/gm
 

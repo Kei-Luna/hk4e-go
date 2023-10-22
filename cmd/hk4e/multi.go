@@ -3,17 +3,17 @@ package main
 import (
 	"context"
 
-	"hk4e/anticheat/app"
+	"hk4e/multi/app"
 
 	"github.com/spf13/cobra"
 )
 
-func AnticheatCmd() *cobra.Command {
+func MultiCmd() *cobra.Command {
 	var cfg string
 	app.APPVERSION = VERSION
 	c := &cobra.Command{
-		Use:   "anticheat",
-		Short: "anticheat server",
+		Use:   "multi",
+		Short: "multi server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return app.Run(context.Background(), cfg)
 		},

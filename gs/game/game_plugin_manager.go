@@ -130,17 +130,8 @@ type PluginEventInfo struct {
 type PluginGlobalTick uint8
 
 const (
-	PluginGlobalTick50MilliSecond = PluginGlobalTick(iota)
-	PluginGlobalTick100MilliSecond
-	PluginGlobalTick200MilliSecond
-	PluginGlobalTickSecond
-	PluginGlobalTick5Second
-	PluginGlobalTick10Second
-	PluginGlobalTickMinute
-	PluginGlobalTickHour
-	PluginGlobalTickHourChange
-	PluginGlobalTickDayChange
-	PluginGlobalTickMonthChange
+	PluginGlobalTickSecond = PluginGlobalTick(iota)
+	PluginGlobalTickMinuteChange
 )
 
 // PluginUserTimerFunc 用户timer处理函数

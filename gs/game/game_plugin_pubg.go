@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"time"
 
 	"hk4e/common/constant"
 	"hk4e/gdconf"
@@ -78,7 +79,7 @@ func (p *PluginPubg) OnEnable() {
 	p.ListenEvent(PluginEventIdPostEnterScene, PluginEventPriorityNormal, p.EventPostEnterScene)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
-	p.AddGlobalTick(PluginGlobalTickHourChange, p.GlobalTickHourChange)
+	p.AddGlobalTick(PluginGlobalTickMinuteChange, p.GlobalTickMinuteChange)
 	// 注册命令
 	p.RegCommandController(p.NewPubgCommandController())
 }
@@ -237,9 +238,13 @@ func (p *PluginPubg) GlobalTickPubg() {
 	}
 }
 
-// GlobalTickHourChange 每小时开启pubg游戏
-func (p *PluginPubg) GlobalTickHourChange() {
-	p.StartPubg()
+// GlobalTickMinuteChange 定时开启pubg游戏
+func (p *PluginPubg) GlobalTickMinuteChange() {
+	minute := time.Now().Minute()
+	startMinute := GAME.GetGsId() % 6 * 10
+	if uint32(minute) == startMinute {
+		p.StartPubg()
+	}
 }
 
 /************************************************** 用户定时器 **************************************************/

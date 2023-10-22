@@ -1,8 +1,9 @@
 package game
 
 import (
-	"hk4e/protocol/cmd"
 	"time"
+
+	"hk4e/protocol/cmd"
 
 	"hk4e/common/constant"
 	"hk4e/gdconf"

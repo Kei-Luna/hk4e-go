@@ -1,9 +1,6 @@
 package model
 
 import (
-	"encoding/json"
-	"time"
-
 	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
 
@@ -79,7 +76,7 @@ type Player struct {
 	CombatInvokeHandler       *InvokeHandler[proto.CombatInvokeEntry]  `bson:"-" msgpack:"-"` // combat转发器
 	AbilityInvokeHandler      *InvokeHandler[proto.AbilityInvokeEntry] `bson:"-" msgpack:"-"` // ability转发器
 	GateAppId                 string                                   `bson:"-" msgpack:"-"` // 网关服务器的appid
-	AnticheatAppId            string                                   `bson:"-" msgpack:"-"` // 反作弊服务器的appid
+	MultiServerAppId          string                                   `bson:"-" msgpack:"-"` // 多功能服务器的appid
 	GCGCurGameGuid            uint32                                   `bson:"-" msgpack:"-"` // GCG玩家所在的游戏guid
 	GCGInfo                   *GCGInfo                                 `bson:"-" msgpack:"-"` // 七圣召唤信息
 	XLuaDebug                 bool                                     `bson:"-" msgpack:"-"` // 是否开启客户端XLUA调试
@@ -88,7 +85,6 @@ type Player struct {
 	CommandAssignUid          uint32                                   `bson:"-" msgpack:"-"` // 命令指定uid
 	WeatherInfo               *WeatherInfo                             `bson:"-" msgpack:"-"` // 天气信息
 	ClientVersion             int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
-	AoiDebug                  *AoiDebug                                `bson:"-" msgpack:"-"` // aoi debug
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 }
@@ -185,50 +181,4 @@ func (i *InvokeHandler[T]) Clear() {
 	i.EntryListForwardAllExceptCur = make([]*T, 0)
 	i.EntryListForwardHost = make([]*T, 0)
 	i.EntryListForwardServer = make([]*T, 0)
-}
-
-type HistoryPos struct {
-	Time string
-	Pos  *Vector
-}
-
-type AoiDebug struct {
-	Uid            uint32
-	HistoryPosList []*HistoryPos
-	LastGid        uint32
-	PlayerPosPtr   *Vector
-}
-
-func (p *Player) GetAoiDebug() *AoiDebug {
-	if p.AoiDebug == nil {
-		p.AoiDebug = &AoiDebug{
-			Uid:            p.PlayerId,
-			HistoryPosList: make([]*HistoryPos, 0),
-			LastGid:        0,
-			PlayerPosPtr:   p.Pos,
-		}
-	}
-	return p.AoiDebug
-}
-
-func (a *AoiDebug) AddHistoryPos(pos *Vector) {
-	a.HistoryPosList = append(a.HistoryPosList, &HistoryPos{
-		Time: time.Now().Format("2006-01-02 15:04:05.000"),
-		Pos:  &Vector{X: pos.X, Y: pos.Y, Z: pos.Z},
-	})
-	if len(a.HistoryPosList) > 100 {
-		a.HistoryPosList = a.HistoryPosList[1:]
-	}
-}
-
-func (a *AoiDebug) PrintHistoryPosList() {
-	data, _ := json.Marshal(a.HistoryPosList)
-	logger.Debug("HistoryPosList: %v, uid: %v", string(data), a.Uid)
-}
-
-func (a *AoiDebug) CheckPlayerPosPtr(player *Player) {
-	if a.PlayerPosPtr != player.Pos {
-		logger.Error("player pos ptr change, oldPtr: %p, nowPtr: %v, oldPos: %+v, nowPos: %+v, uid: %v",
-			a.PlayerPosPtr, player.Pos, a.PlayerPosPtr, player.Pos, player.PlayerId)
-	}
 }

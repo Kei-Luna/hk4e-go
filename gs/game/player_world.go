@@ -677,7 +677,7 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 
-	if WORLD_MANAGER.IsAiWorld(world) {
+	if WORLD_MANAGER.IsAiWorld(world) && player.CmdPerm != uint8(CommandPermGM) {
 		return
 	}
 

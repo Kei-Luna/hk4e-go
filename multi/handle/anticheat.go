@@ -5,12 +5,8 @@ import (
 	"time"
 
 	"hk4e/common/constant"
-	"hk4e/common/mq"
-	"hk4e/gate/kcp"
 	"hk4e/gdconf"
-	"hk4e/node/api"
 	"hk4e/pkg/logger"
-	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 
 	pb "google.golang.org/protobuf/proto"
@@ -137,11 +133,6 @@ func NewAnticheatContext() *AnticheatContext {
 	return r
 }
 
-type Handle struct {
-	messageQueue   *mq.MessageQueue
-	playerAcCtxMap map[uint32]*AnticheatContext
-}
-
 func (h *Handle) AddPlayerAcCtx(userId uint32) {
 	h.playerAcCtxMap[userId] = NewAnticheatContext()
 }
@@ -152,48 +143,6 @@ func (h *Handle) DelPlayerAcCtx(userId uint32) {
 
 func (h *Handle) GetPlayerAcCtx(userId uint32) *AnticheatContext {
 	return h.playerAcCtxMap[userId]
-}
-
-func NewHandle(messageQueue *mq.MessageQueue) (r *Handle) {
-	r = new(Handle)
-	r.messageQueue = messageQueue
-	r.playerAcCtxMap = make(map[uint32]*AnticheatContext)
-	go r.run()
-	return r
-}
-
-func (h *Handle) run() {
-	logger.Info("start handle")
-	for {
-		netMsg := <-h.messageQueue.GetNetMsg()
-		switch netMsg.MsgType {
-		case mq.MsgTypeGame:
-			if netMsg.OriginServerType != api.GATE {
-				continue
-			}
-			if netMsg.EventId != mq.NormalMsg {
-				continue
-			}
-			gameMsg := netMsg.GameMsg
-			switch gameMsg.CmdId {
-			case cmd.CombatInvocationsNotify:
-				h.CombatInvocationsNotify(gameMsg.UserId, netMsg.OriginServerAppId, gameMsg.PayloadMessage)
-			case cmd.ToTheMoonEnterSceneReq:
-				h.ToTheMoonEnterSceneReq(gameMsg.UserId, netMsg.OriginServerAppId, gameMsg.PayloadMessage)
-			}
-		case mq.MsgTypeServer:
-			serverMsg := netMsg.ServerMsg
-			switch netMsg.EventId {
-			case mq.ServerUserOnlineStateChangeNotify:
-				logger.Info("player online state change, state: %v, uid: %v", serverMsg.IsOnline, serverMsg.UserId)
-				if serverMsg.IsOnline {
-					h.AddPlayerAcCtx(serverMsg.UserId)
-				} else {
-					h.DelPlayerAcCtx(serverMsg.UserId)
-				}
-			}
-		}
-	}
 }
 
 func (h *Handle) CombatInvocationsNotify(userId uint32, gateAppId string, payloadMsg pb.Message) {
@@ -283,18 +232,4 @@ func GetDistance(v1 *proto.Vector, v2 *proto.Vector) float32 {
 			float64((v1.Y-v2.Y)*(v1.Y-v2.Y)) +
 			float64((v1.Z-v2.Z)*(v1.Z-v2.Z)),
 	))
-}
-
-func (h *Handle) KickPlayer(userId uint32, gateAppId string) {
-	if !KickCheatPlayer {
-		return
-	}
-	h.messageQueue.SendToGate(gateAppId, &mq.NetMsg{
-		MsgType: mq.MsgTypeConnCtrl,
-		EventId: mq.KickPlayerNotify,
-		ConnCtrlMsg: &mq.ConnCtrlMsg{
-			KickUserId: userId,
-			KickReason: kcp.EnetServerKillClient,
-		},
-	})
 }

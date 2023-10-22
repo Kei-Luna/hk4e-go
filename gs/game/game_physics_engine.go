@@ -24,6 +24,7 @@ type RigidBody struct {
 	avatarEntityId    uint32       // 子弹发射者角色实体id
 	hitAvatarEntityId uint32       // 子弹命中的角色实体id
 	sceneId           uint32       // 子弹所在场景id
+	venti             bool         // 子弹是否为满蓄力箭
 	position          *alg.Vector3 // 坐标
 	velocity          *alg.Vector3 // 速度
 }
@@ -203,7 +204,7 @@ func (p *PhysicsEngine) IsRigidBody(entityId uint32) bool {
 	return exist
 }
 
-func (p *PhysicsEngine) CreateRigidBody(entityId, avatarEntityId, sceneId uint32, x, y, z float32, pitchAngle, yawAngle float32) {
+func (p *PhysicsEngine) CreateRigidBody(entityId, avatarEntityId, sceneId uint32, venti bool, x, y, z float32, pitchAngle, yawAngle float32) {
 	pitchAngle += p.pitchAngleOffset
 	vy := math.Sin(float64(pitchAngle)/360.0*2*math.Pi) * float64(p.initSpeed)
 	vxz := math.Cos(float64(pitchAngle)/360.0*2*math.Pi) * float64(p.initSpeed)
@@ -213,6 +214,7 @@ func (p *PhysicsEngine) CreateRigidBody(entityId, avatarEntityId, sceneId uint32
 		entityId:       entityId,
 		avatarEntityId: avatarEntityId,
 		sceneId:        sceneId,
+		venti:          venti,
 		position:       &alg.Vector3{X: x, Y: y, Z: z},
 		velocity:       &alg.Vector3{X: float32(vx), Y: float32(vy), Z: float32(vz)},
 	}

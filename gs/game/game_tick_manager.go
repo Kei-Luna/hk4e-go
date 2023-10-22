@@ -161,15 +161,12 @@ func (t *TickManager) OnGameServerTick() {
 	now := tm.UnixMilli()
 	if t.globalTickCount%(50/ServerTickTime) == 0 {
 		t.onTick50MilliSecond(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick50MilliSecond)
 	}
 	if t.globalTickCount%(100/ServerTickTime) == 0 {
 		t.onTick100MilliSecond(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick100MilliSecond)
 	}
 	if t.globalTickCount%(200/ServerTickTime) == 0 {
 		t.onTick200MilliSecond(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick200MilliSecond)
 	}
 	if t.globalTickCount%(1000/ServerTickTime) == 0 {
 		t.onTickSecond(now)
@@ -177,19 +174,15 @@ func (t *TickManager) OnGameServerTick() {
 	}
 	if t.globalTickCount%(5000/ServerTickTime) == 0 {
 		t.onTick5Second(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick5Second)
 	}
 	if t.globalTickCount%(10000/ServerTickTime) == 0 {
 		t.onTick10Second(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick10Second)
 	}
 	if t.globalTickCount%(60000/ServerTickTime) == 0 {
 		t.onTickMinute(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinute)
 	}
 	if t.globalTickCount%(60000*60/ServerTickTime) == 0 {
 		t.onTickHour(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHour)
 	}
 	for userId, userTick := range t.userTickMap {
 		if len(userTick.globalTick.C) == 0 {
@@ -213,17 +206,18 @@ func (t *TickManager) OnGameServerTick() {
 			t.userTimerHandle(userId, timer.action, timer.data)
 		}
 	}
+	if tm.Minute() != t.tm.Minute() {
+		t.onMinuteChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinuteChange)
+	}
 	if tm.Hour() != t.tm.Hour() {
 		t.onHourChange(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHourChange)
 	}
 	if tm.Day() != t.tm.Day() {
 		t.onDayChange(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickDayChange)
 	}
 	if tm.Month() != t.tm.Month() {
 		t.onMonthChange(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMonthChange)
 	}
 	t.tm = tm
 }
@@ -238,6 +232,9 @@ func (t *TickManager) onDayChange(now int64) {
 
 func (t *TickManager) onHourChange(now int64) {
 	logger.Info("on hour change, time: %v", now)
+}
+
+func (t *TickManager) onMinuteChange(now int64) {
 }
 
 func (t *TickManager) onTickHour(now int64) {
@@ -276,15 +273,16 @@ func (t *TickManager) onTick5Second(now int64) {
 		return
 	}
 	pluginPubg := iPlugin.(*PluginPubg)
+	agree := true
 	if pluginPubg.IsStartPubg() {
-		return
+		agree = false
 	}
 	aiWorld := WORLD_MANAGER.GetAiWorld()
 	if aiWorld.GetWorldPlayerNum() >= 100 {
-		return
+		agree = false
 	}
 	for applyUid := range aiWorld.GetOwner().CoopApplyMap {
-		GAME.PlayerDealEnterWorld(aiWorld.GetOwner(), applyUid, true)
+		GAME.PlayerDealEnterWorld(aiWorld.GetOwner(), applyUid, agree)
 	}
 }
 
@@ -348,11 +346,17 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
 		atkAvatarEntity := scene.GetEntity(rigidBody.avatarEntityId)
 		atk := atkAvatarEntity.GetFightProp()[constant.FIGHT_PROP_CUR_ATTACK]
+		dmg := float32(0.0)
+		if rigidBody.venti {
+			dmg = atk
+		} else {
+			dmg = atk / 3.0
+		}
 		GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
 			AttackResult: &proto.AttackResult{
 				AttackerId: atkAvatarEntity.GetId(),
 				DefenseId:  defAvatarEntity.GetId(),
-				Damage:     atk,
+				Damage:     dmg,
 			},
 		})
 		if attackResultTemplate == nil {
@@ -365,7 +369,7 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 		}
 		evtBeingHitInfo.AttackResult.AttackerId = atkAvatarEntity.GetId()
 		evtBeingHitInfo.AttackResult.DefenseId = defAvatarEntity.GetId()
-		evtBeingHitInfo.AttackResult.Damage = atk
+		evtBeingHitInfo.AttackResult.Damage = dmg
 		if evtBeingHitInfo.AttackResult.HitCollision == nil {
 			return
 		}

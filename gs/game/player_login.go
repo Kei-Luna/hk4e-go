@@ -212,14 +212,14 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	return player
 }
 
-func (g *Game) ServerAppidBindNotify(userId uint32, anticheatAppId string) {
+func (g *Game) ServerAppidBindNotify(userId uint32, multiServerAppId string) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	logger.Debug("server appid bind notify, uid: %v, anticheatAppId: %v", userId, anticheatAppId)
-	player.AnticheatAppId = anticheatAppId
+	logger.Debug("server appid bind notify, uid: %v, multiServerAppId: %v", userId, multiServerAppId)
+	player.MultiServerAppId = multiServerAppId
 }
 
 func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {

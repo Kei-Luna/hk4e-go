@@ -121,23 +121,11 @@ func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, sess
 		}
 		k.serverCmdProtoMap.PutProtoObjCache(protoMsg.CmdId, protoMsg.PayloadMessage)
 		gameMsg.PayloadMessageData = payloadMessageData
-		// 转发到寻路服务器
-		if session.pathfindingServerAppId != "" {
+		// 转发到寻路服务
+		if session.multiServerAppId != "" {
 			if protoMsg.CmdId == cmd.QueryPathReq ||
 				protoMsg.CmdId == cmd.ObstacleModifyNotify {
-				k.messageQueue.SendToPathfinding(session.pathfindingServerAppId, &mq.NetMsg{
-					MsgType: mq.MsgTypeGame,
-					EventId: mq.NormalMsg,
-					GameMsg: gameMsg,
-				})
-				return
-			}
-		}
-		// 转发到反作弊服务器
-		if session.anticheatServerAppId != "" {
-			if protoMsg.CmdId == cmd.CombatInvocationsNotify ||
-				protoMsg.CmdId == cmd.ToTheMoonEnterSceneReq {
-				k.messageQueue.SendToAnticheat(session.anticheatServerAppId, &mq.NetMsg{
+				k.messageQueue.SendToMulti(session.multiServerAppId, &mq.NetMsg{
 					MsgType: mq.MsgTypeGame,
 					EventId: mq.NormalMsg,
 					GameMsg: gameMsg,
@@ -244,8 +232,8 @@ func (k *KcpConnManager) gameMsgHandle(
 				session.connState = ConnActive
 				// 通知GS玩家各个服务器的appid
 				serverMsg := &mq.ServerMsg{
-					UserId:               session.userId,
-					AnticheatServerAppId: session.anticheatServerAppId,
+					UserId:           session.userId,
+					MultiServerAppId: session.multiServerAppId,
 				}
 				k.messageQueue.SendToGs(session.gsServerAppId, &mq.NetMsg{
 					MsgType:   mq.MsgTypeServer,
@@ -293,7 +281,7 @@ func (k *KcpConnManager) serverMsgHandle(
 			return
 		}
 		session.gsServerAppId = serverMsg.GameServerAppId
-		session.anticheatServerAppId = ""
+		session.multiServerAppId = ""
 		// 网关代发登录请求到新的GS
 		gameMsg := &mq.GameMsg{
 			UserId:    serverMsg.UserId,
@@ -603,11 +591,9 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 		return k.loginFailRsp(0, proto.Retcode_RET_SVR_ERROR, false, 0)
 	}
 	session.gsServerAppId = k.minLoadGsServerAppId
-	session.anticheatServerAppId = k.minLoadAnticheatServerAppId
-	session.pathfindingServerAppId = k.minLoadPathfindingServerAppId
+	session.multiServerAppId = k.minLoadMultiServerAppId
 	logger.Debug("session gs appid: %v, uid: %v", session.gsServerAppId, uid)
-	logger.Debug("session anticheat appid: %v, uid: %v", session.anticheatServerAppId, uid)
-	logger.Debug("session pathfinding appid: %v, uid: %v", session.pathfindingServerAppId, uid)
+	logger.Debug("session multi appid: %v, uid: %v", session.multiServerAppId, uid)
 	// 构造响应
 	rsp := k.buildGateLoginRsp(uid, req.AccountUid, req.AccountToken, clientIp)
 	// 密钥交换

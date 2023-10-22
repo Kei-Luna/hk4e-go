@@ -35,19 +35,9 @@ func (m *MessageQueue) SendToGs(appId string, netMsg *NetMsg) {
 	m.netMsgInput <- netMsg
 }
 
-func (m *MessageQueue) SendToAnticheat(appId string, netMsg *NetMsg) {
-	netMsg.Topic = m.getTopic(api.ANTICHEAT, appId)
-	netMsg.ServerType = api.ANTICHEAT
-	netMsg.AppId = appId
-	originServerType, originServerAppId := m.getOriginServer()
-	netMsg.OriginServerType = originServerType
-	netMsg.OriginServerAppId = originServerAppId
-	m.netMsgInput <- netMsg
-}
-
-func (m *MessageQueue) SendToPathfinding(appId string, netMsg *NetMsg) {
-	netMsg.Topic = m.getTopic(api.PATHFINDING, appId)
-	netMsg.ServerType = api.PATHFINDING
+func (m *MessageQueue) SendToMulti(appId string, netMsg *NetMsg) {
+	netMsg.Topic = m.getTopic(api.MULTI, appId)
+	netMsg.ServerType = api.MULTI
 	netMsg.AppId = appId
 	originServerType, originServerAppId := m.getOriginServer()
 	netMsg.OriginServerType = originServerType

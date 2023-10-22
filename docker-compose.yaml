@@ -68,49 +68,6 @@ services:
         limits:
           cpus: '8.00'
           memory: 8192M
-  anticheat_services:
-    restart: always
-    image: flswld/anticheat:1.0.0
-    container_name: anticheat
-    ports:
-      - "5678:5678/tcp"
-    environment:
-      TZ: Asia/Shanghai
-      GOLANG_PROTOBUF_REGISTRATION_CONFLICT: ignore
-    volumes:
-      - /etc/localtime:/etc/localtime
-      - /etc/timezone:/etc/timezone
-      - /usr/share/zoneinfo:/usr/share/zoneinfo
-      - ./anticheat/bin/application.toml:/anticheat/application.toml
-      - ../gdconf/game_data_config:/anticheat/game_data_config
-    depends_on:
-      - gate_320_services
-    deploy:
-      resources:
-        limits:
-          cpus: '1.00'
-          memory: 512M
-  pathfinding_services:
-    restart: always
-    image: flswld/pathfinding:1.0.0
-    container_name: pathfinding
-    ports:
-      - "6789:6789/tcp"
-    environment:
-      TZ: Asia/Shanghai
-      GOLANG_PROTOBUF_REGISTRATION_CONFLICT: ignore
-    volumes:
-      - /etc/localtime:/etc/localtime
-      - /etc/timezone:/etc/timezone
-      - /usr/share/zoneinfo:/usr/share/zoneinfo
-      - ./pathfinding/bin/application.toml:/pathfinding/application.toml
-    depends_on:
-      - anticheat_services
-    deploy:
-      resources:
-        limits:
-          cpus: '1.00'
-          memory: 512M
   gs_1_services:
     restart: always
     image: flswld/gs:1.0.0
@@ -127,7 +84,7 @@ services:
       - ./gs/bin/application.toml:/gs/application.toml
       - ../gdconf/game_data_config:/gs/game_data_config
     depends_on:
-      - pathfinding_services
+      - gate_320_services
     deploy:
       resources:
         limits:
@@ -149,7 +106,7 @@ services:
       - ./gs/bin/application.toml:/gs/application.toml
       - ../gdconf/game_data_config:/gs/game_data_config
     depends_on:
-      - gs_1_services
+      - gate_320_services
     deploy:
       resources:
         limits:
@@ -171,12 +128,34 @@ services:
       - ./gs/bin/application.toml:/gs/application.toml
       - ../gdconf/game_data_config:/gs/game_data_config
     depends_on:
-      - gs_2_services
+      - gate_320_services
     deploy:
       resources:
         limits:
           cpus: '8.00'
           memory: 8192M
+  multi_services:
+    restart: always
+    image: flswld/multi:1.0.0
+    container_name: multi
+    ports:
+      - "5678:5678/tcp"
+    environment:
+      TZ: Asia/Shanghai
+      GOLANG_PROTOBUF_REGISTRATION_CONFLICT: ignore
+    volumes:
+      - /etc/localtime:/etc/localtime
+      - /etc/timezone:/etc/timezone
+      - /usr/share/zoneinfo:/usr/share/zoneinfo
+      - ./multi/bin/application.toml:/multi/application.toml
+      - ../gdconf/game_data_config:/multi/game_data_config
+    depends_on:
+      - gate_320_services
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 4096M
   gm_services:
     restart: always
     image: flswld/gm:1.0.0
@@ -193,7 +172,7 @@ services:
       - /usr/share/zoneinfo:/usr/share/zoneinfo
       - ./gm/bin/application.toml:/gm/application.toml
     depends_on:
-      - gs_3_services
+      - multi_services
     deploy:
       resources:
         limits:

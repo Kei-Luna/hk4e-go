@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"time"
@@ -380,7 +381,9 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 	aiUidList := USER_MANAGER.GetAllRemoteAiUidList()
 	aiUidList = append(aiUidList, g.GetAi().PlayerId)
 	for _, aiUid := range aiUidList {
-		sign := AiSign + " GS:" + strconv.Itoa(int(aiUid-AiBaseUid))
+		aiGsId := aiUid - AiBaseUid
+		startMinute := aiGsId % 6 * 10
+		sign := fmt.Sprintf("开启时间：每小时%v分。", strconv.Itoa(int(startMinute)))
 		rsp.PlayerInfoList = append(rsp.PlayerInfoList, &proto.OnlinePlayerInfo{
 			Uid:                 aiUid,
 			Nickname:            AiName,

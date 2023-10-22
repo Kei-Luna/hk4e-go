@@ -394,6 +394,10 @@ func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32, posX, posY, pos
 		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
 		return
 	}
+	if count > 100 {
+		logger.Error("monster count too large, uid: %v", userId)
+		return
+	}
 	for i := 0; i < int(count); i++ {
 		GAME.CreateMonster(player, &model.Vector{
 			X: posX,
@@ -408,6 +412,10 @@ func (g *GMCmd) GMCreateGadget(userId uint32, gadgetId uint32, count uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	if count > 100 {
+		logger.Error("gadget count too large, uid: %v", userId)
 		return
 	}
 	for i := 0; i < int(count); i++ {
@@ -612,9 +620,13 @@ func (g *GMCmd) AiWorldAoiDebug(v bool) {
 	}
 	aiWorldAoi := aiWorld.GetAiWorldAoi()
 	gridMap := aiWorldAoi.Debug()
+	logger.Debug("total grid num: %v", len(gridMap))
 	for _, grid := range gridMap {
-		logger.Debug("================================================== GRID gid:%v ==================================================", grid.GetGid())
 		objectMap := grid.GetObjectList()
+		if len(objectMap) == 0 {
+			continue
+		}
+		logger.Debug("================================================== GRID gid:%v ==================================================", grid.GetGid())
 		for objectId, object := range objectMap {
 			wa := object.(*WorldAvatar)
 			logger.Debug("uid: %v, wa.uid: %v, wa.avatarId: %v, wa.entityId: %v", objectId, wa.uid, wa.avatarId, wa.avatarEntityId)

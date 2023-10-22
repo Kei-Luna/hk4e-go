@@ -63,16 +63,16 @@ const (
 )
 
 type ServerMsg struct {
-	AnticheatServerAppId string
-	UserId               uint32
-	IsOnline             bool
-	GameServerAppId      string
-	JoinHostUserId       uint32
-	PlayerMpInfo         *PlayerMpInfo
-	ChatMsgInfo          *ChatMsgInfo
-	AddFriendInfo        *AddFriendInfo
-	ForwardDispatchInfo  *ForwardDispatchInfo
-	AppVersion           string
+	MultiServerAppId    string
+	UserId              uint32
+	IsOnline            bool
+	GameServerAppId     string
+	JoinHostUserId      uint32
+	PlayerMpInfo        *PlayerMpInfo
+	ChatMsgInfo         *ChatMsgInfo
+	AddFriendInfo       *AddFriendInfo
+	ForwardDispatchInfo *ForwardDispatchInfo
+	AppVersion          string
 }
 
 type OriginInfo struct {

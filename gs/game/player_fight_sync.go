@@ -263,12 +263,8 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		// 玩家实体在移动
 		avatarEntity := entity.GetAvatarEntity()
 		if avatarEntity.GetUid() != player.PlayerId {
-			logger.Error("can not move other player avatar entity, entityId: %v, uid: %v", entity.GetId(), player.PlayerId)
 			return
 		}
-		aoiDebug := player.GetAoiDebug()
-		aoiDebug.AddHistoryPos(pos)
-		aoiDebug.CheckPlayerPosPtr(player)
 		if !WORLD_MANAGER.IsAiWorld(world) {
 			g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
 		} else {
@@ -427,15 +423,6 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		// 玩家跨越了格子
 		logger.Debug("player cross ai world aoi grid, oldGid: %v, oldPos: %+v, newGid: %v, newPos: %+v, uid: %v",
 			oldGid, oldPos, newGid, newPos, player.PlayerId)
-		aoiDebug := player.GetAoiDebug()
-		if aoiDebug.LastGid == 0 {
-			aoiDebug.LastGid = oldGid
-		}
-		if aoiDebug.LastGid != oldGid {
-			logger.Error("aoi bug move skip grid, last gid: %v, old gid: %v, uid: %v", aoiDebug.LastGid, oldGid, player.PlayerId)
-			aoiDebug.PrintHistoryPosList()
-		}
-		aoiDebug.LastGid = newGid
 		// 找出本次移动所带来的消失和出现的格子
 		oldGridList := aiWorldAoi.GetSurrGridListByGid(oldGid)
 		newGridList := aiWorldAoi.GetSurrGridListByGid(newGid)
@@ -849,11 +836,14 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 			return
 		}
 		// 蓄力箭
-		if gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_ArrowAiming" &&
-			gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_Venti_ArrowAiming" {
+		venti := false
+		if gadgetDataConfig.PrefabPath == "ART/Others/Bullet/Bullet_ArrowAiming" {
+			venti = false
+		} else if gadgetDataConfig.PrefabPath == "ART/Others/Bullet/Bullet_Venti_ArrowAiming" {
+			venti = true
+		} else {
 			return
 		}
-		logger.Debug("[FPS] EvtCreateGadgetNotify: %+v", ntf)
 		pitchAngleRaw := ntf.InitEulerAngles.X
 		pitchAngle := float32(0.0)
 		if pitchAngleRaw < 90.0 {
@@ -871,6 +861,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 			ntf.EntityId,
 			world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
 			player.SceneId,
+			venti,
 			ntf.InitPos.X, ntf.InitPos.Y, ntf.InitPos.Z,
 			pitchAngle, yawAngle,
 		)

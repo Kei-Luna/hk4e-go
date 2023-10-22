@@ -199,7 +199,7 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 			logger.Debug("remote user online state change, uid: %v, online: %v", serverMsg.UserId, serverMsg.IsOnline)
 			USER_MANAGER.SetRemoteUserOnlineState(serverMsg.UserId, serverMsg.IsOnline, netMsg.OriginServerAppId)
 		case mq.ServerAppidBindNotify:
-			GAME.ServerAppidBindNotify(serverMsg.UserId, serverMsg.AnticheatServerAppId)
+			GAME.ServerAppidBindNotify(serverMsg.UserId, serverMsg.MultiServerAppId)
 		case mq.ServerPlayerMpReq:
 			GAME.ServerPlayerMpReq(serverMsg.PlayerMpInfo, netMsg.OriginServerAppId)
 		case mq.ServerPlayerMpRsp:

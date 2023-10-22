@@ -51,17 +51,16 @@ type KcpEvent struct {
 }
 
 type KcpConnManager struct {
-	kcpListener                   *kcp.Listener
-	db                            *dao.Dao
-	discoveryClient               *rpc.DiscoveryClient // 节点服务器rpc客户端
-	messageQueue                  *mq.MessageQueue     // 消息队列
-	globalGsOnlineMap             map[uint32]string    // 全服玩家在线表
-	globalGsOnlineMapLock         sync.RWMutex
-	minLoadGsServerAppId          string
-	minLoadAnticheatServerAppId   string
-	minLoadPathfindingServerAppId string
-	stopServerInfo                *api.StopServerInfo
-	whiteList                     *api.GetWhiteListRsp
+	kcpListener             *kcp.Listener
+	db                      *dao.Dao
+	discoveryClient         *rpc.DiscoveryClient // 节点服务器rpc客户端
+	messageQueue            *mq.MessageQueue     // 消息队列
+	globalGsOnlineMap       map[uint32]string    // 全服玩家在线表
+	globalGsOnlineMapLock   sync.RWMutex
+	minLoadGsServerAppId    string
+	minLoadMultiServerAppId string
+	stopServerInfo          *api.StopServerInfo
+	whiteList               *api.GetWhiteListRsp
 	// 会话
 	sessionIdCounter uint32
 	sessionMap       map[uint32]*Session
@@ -89,8 +88,7 @@ func NewKcpConnManager(db *dao.Dao, messageQueue *mq.MessageQueue, discovery *rp
 	r.messageQueue = messageQueue
 	r.globalGsOnlineMap = make(map[uint32]string)
 	r.minLoadGsServerAppId = ""
-	r.minLoadAnticheatServerAppId = ""
-	r.minLoadPathfindingServerAppId = ""
+	r.minLoadMultiServerAppId = ""
 	r.stopServerInfo = nil
 	r.whiteList = nil
 	r.sessionIdCounter = 0
@@ -260,23 +258,22 @@ func (k *KcpConnManager) acceptHandle(tcpMode bool, kcpListener *kcp.Listener, t
 		logger.Info("[ACCEPT] client connect, tcpMode: %v, sessionId: %v, conv: %v, addr: %v",
 			tcpMode, sessionId, conn.GetConv(), conn.RemoteAddr())
 		session := &Session{
-			sessionId:              sessionId,
-			conn:                   conn,
-			connState:              ConnEst,
-			userId:                 0,
-			sendChan:               make(chan *ProtoMsg, SessionSendChanLen),
-			seed:                   0,
-			xorKey:                 k.dispatchKey,
-			changeXorKeyFin:        false,
-			gsServerAppId:          "",
-			anticheatServerAppId:   "",
-			pathfindingServerAppId: "",
-			robotServerAppId:       "",
-			useMagicSeed:           false,
-			keyId:                  0,
-			clientRandKey:          "",
-			tcpRtt:                 0,
-			tcpRttLastSendTime:     0,
+			sessionId:          sessionId,
+			conn:               conn,
+			connState:          ConnEst,
+			userId:             0,
+			sendChan:           make(chan *ProtoMsg, SessionSendChanLen),
+			seed:               0,
+			xorKey:             k.dispatchKey,
+			changeXorKeyFin:    false,
+			gsServerAppId:      "",
+			multiServerAppId:   "",
+			robotServerAppId:   "",
+			useMagicSeed:       false,
+			keyId:              0,
+			clientRandKey:      "",
+			tcpRtt:             0,
+			tcpRttLastSendTime: 0,
 		}
 		if config.GetConfig().Hk4e.ForwardModeEnable {
 			robotServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
@@ -353,23 +350,22 @@ func (k *KcpConnManager) kcpEnetHandle(listener *kcp.Listener) {
 
 // Session 连接会话结构 只允许定义并发安全或者简单的基础数据结构
 type Session struct {
-	sessionId              uint32
-	conn                   *Conn
-	connState              uint8
-	userId                 uint32
-	sendChan               chan *ProtoMsg
-	seed                   uint64
-	xorKey                 []byte
-	changeXorKeyFin        bool
-	gsServerAppId          string
-	anticheatServerAppId   string
-	pathfindingServerAppId string
-	robotServerAppId       string
-	useMagicSeed           bool
-	keyId                  uint32
-	clientRandKey          string
-	tcpRtt                 uint32
-	tcpRttLastSendTime     int64
+	sessionId          uint32
+	conn               *Conn
+	connState          uint8
+	userId             uint32
+	sendChan           chan *ProtoMsg
+	seed               uint64
+	xorKey             []byte
+	changeXorKeyFin    bool
+	gsServerAppId      string
+	multiServerAppId   string
+	robotServerAppId   string
+	useMagicSeed       bool
+	keyId              uint32
+	clientRandKey      string
+	tcpRtt             uint32
+	tcpRttLastSendTime int64
 }
 
 // 接收协程
@@ -706,21 +702,14 @@ func (k *KcpConnManager) syncMinLoadServerAppid() {
 	} else {
 		k.minLoadGsServerAppId = gsServerAppId.AppId
 	}
-	anticheatServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
-		ServerType: api.ANTICHEAT,
+
+	multiServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+		ServerType: api.MULTI,
 	})
 	if err != nil {
-		k.minLoadAnticheatServerAppId = ""
+		k.minLoadMultiServerAppId = ""
 	} else {
-		k.minLoadAnticheatServerAppId = anticheatServerAppId.AppId
-	}
-	pathfindingServerAppId, err := k.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
-		ServerType: api.PATHFINDING,
-	})
-	if err != nil {
-		k.minLoadPathfindingServerAppId = ""
-	} else {
-		k.minLoadPathfindingServerAppId = pathfindingServerAppId.AppId
+		k.minLoadMultiServerAppId = multiServerAppId.AppId
 	}
 }
 

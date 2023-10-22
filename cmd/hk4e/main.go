@@ -25,9 +25,8 @@ func main() {
 		NodeCmd(),
 		DispatchCmd(),
 		GateCmd(),
-		AnticheatCmd(),
-		PathfindingCmd(),
 		GSCmd(),
+		MultiCmd(),
 		GMCmd(),
 	)
 

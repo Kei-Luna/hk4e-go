@@ -245,6 +245,7 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 	}
 	targetWorld := WORLD_MANAGER.GetWorldById(targetPlayer.WorldId)
 	if targetWorld == nil {
+		// 目标玩家世界状态异常
 		logger.Error("target world is nil, target worldId: %v, uid: %v", targetPlayer.WorldId, player.PlayerId)
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
@@ -265,6 +266,7 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 	}
 	applyTime, exist := targetPlayer.CoopApplyMap[player.PlayerId]
 	if exist && time.Now().UnixNano() < applyTime+int64(10*time.Second) {
+		// 申请过期
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
@@ -314,7 +316,7 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 	}
 
 	otherPlayerWorld := WORLD_MANAGER.GetWorldById(otherPlayer.WorldId)
-	if otherPlayerWorld.GetMultiplayer() {
+	if otherPlayerWorld == nil || otherPlayerWorld.GetMultiplayer() {
 		playerApplyEnterMpResultNotify := &proto.PlayerApplyEnterMpResultNotify{
 			TargetUid:      hostPlayer.PlayerId,
 			TargetNickname: hostPlayer.NickName,
