@@ -377,6 +377,16 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 	})
 }
 
+// GMSetWeather 设置天气
+func (g *GMCmd) GMSetWeather(userId uint32, weatherAreaId uint32, climateType uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	GAME.SetPlayerWeather(player, weatherAreaId, climateType)
+}
+
 // GMCreateMonster 在玩家附近创建怪物
 func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32, posX, posY, posZ float64, count uint32, level uint8) {
 	player := USER_MANAGER.GetOnlineUser(userId)

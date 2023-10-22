@@ -37,6 +37,7 @@ func (c *CommandManager) InitController() {
 		c.NewGadgetCommandController(),
 		c.NewQuestCommandController(),
 		c.NewPointCommandController(),
+		c.NewWeatherCommandController(),
 		c.NewXLuaDebugCommandController(),
 		c.NewGcgCommandController(),
 	}
@@ -808,6 +809,41 @@ func (c *CommandManager) PointCommand(content *CommandContent) bool {
 		}
 		c.gmCmd.GMUnlockPoint(content.AssignPlayer.PlayerId, sceneId, uint32(pointId))
 		content.SendSuccMessage(content.Executor, "已解锁锚点，指定UID：%v，场景ID：%v，锚点ID：%v。", content.AssignPlayer.PlayerId, content.AssignPlayer.SceneId, pointId)
+		return true
+	})
+}
+
+// 更改天气命令
+
+func (c *CommandManager) NewWeatherCommandController() *CommandController {
+	return &CommandController{
+		Name:        "更改天气",
+		AliasList:   []string{"weather"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>更改天气</color>",
+		UsageList: []string{
+			"{alias} [天气区域ID] <气象类型> 更改天气",
+		},
+		Perm: CommandPermNormal,
+		Func: c.WeatherCommand,
+	}
+}
+
+func (c *CommandManager) WeatherCommand(content *CommandContent) bool {
+	var weatherAreaId = content.AssignPlayer.WeatherInfo.WeatherAreaId // 天气区域id
+	var climateType uint32                                             // 气象类型
+
+	return content.Option("uint32", func(param any) bool {
+		// 天气id
+		weatherAreaId = param.(uint32)
+		return true
+	}).Dynamic("uint32", func(param any) bool {
+		// 气象类型
+		climateType = param.(uint32)
+		return true
+	}).Execute(func() bool {
+		// 设置天气
+		c.gmCmd.GMSetWeather(content.AssignPlayer.PlayerId, weatherAreaId, climateType)
+		content.SendSuccMessage(content.Executor, "已更改天气，指定UID：%v，天气区域ID：%v，气象类型：%v。", content.AssignPlayer.PlayerId, weatherAreaId, climateType)
 		return true
 	})
 }
