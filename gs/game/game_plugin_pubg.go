@@ -13,6 +13,8 @@ import (
 	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
+
+	pb "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -24,13 +26,17 @@ const (
 
 const (
 	PUBG_PHASE_INV_TIME         = 180.0
-	PUBG_FIRST_AREA_REDUCE_TIME = 600.0
+	PUBG_FIRST_AREA_REDUCE_TIME = 300.0
 )
 
 const (
-	PUBG_ATK     = 100.0
-	PUBG_HP      = 1000.0
-	PUBG_HP_LOST = 10.0
+	PUBG_ATK                         = 100.0
+	PUBG_HP                          = 1000.0
+	PUBG_HP_LOST                     = 10.0
+	PUBG_BOW_ATTACK_ATK_RATIO        = 2.0
+	PUBG_NORMAL_ATTACK_DISTANCE      = 3.0
+	PUBG_NORMAL_ATTACK_INTERVAL_TIME = 500
+	PUBG_NORMAL_ATTACK_ATK_RATIO     = 5.0
 )
 
 // PluginPubg pubg游戏插件
@@ -48,6 +54,7 @@ type PluginPubg struct {
 	areaReduceZSpeed         float64               // 缩圈Z速度
 	areaPointList            []*proto.MapMarkPoint // 客户端区域地图坐标列表
 	entityIdWorldGadgetIdMap map[uint32]int32      // 实体id世界物件id映射集合
+	playerHitTimeMap         map[uint32]int64      // 玩家攻击命中时间集合
 }
 
 func NewPluginPubg() *PluginPubg {
@@ -65,6 +72,7 @@ func NewPluginPubg() *PluginPubg {
 		areaReduceZSpeed:         0.0,
 		areaPointList:            make([]*proto.MapMarkPoint, 0),
 		entityIdWorldGadgetIdMap: make(map[uint32]int32),
+		playerHitTimeMap:         make(map[uint32]int64),
 	}
 	return p
 }
@@ -365,6 +373,7 @@ func (p *PluginPubg) StartPubg() {
 			AvatarGuid:   avatar.Guid,
 			FightPropMap: avatar.FightPropMap,
 		})
+		p.playerHitTimeMap[player.PlayerId] = 0
 	}
 }
 
@@ -386,6 +395,7 @@ func (p *PluginPubg) StopPubg() {
 	p.areaReduceZSpeed = 0.0
 	p.areaPointList = make([]*proto.MapMarkPoint, 0)
 	p.entityIdWorldGadgetIdMap = make(map[uint32]int32)
+	p.playerHitTimeMap = make(map[uint32]int64)
 	p.CreateUserTimer(world.GetOwner().PlayerId, 60, p.UserTimerPubgEnd)
 }
 
@@ -513,4 +523,69 @@ func (p *PluginPubg) GetAlivePlayerList() []*model.Player {
 		alivePlayerList = append(alivePlayerList, scenePlayer)
 	}
 	return alivePlayerList
+}
+
+func (p *PluginPubg) PubgHit(scene *Scene, defAvatarEntityId uint32, atkAvatarEntityId uint32, isBow bool) {
+	defAvatarEntity := scene.GetEntity(defAvatarEntityId)
+	if defAvatarEntity == nil {
+		return
+	}
+	defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetAvatarEntity().GetUid())
+	if defPlayer == nil {
+		return
+	}
+	atkAvatarEntity := scene.GetEntity(atkAvatarEntityId)
+	if atkAvatarEntity == nil {
+		return
+	}
+	atkPlayer := USER_MANAGER.GetOnlineUser(atkAvatarEntity.GetAvatarEntity().GetUid())
+	if atkPlayer == nil {
+		return
+	}
+	now := time.Now().UnixMilli()
+	lastHitTime := p.playerHitTimeMap[atkPlayer.PlayerId]
+	if now-lastHitTime < PUBG_NORMAL_ATTACK_INTERVAL_TIME {
+		return
+	}
+	p.playerHitTimeMap[atkPlayer.PlayerId] = now
+	atk := atkAvatarEntity.GetFightProp()[constant.FIGHT_PROP_CUR_ATTACK]
+	dmg := float32(0.0)
+	if isBow {
+		dmg = atk / PUBG_BOW_ATTACK_ATK_RATIO
+	} else {
+		dmg = atk / PUBG_NORMAL_ATTACK_ATK_RATIO
+	}
+	GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
+		AttackResult: &proto.AttackResult{
+			AttackerId: atkAvatarEntity.GetId(),
+			DefenseId:  defAvatarEntity.GetId(),
+			Damage:     dmg,
+		},
+	})
+	if attackResultTemplate == nil {
+		return
+	}
+	evtBeingHitInfo := &proto.EvtBeingHitInfo{
+		PeerId:       0,
+		AttackResult: attackResultTemplate,
+		FrameNum:     0,
+	}
+	evtBeingHitInfo.AttackResult.AttackerId = atkAvatarEntity.GetId()
+	evtBeingHitInfo.AttackResult.DefenseId = defAvatarEntity.GetId()
+	evtBeingHitInfo.AttackResult.Damage = dmg
+	if evtBeingHitInfo.AttackResult.HitCollision == nil {
+		return
+	}
+	evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(defPlayer.Pos.X), Y: float32(defPlayer.Pos.Y), Z: float32(defPlayer.Pos.Z)}
+	combatData, err := pb.Marshal(evtBeingHitInfo)
+	if err != nil {
+		return
+	}
+	GAME.SendToSceneA(scene, cmd.CombatInvocationsNotify, 0, &proto.CombatInvocationsNotify{
+		InvokeList: []*proto.CombatInvokeEntry{{
+			CombatData:   combatData,
+			ForwardType:  proto.ForwardType_FORWARD_TO_ALL,
+			ArgumentType: proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT,
+		}},
+	}, 0)
 }

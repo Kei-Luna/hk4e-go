@@ -3,7 +3,6 @@ package game
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"time"
 	"unicode/utf8"
 
@@ -382,11 +381,13 @@ func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Messag
 	aiUidList = append(aiUidList, g.GetAi().PlayerId)
 	for _, aiUid := range aiUidList {
 		aiGsId := aiUid - AiBaseUid
-		startMinute := aiGsId % 6 * 10
-		sign := fmt.Sprintf("开启时间：每小时%v分。", strconv.Itoa(int(startMinute)))
+		roomNumber := aiGsId - 1
+		startMinute := roomNumber % 6 * 10
+		name := fmt.Sprintf("房间：%v", roomNumber)
+		sign := fmt.Sprintf("开启时间：%02d:%02d。", time.Now().Hour(), startMinute)
 		rsp.PlayerInfoList = append(rsp.PlayerInfoList, &proto.OnlinePlayerInfo{
 			Uid:                 aiUid,
-			Nickname:            AiName,
+			Nickname:            name,
 			PlayerLevel:         1,
 			AvatarId:            10000007,
 			MpSettingType:       proto.MpSettingType_MP_SETTING_ENTER_AFTER_APPLY,

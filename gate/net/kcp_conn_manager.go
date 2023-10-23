@@ -26,7 +26,7 @@ import (
 
 const (
 	ConnEstFreqLimit      = 100        // 每秒连接建立频率限制
-	RecvPacketFreqLimit   = 100        // 客户端上行每秒发包频率限制
+	RecvPacketFreqLimit   = 1000       // 客户端上行每秒发包频率限制
 	SendPacketFreqLimit   = 1000       // 服务器下行每秒发包频率限制
 	PacketMaxLen          = 343 * 1024 // 最大应用层包长度
 	ConnRecvTimeout       = 30         // 收包超时时间 秒
