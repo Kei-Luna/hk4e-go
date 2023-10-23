@@ -74,7 +74,7 @@ func Run(ctx context.Context, configFile string) error {
 		logger.CloseLogger()
 	}()
 
-	messageQueue := mq.NewMessageQueue(api.GATE, APPID, discoveryClient)
+	messageQueue := mq.NewMessageQueue(api.GATE, APPID, nil)
 	defer messageQueue.Close()
 
 	db, err := dao.NewDao()

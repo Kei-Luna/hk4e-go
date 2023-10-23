@@ -50,6 +50,14 @@ func NewController(db *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq
 	}
 	r.ec2b = ec2b
 	r.messageQueue = messageQueue
+	go func() {
+		for {
+			_, ok := <-r.messageQueue.GetNetMsg()
+			if !ok {
+				return
+			}
+		}
+	}()
 	r.gateServerMap = new(sync.Map)
 	r.stopServerInfo = nil
 	r.whiteList = nil

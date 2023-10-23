@@ -249,7 +249,8 @@ func (p *PluginPubg) GlobalTickPubg() {
 // GlobalTickMinuteChange 定时开启pubg游戏
 func (p *PluginPubg) GlobalTickMinuteChange() {
 	minute := time.Now().Minute()
-	startMinute := GAME.GetGsId() % 6 * 10
+	roomNumber := GAME.GetGsId() - 1
+	startMinute := roomNumber % 6 * 10
 	if uint32(minute) == startMinute {
 		p.StartPubg()
 	}
@@ -268,6 +269,10 @@ func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
 	newWorld := WORLD_MANAGER.CreateWorld(player)
 	GAME.WorldAddPlayer(newWorld, player)
 	WORLD_MANAGER.InitAiWorld(player)
+	roomNumber := GAME.GetGsId() - 1
+	startMinute := roomNumber % 6 * 10
+	info := fmt.Sprintf("下一次游戏开启时间：%02d:%02d。", time.Now().Add(time.Hour).Hour(), startMinute)
+	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // UserTimerPubgUpdateArea 更新游戏区域
@@ -375,6 +380,8 @@ func (p *PluginPubg) StartPubg() {
 		})
 		p.playerHitTimeMap[player.PlayerId] = 0
 	}
+	info := "游戏开始。"
+	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // StopPubg 结束pubg游戏
@@ -397,6 +404,8 @@ func (p *PluginPubg) StopPubg() {
 	p.entityIdWorldGadgetIdMap = make(map[uint32]int32)
 	p.playerHitTimeMap = make(map[uint32]int64)
 	p.CreateUserTimer(world.GetOwner().PlayerId, 60, p.UserTimerPubgEnd)
+	info := "游戏结束。"
+	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // IsStartPubg pubg游戏是否开启

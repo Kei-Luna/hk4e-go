@@ -122,3 +122,15 @@ func (c *Controller) serverDispatchCancel(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
 }
+
+type ServerOnlineStats struct {
+	TotalOnlinePlayerNum uint32 `json:"total_online_player_num"`
+}
+
+func (c *Controller) serverOnlineStats(ctx *gin.Context) {
+	num := 0
+	c.globalGsOnlineMapLock.RLock()
+	num = len(c.globalGsOnlineMap)
+	c.globalGsOnlineMapLock.RUnlock()
+	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: &ServerOnlineStats{TotalOnlinePlayerNum: uint32(num)}})
+}

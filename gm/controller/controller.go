@@ -1,11 +1,14 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"hk4e/common/config"
+	"hk4e/common/mq"
 	"hk4e/common/rpc"
 	"hk4e/pkg/logger"
 
@@ -13,22 +16,62 @@ import (
 )
 
 type Controller struct {
-	gmClientMap     map[uint32]*rpc.GMClient
-	gmClientMapLock sync.RWMutex
-	discoveryClient *rpc.DiscoveryClient
+	gmClientMap           map[uint32]*rpc.GMClient
+	gmClientMapLock       sync.RWMutex
+	discoveryClient       *rpc.DiscoveryClient
+	messageQueue          *mq.MessageQueue
+	globalGsOnlineMap     map[uint32]string // 全服玩家在线表
+	globalGsOnlineMapLock sync.RWMutex
 }
 
-func NewController(discoveryClient *rpc.DiscoveryClient) (r *Controller) {
+func NewController(discoveryClient *rpc.DiscoveryClient, messageQueue *mq.MessageQueue) (r *Controller) {
 	r = new(Controller)
 	r.gmClientMap = make(map[uint32]*rpc.GMClient)
 	r.discoveryClient = discoveryClient
+	r.messageQueue = messageQueue
+	go func() {
+		for {
+			_, ok := <-r.messageQueue.GetNetMsg()
+			if !ok {
+				return
+			}
+		}
+	}()
+	r.globalGsOnlineMap = make(map[uint32]string)
+	r.syncGlobalGsOnlineMap()
+	go r.autoSyncGlobalGsOnlineMap()
 	go r.registerRouter()
 	return r
 }
 
+func (c *Controller) autoSyncGlobalGsOnlineMap() {
+	ticker := time.NewTicker(time.Second * 60)
+	for {
+		<-ticker.C
+		c.syncGlobalGsOnlineMap()
+	}
+}
+
+func (c *Controller) syncGlobalGsOnlineMap() {
+	rsp, err := c.discoveryClient.GetGlobalGsOnlineMap(context.TODO(), nil)
+	if err != nil {
+		logger.Error("get global gs online map error: %v", err)
+		return
+	}
+	copyMap := make(map[uint32]string)
+	for k, v := range rsp.OnlineMap {
+		copyMap[k] = v
+	}
+	copyMapLen := len(copyMap)
+	c.globalGsOnlineMapLock.Lock()
+	c.globalGsOnlineMap = copyMap
+	c.globalGsOnlineMapLock.Unlock()
+	logger.Info("sync global gs online map finish, len: %v", copyMapLen)
+}
+
 func (c *Controller) authorize() gin.HandlerFunc {
 	return func(context *gin.Context) {
-		if true {
+		if context.GetHeader("Auth") == "flswld" {
 			// 验证通过
 			context.Next()
 			return
@@ -55,6 +98,7 @@ func (c *Controller) registerRouter() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	engine := gin.Default()
+	engine.GET("/server/online/stats", c.serverOnlineStats)
 	engine.Use(c.authorize())
 	engine.POST("/gm/cmd", c.gmCmd)
 	engine.GET("/server/stop/state", c.serverStopState)

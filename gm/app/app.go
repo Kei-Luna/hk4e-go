@@ -7,8 +7,10 @@ import (
 	"syscall"
 
 	"hk4e/common/config"
+	"hk4e/common/mq"
 	"hk4e/common/rpc"
 	"hk4e/gm/controller"
+	"hk4e/node/api"
 	"hk4e/pkg/logger"
 )
 
@@ -27,7 +29,10 @@ func Run(ctx context.Context, configFile string) error {
 		return err
 	}
 
-	_ = controller.NewController(discoveryClient)
+	messageQueue := mq.NewMessageQueue(api.GM, "gm", nil)
+	defer messageQueue.Close()
+
+	_ = controller.NewController(discoveryClient, messageQueue)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)

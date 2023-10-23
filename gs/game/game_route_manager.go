@@ -212,6 +212,13 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 			GAME.ServerStopNotify()
 		case mq.ServerDispatchCancelNotify:
 			GAME.ServerDispatchCancelNotify(serverMsg.AppVersion)
+		case mq.ServerGmCmdNotify:
+			commandTextInput := COMMAND_MANAGER.GetCommandMessageInput()
+			commandTextInput <- &CommandMessage{
+				GMType:    SystemFuncGM,
+				FuncName:  serverMsg.GmCmdFuncName,
+				ParamList: serverMsg.GmCmdParamList,
+			}
 		}
 	}
 }

@@ -60,6 +60,7 @@ const (
 	ServerForwardDispatchInfoNotify           // 转发模式区服信息通知
 	ServerStopNotify                          // 停服通知
 	ServerDispatchCancelNotify                // 服务器取消调度通知
+	ServerGmCmdNotify                         // 服务器GM指令执行通知
 )
 
 type ServerMsg struct {
@@ -73,6 +74,8 @@ type ServerMsg struct {
 	AddFriendInfo       *AddFriendInfo
 	ForwardDispatchInfo *ForwardDispatchInfo
 	AppVersion          string
+	GmCmdFuncName       string
+	GmCmdParamList      []string
 }
 
 type OriginInfo struct {

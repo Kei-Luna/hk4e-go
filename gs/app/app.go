@@ -5,6 +5,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -66,7 +67,7 @@ func Run(ctx context.Context, configFile string) error {
 		})
 	}()
 
-	logger.InitLogger("gs_" + APPID)
+	logger.InitLogger("gs_" + strconv.Itoa(int(GSID)) + "_" + APPID)
 	logger.Warn("gs start, appid: %v, gsid: %v", APPID, GSID)
 	defer func() {
 		logger.CloseLogger()
