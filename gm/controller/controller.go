@@ -71,7 +71,7 @@ func (c *Controller) syncGlobalGsOnlineMap() {
 
 func (c *Controller) authorize() gin.HandlerFunc {
 	return func(context *gin.Context) {
-		if context.GetHeader("Auth") == "flswld" {
+		if context.GetHeader("GmAuthKey") == config.GetConfig().Hk4e.GmAuthKey {
 			// 验证通过
 			context.Next()
 			return

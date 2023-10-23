@@ -54,6 +54,7 @@ type Hk4e struct {
 	DispatchUrl            string `toml:"dispatch_url"`              // 二级dispatch地址 将域名改为dispatch的外网地址
 	ForwardRegionUrl       string `toml:"forward_region_url"`        // 转发的一级dispatch地址
 	ForwardDispatchUrl     string `toml:"forward_dispatch_url"`      // 转发的二级dispatch地址
+	GmAuthKey              string `toml:"gm_auth_key"`               // gm认证密钥
 }
 
 // Hk4eRobot 原神机器人

@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -67,30 +66,6 @@ func NewController(db *dao.Dao, discovery *rpc.DiscoveryClient, messageQueue *mq
 	r.syncStopServerInfo()
 	go r.autoSyncStopServerInfo()
 	return r
-}
-
-func (c *Controller) authorize() gin.HandlerFunc {
-	return func(context *gin.Context) {
-		addr := context.ClientIP()
-		if addr == "" {
-			addr = context.Request.RemoteAddr
-		}
-		ip := net.ParseIP(addr)
-		ipv4 := ip.To4()
-		if ip.IsLoopback() ||
-			ipv4[0] == 10 ||
-			ipv4[0] == 169 && ipv4[1] == 254 ||
-			ipv4[0] == 172 && ipv4[1] >= 16 && ipv4[1] <= 31 ||
-			ipv4[0] == 192 && ipv4[1] == 168 {
-			context.Next()
-			return
-		}
-		context.Abort()
-		context.JSON(http.StatusOK, gin.H{
-			"code": "10001",
-			"msg":  "没有访问权限",
-		})
-	}
 }
 
 func (c *Controller) registerRouter() {
@@ -186,7 +161,6 @@ func (c *Controller) registerRouter() {
 		engine.StaticFS("/static", http.Dir("./static/geetest/static"))
 		engine.StaticFS("/pictures", http.Dir("./static/geetest/pictures"))
 	}
-	engine.Use(c.authorize())
 	engine.POST("/gate/token/verify", c.gateTokenVerify)
 	port := config.GetConfig().HttpPort
 	addr := ":" + strconv.Itoa(int(port))
