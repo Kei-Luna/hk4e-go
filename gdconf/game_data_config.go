@@ -81,16 +81,16 @@ type GameDataConfig struct {
 func InitGameDataConfig() {
 	CONF = new(GameDataConfig)
 	startTime := time.Now().Unix()
-	CONF.loadAll()
+	CONF.loadAll(config.GetConfig().Hk4e.LoadSceneLuaConfig)
 	endTime := time.Now().Unix()
 	runtime.GC()
 	logger.Info("load all game data config finish, cost: %v(s)", endTime-startTime)
 }
 
-func ReloadGameDataConfig() {
+func ReloadGameDataConfig(reloadSceneLua bool) {
 	CONF_RELOAD = new(GameDataConfig)
 	startTime := time.Now().Unix()
-	CONF_RELOAD.loadAll()
+	CONF_RELOAD.loadAll(reloadSceneLua)
 	endTime := time.Now().Unix()
 	runtime.GC()
 	logger.Info("reload all game data config finish, cost: %v(s)", endTime-startTime)
@@ -100,7 +100,7 @@ func ReplaceGameDataConfig() {
 	CONF = CONF_RELOAD
 }
 
-func (g *GameDataConfig) loadAll() {
+func (g *GameDataConfig) loadAll(loadSceneLua bool) {
 	pathPrefix := config.GetConfig().Hk4e.GameDataConfigPath
 
 	dirInfo, err := os.Stat(pathPrefix)
@@ -141,49 +141,49 @@ func (g *GameDataConfig) loadAll() {
 	}
 	g.extPrefix += "/"
 
-	g.load()
+	g.load(loadSceneLua)
 }
 
-func (g *GameDataConfig) load() {
-	g.loadSceneData()            // 场景
-	g.loadSceneLuaConfig()       // 场景LUA配置
-	g.loadTriggerData()          // 场景LUA触发器
-	g.loadScenePoint()           // 场景传送点
-	g.loadSceneTagData()         // 场景标签
-	g.loadGatherData()           // 采集物
-	g.loadWorldAreaData()        // 世界区域
-	g.loadAvatarData()           // 角色
-	g.loadAvatarSkillData()      // 角色技能
-	g.loadAvatarSkillDepotData() // 角色技能库
-	g.loadFetterData()           // 角色资料解锁
-	g.loadItemData()             // 统一道具
-	g.loadAvatarLevelData()      // 角色等级
-	g.loadAvatarPromoteData()    // 角色突破
-	g.loadPlayerLevelData()      // 玩家等级
-	g.loadWeaponLevelData()      // 武器等级
-	g.loadWeaponPromoteData()    // 武器突破
-	g.loadRewardData()           // 奖励
-	g.loadAvatarCostumeData()    // 角色时装
-	g.loadAvatarFlycloakData()   // 角色风之翼
-	g.loadReliquaryMainData()    // 圣遗物主属性
-	g.loadReliquaryAffixData()   // 圣遗物追加属性
-	g.loadQuestData()            // 任务
-	g.loadDropData()             // 掉落
-	g.loadMonsterDropData()      // 怪物掉落
-	g.loadChestDropData()        // 宝箱掉落
-	g.loadDungeonData()          // 地牢
-	g.loadGadgetData()           // 物件
-	g.loadRefreshPolicyData()    // 刷新策略
-	g.loadGCGCharData()          // 七圣召唤角色卡牌
-	g.loadGCGSkillData()         // 七圣召唤卡牌技能
-	g.loadGachaDropGroupData()   // 卡池掉落组 临时的
-	g.loadSkillStaminaData()     // 角色技能消耗体力 临时的
-	g.loadVehicleData()          // 载具
-	g.loadOpenStateData()        // 开放状态
-	g.loadWeatherData()          // 天气
-	g.loadWeatherTemplateData()  // 天气模版
-	g.loadSceneWeatherArea()     // 天气区域
-	g.loadPubgWorldGadgetData()  // pubg世界物件
+func (g *GameDataConfig) load(loadSceneLua bool) {
+	g.loadSceneData()                  // 场景
+	g.loadSceneLuaConfig(loadSceneLua) // 场景LUA配置
+	g.loadTriggerData()                // 场景LUA触发器
+	g.loadScenePoint()                 // 场景传送点
+	g.loadSceneTagData()               // 场景标签
+	g.loadGatherData()                 // 采集物
+	g.loadWorldAreaData()              // 世界区域
+	g.loadAvatarData()                 // 角色
+	g.loadAvatarSkillData()            // 角色技能
+	g.loadAvatarSkillDepotData()       // 角色技能库
+	g.loadFetterData()                 // 角色资料解锁
+	g.loadItemData()                   // 统一道具
+	g.loadAvatarLevelData()            // 角色等级
+	g.loadAvatarPromoteData()          // 角色突破
+	g.loadPlayerLevelData()            // 玩家等级
+	g.loadWeaponLevelData()            // 武器等级
+	g.loadWeaponPromoteData()          // 武器突破
+	g.loadRewardData()                 // 奖励
+	g.loadAvatarCostumeData()          // 角色时装
+	g.loadAvatarFlycloakData()         // 角色风之翼
+	g.loadReliquaryMainData()          // 圣遗物主属性
+	g.loadReliquaryAffixData()         // 圣遗物追加属性
+	g.loadQuestData()                  // 任务
+	g.loadDropData()                   // 掉落
+	g.loadMonsterDropData()            // 怪物掉落
+	g.loadChestDropData()              // 宝箱掉落
+	g.loadDungeonData()                // 地牢
+	g.loadGadgetData()                 // 物件
+	g.loadRefreshPolicyData()          // 刷新策略
+	g.loadGCGCharData()                // 七圣召唤角色卡牌
+	g.loadGCGSkillData()               // 七圣召唤卡牌技能
+	g.loadGachaDropGroupData()         // 卡池掉落组 临时的
+	g.loadSkillStaminaData()           // 角色技能消耗体力 临时的
+	g.loadVehicleData()                // 载具
+	g.loadOpenStateData()              // 开放状态
+	g.loadWeatherData()                // 天气
+	g.loadWeatherTemplateData()        // 天气模版
+	g.loadSceneWeatherArea()           // 天气区域
+	g.loadPubgWorldGadgetData()        // pubg世界物件
 }
 
 // CSV相关

@@ -215,9 +215,10 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 		case mq.ServerGmCmdNotify:
 			commandTextInput := COMMAND_MANAGER.GetCommandMessageInput()
 			commandTextInput <- &CommandMessage{
-				GMType:    SystemFuncGM,
-				FuncName:  serverMsg.GmCmdFuncName,
-				ParamList: serverMsg.GmCmdParamList,
+				GMType:     SystemFuncGM,
+				FuncName:   serverMsg.GmCmdFuncName,
+				ParamList:  serverMsg.GmCmdParamList,
+				ResultChan: nil,
 			}
 		}
 	}

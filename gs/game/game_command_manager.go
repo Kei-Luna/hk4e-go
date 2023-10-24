@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -38,8 +39,14 @@ type CommandMessage struct {
 	Executor *model.Player // 执行者
 	Text     string        // 命令文本
 	// 系统函数GM
-	FuncName  string   // 函数名
-	ParamList []string // 函数参数列表
+	FuncName   string            // 函数名
+	ParamList  []string          // 函数参数列表
+	ResultChan chan *GMCmdResult // 执行结果返回管道
+}
+
+type GMCmdResult struct {
+	Code int32
+	Msg  string
 }
 
 // CommandContentStepFunc 命令步骤处理函数
@@ -365,15 +372,15 @@ func (c *CommandManager) PlayerInputCommand(player *model.Player, targetUid uint
 }
 
 // CallGMCmd 调用GM命令
-func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
+func (c *CommandManager) CallGMCmd(funcName string, paramList []string) (bool, string) {
 	fn := c.gmCmdRefValue.MethodByName(funcName)
 	if !fn.IsValid() {
 		logger.Error("gm func not valid, func: %v", funcName)
-		return false
+		return false, ""
 	}
 	if fn.Type().NumIn() != len(paramList) {
 		logger.Error("gm func param num not match, func: %v, need: %v, give: %v", funcName, fn.Type().NumIn(), len(paramList))
-		return false
+		return false, ""
 	}
 	in := make([]reflect.Value, fn.Type().NumIn())
 	for i := 0; i < fn.Type().NumIn(); i++ {
@@ -384,103 +391,118 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) bool {
 		case reflect.Int:
 			val, err := strconv.ParseInt(param, 10, 64)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(int(val))
 		case reflect.Uint:
 			val, err := strconv.ParseUint(param, 10, 64)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(uint(val))
 		case reflect.Int8:
 			val, err := strconv.ParseInt(param, 10, 8)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(int8(val))
 		case reflect.Uint8:
 			val, err := strconv.ParseUint(param, 10, 8)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(uint8(val))
 		case reflect.Int16:
 			val, err := strconv.ParseInt(param, 10, 16)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(int16(val))
 		case reflect.Uint16:
 			val, err := strconv.ParseUint(param, 10, 16)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(uint16(val))
 		case reflect.Int32:
 			val, err := strconv.ParseInt(param, 10, 32)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(int32(val))
 		case reflect.Uint32:
 			val, err := strconv.ParseUint(param, 10, 32)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(uint32(val))
 		case reflect.Int64:
 			val, err := strconv.ParseInt(param, 10, 64)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(val)
 		case reflect.Uint64:
 			val, err := strconv.ParseUint(param, 10, 64)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(val)
 		case reflect.Float32:
 			val, err := strconv.ParseFloat(param, 32)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(float32(val))
 		case reflect.Float64:
 			val, err := strconv.ParseFloat(param, 64)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(val)
 		case reflect.Bool:
 			val, err := strconv.ParseBool(param)
 			if err != nil {
-				return false
+				return false, ""
 			}
 			value = reflect.ValueOf(val)
 		case reflect.String:
 			value = reflect.ValueOf(param)
 		default:
-			return false
+			return false, ""
 		}
 		in[i] = value
 	}
-	fn.Call(in)
-	return true
+	out := fn.Call(in)
+	ret := make([]any, 0)
+	for _, v := range out {
+		ret = append(ret, v.Interface())
+	}
+	data, _ := json.Marshal(ret)
+	return true, string(data)
 }
 
 // HandleCommand 处理命令
 // 主协程接收到命令消息后执行
-func (c *CommandManager) HandleCommand(cmd *CommandMessage) {
-	switch cmd.GMType {
+func (c *CommandManager) HandleCommand(command *CommandMessage) {
+	switch command.GMType {
 	case PlayerChatGM, DevClientGM:
 		// 执行命令
-		c.ExecCommand(cmd)
+		c.ExecCommand(command)
 	case SystemFuncGM:
-		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", cmd.FuncName, cmd.ParamList)
-		// 反射调用command_gm.go中的函数并反射解析传入参数类型
-		c.CallGMCmd(cmd.FuncName, cmd.ParamList)
+		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", command.FuncName, command.ParamList)
+		// 反射调用game_command_gm.go中的函数并反射解析传入参数类型
+		ok, ret := c.CallGMCmd(command.FuncName, command.ParamList)
+		if command.ResultChan != nil {
+			var gmCmdResult *GMCmdResult = nil
+			if ok {
+				gmCmdResult = &GMCmdResult{Code: 0, Msg: ret}
+			} else {
+				gmCmdResult = &GMCmdResult{Code: -1, Msg: ""}
+			}
+			command.ResultChan <- gmCmdResult
+			close(command.ResultChan)
+		}
 	}
 }
 

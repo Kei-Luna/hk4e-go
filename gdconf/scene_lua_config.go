@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"hk4e/common/config"
 	"hk4e/pkg/logger"
 
 	lua "github.com/yuin/gopher-lua"
@@ -306,11 +305,11 @@ func (g *GameDataConfig) loadGroup(group *Group, block *Block, sceneId int32, bl
 	block.groupMapLoadLock.Unlock()
 }
 
-func (g *GameDataConfig) loadSceneLuaConfig() {
+func (g *GameDataConfig) loadSceneLuaConfig(loadSceneLua bool) {
 	g.SceneLuaConfigMap = make(map[int32]*SceneLuaConfig)
 	g.GroupMap = make(map[int32]*Group)
 	g.LuaStateLruMap = make(map[int32]*LuaStateLru)
-	if !config.GetConfig().Hk4e.LoadSceneLuaConfig {
+	if !loadSceneLua {
 		return
 	}
 	sceneLuaPrefix := g.luaPrefix + "scene/"

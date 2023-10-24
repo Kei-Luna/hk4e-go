@@ -85,6 +85,8 @@ type Player struct {
 	CommandAssignUid          uint32                                   `bson:"-" msgpack:"-"` // 命令指定uid
 	WeatherInfo               *WeatherInfo                             `bson:"-" msgpack:"-"` // 天气信息
 	ClientVersion             int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
+	OfflineClear              bool                                     `bson:"-" msgpack:"-"` // 是否离线时清除账号数据
+	OfflineNotSave            bool                                     `bson:"-" msgpack:"-"` // 是否离线时不保存账号数据
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 }

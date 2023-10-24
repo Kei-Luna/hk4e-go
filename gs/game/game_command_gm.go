@@ -432,7 +432,53 @@ func (g *GMCmd) GMCreateGadget(userId uint32, gadgetId uint32, count uint32) {
 	}
 }
 
+// GMClearPlayer 清除账号数据
+func (g *GMCmd) GMClearPlayer(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.OfflineClear = true
+	GAME.LogoutPlayer(userId)
+}
+
+// GMClearItem 清除道具
+func (g *GMCmd) GMClearItem(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.DbItem = nil
+	GAME.LogoutPlayer(userId)
+}
+
+// GMClearQuest 清除任务
+func (g *GMCmd) GMClearQuest(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.DbQuest = nil
+	GAME.LogoutPlayer(userId)
+}
+
+// GMClearWorld 清除大世界数据
+func (g *GMCmd) GMClearWorld(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.DbWorld = nil
+	GAME.LogoutPlayer(userId)
+}
+
 // 系统级GM指令
+
+// TODO 不知道为什么0个参数的函数会反射调用失败
 
 func (g *GMCmd) ChangePlayerCmdPerm(userId uint32, cmdPerm uint8) {
 	player := USER_MANAGER.GetOnlineUser(userId)
@@ -443,10 +489,10 @@ func (g *GMCmd) ChangePlayerCmdPerm(userId uint32, cmdPerm uint8) {
 	player.CmdPerm = cmdPerm
 }
 
-func (g *GMCmd) ReloadGameDataConfig(v bool) {
-	// TODO 不知道为什么0个参数的函数会反射调用失败
+func (g *GMCmd) ReloadGameDataConfig(reloadSceneLua bool) {
 	LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 		EventId: ReloadGameDataConfig,
+		Msg:     reloadSceneLua,
 	}
 }
 
@@ -475,20 +521,31 @@ func (g *GMCmd) XLuaDebug(userId uint32, luacBase64 string) {
 	})
 }
 
-func (g *GMCmd) PlayAudio(v bool) {
-	go PlayAudio()
+func (g *GMCmd) AvPlayAudio(fileDataBase64 string) {
+	fileData, err := base64.StdEncoding.DecodeString(fileDataBase64)
+	if err != nil {
+		logger.Error("file data base64 format error: %v", err)
+		return
+	}
+	go PlayAudio(fileData)
 }
 
-func (g *GMCmd) UpdateFrame(rgb bool) {
-	UpdateFrame(rgb)
+func (g *GMCmd) AvUpdateFrame(fileDataBase64 string, rgb bool, posX, posY, posZ float64) {
+	fileData, err := base64.StdEncoding.DecodeString(fileDataBase64)
+	if err != nil {
+		logger.Error("file data base64 format error: %v", err)
+		return
+	}
+	basePos := &model.Vector{X: posX, Y: posY, Z: posZ}
+	if basePos.X == 0.0 && basePos.Y == 0.0 && basePos.Z == 0.0 {
+		basePos = &model.Vector{X: 2700, Y: 200, Z: -1800}
+	}
+	UpdateFrame(fileData, basePos, rgb)
 }
 
-var RobotUidCounter uint32 = 0
-
-func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32) {
+func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32, posX, posY, posZ float64) {
 	if uid == 0 {
-		RobotUidCounter++
-		uid = 1000000 + RobotUidCounter
+		return
 	}
 	if name == "" {
 		name = random.GetRandomStr(8)
@@ -527,20 +584,11 @@ func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32) {
 		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
 	activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
-	pos := new(model.Vector)
-	rot := new(model.Vector)
-	for _, targetPlayer := range aiWorld.GetAllPlayer() {
-		if targetPlayer.PlayerId < PlayerBaseUid {
-			continue
-		}
-		pos = &model.Vector{X: targetPlayer.Pos.X, Y: targetPlayer.Pos.Y, Z: targetPlayer.Pos.Z}
-		rot = &model.Vector{X: targetPlayer.Rot.X, Y: targetPlayer.Rot.Y, Z: targetPlayer.Rot.Z}
-	}
 	entityMoveInfo := &proto.EntityMoveInfo{
 		EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
 		MotionInfo: &proto.MotionInfo{
-			Pos:   &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
-			Rot:   &proto.Vector{X: float32(rot.X), Y: float32(rot.Y), Z: float32(rot.Z)},
+			Pos:   &proto.Vector{X: float32(posX), Y: float32(posY), Z: float32(posZ)},
+			Rot:   &proto.Vector{X: float32(0.0), Y: float32(0.0), Z: float32(0.0)},
 			State: proto.MotionState_MOTION_STANDBY,
 		},
 		SceneTime:   0,
@@ -627,6 +675,7 @@ func (g *GMCmd) AiWorldAoiDebug(v bool) {
 	if aiWorld == nil {
 		return
 	}
+	scene := aiWorld.GetSceneById(aiWorld.GetOwner().SceneId)
 	aiWorldAoi := aiWorld.GetAiWorldAoi()
 	gridMap := aiWorldAoi.Debug()
 	logger.Debug("total grid num: %v", len(gridMap))
@@ -638,7 +687,39 @@ func (g *GMCmd) AiWorldAoiDebug(v bool) {
 		logger.Debug("================================================== GRID gid:%v ==================================================", grid.GetGid())
 		for objectId, object := range objectMap {
 			wa := object.(*WorldAvatar)
-			logger.Debug("uid: %v, wa.uid: %v, wa.avatarId: %v, wa.entityId: %v", objectId, wa.uid, wa.avatarId, wa.avatarEntityId)
+			var pos *model.Vector = nil
+			entity := scene.GetEntity(wa.avatarEntityId)
+			if entity != nil {
+				pos = entity.GetPos()
+			}
+			logger.Debug("uid: %v, wa.uid: %v, wa.avatarId: %v, wa.entityId: %v, pos: %+v", objectId, wa.uid, wa.avatarId, wa.avatarEntityId, pos)
 		}
 	}
+}
+
+func (g *GMCmd) GetPlayerData(userId uint32) *model.Player {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return nil
+	}
+	return player
+}
+
+func (g *GMCmd) GetPlayerPos(userId uint32) *model.Vector {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return nil
+	}
+	return player.Pos
+}
+
+func (g *GMCmd) NotSavePlayer(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.OfflineNotSave = true
 }

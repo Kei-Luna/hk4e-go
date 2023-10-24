@@ -174,6 +174,21 @@ type PlayerOfflineInfo struct {
 
 // OfflineUser 玩家离线
 func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsInfo) {
+	if player.OfflineNotSave {
+		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
+			EventId: UserOfflineSaveToDbFinish,
+			Msg: &PlayerOfflineInfo{
+				Player:       player,
+				ChangeGsInfo: changeGsInfo,
+			},
+		}
+		return
+	}
+	if player.OfflineClear {
+		newPlayer := GAME.CreatePlayer(player.PlayerId)
+		newPlayer.DbState = player.DbState
+		player = newPlayer
+	}
 	startTime := time.Now().UnixNano()
 	playerData, err := msgpack.Marshal(player)
 	if err != nil {

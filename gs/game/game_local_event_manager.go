@@ -186,13 +186,14 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 				playerOfflineInfo.Player.PlayerId, playerOfflineInfo.Player.GateAppId, gsAppId, playerOfflineInfo.ChangeGsInfo.JoinHostUserId)
 		}
 	case ReloadGameDataConfig:
+		reloadSceneLua := localEvent.Msg.(bool)
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
 					logger.Error("reload game data config error: %v", err)
 				}
 			}()
-			gdconf.ReloadGameDataConfig()
+			gdconf.ReloadGameDataConfig(reloadSceneLua)
 			LOCAL_EVENT_MANAGER.localEventChan <- &LocalEvent{
 				EventId: ReloadGameDataConfigFinish,
 			}

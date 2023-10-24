@@ -1,7 +1,7 @@
 package game
 
 import (
-	"errors"
+	"bytes"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -29,8 +29,9 @@ func init() {
 	AUDIO_CHAN = make(chan uint32, 1000)
 }
 
-func PlayAudio() {
-	audio, err := smf.ReadFile("./audio.mid")
+func PlayAudio(fileData []byte) {
+	reader := bytes.NewReader(fileData)
+	audio, err := smf.ReadFrom(reader)
 	if err != nil {
 		logger.Error("read midi file error: %v", err)
 		return
@@ -104,11 +105,6 @@ const (
 )
 const GADGET_ID = 70590015
 
-var BASE_POS = &model.Vector{
-	X: 2700,
-	Y: 200,
-	Z: -1800,
-}
 var SCREEN_ENTITY_ID_LIST []uint32
 var FRAME_COLOR [][]int
 var FRAME [][]bool
@@ -239,10 +235,11 @@ func WriteJpgFile(fileName string, jpg image.Image) {
 	}
 }
 
-func LoadFrameFile() error {
-	frameImg := ReadJpgFile("./frame.jpg")
-	if frameImg == nil {
-		return errors.New("file not exist")
+func LoadFrameFile(fileData []byte) error {
+	reader := bytes.NewReader(fileData)
+	frameImg, err := jpeg.Decode(reader)
+	if err != nil {
+		return err
 	}
 	FRAME = make([][]bool, SCREEN_WIDTH)
 	for w := 0; w < SCREEN_WIDTH; w++ {
@@ -263,7 +260,6 @@ func LoadFrameFile() error {
 			grayAvg += uint64(gray)
 		}
 	}
-	WriteJpgFile("./frame_gray.jpg", grayImg)
 	grayAvg /= SCREEN_WIDTH * SCREEN_HEIGHT
 	rgbImg := image.NewRGBA(image.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
 	binImg := image.NewRGBA(image.Rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -291,13 +287,11 @@ func LoadFrameFile() error {
 			}
 		}
 	}
-	WriteJpgFile("./frame_rgb.jpg", rgbImg)
-	WriteJpgFile("./frame_bin.jpg", binImg)
 	return nil
 }
 
-func UpdateFrame(rgb bool) {
-	err := LoadFrameFile()
+func UpdateFrame(fileData []byte, basePos *model.Vector, rgb bool) {
+	err := LoadFrameFile(fileData)
 	if err != nil {
 		return
 	}
@@ -309,9 +303,9 @@ func UpdateFrame(rgb bool) {
 	GAME.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, SCREEN_ENTITY_ID_LIST)
 	SCREEN_ENTITY_ID_LIST = make([]uint32, 0)
 	leftTopPos := &model.Vector{
-		X: BASE_POS.X + float64(SCREEN_WIDTH)*SCREEN_DPI/2,
-		Y: BASE_POS.Y + float64(SCREEN_HEIGHT)*SCREEN_DPI,
-		Z: BASE_POS.Z,
+		X: basePos.X + float64(SCREEN_WIDTH)*SCREEN_DPI/2,
+		Y: basePos.Y + float64(SCREEN_HEIGHT)*SCREEN_DPI,
+		Z: basePos.Z,
 	}
 	for w := 0; w < SCREEN_WIDTH; w++ {
 		for h := 0; h < SCREEN_HEIGHT; h++ {

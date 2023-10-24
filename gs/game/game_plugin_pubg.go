@@ -272,7 +272,7 @@ func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
 	roomNumber := GAME.GetGsId() - 1
 	startMinute := roomNumber % 6 * 10
 	info := fmt.Sprintf("下一次游戏开启时间：%02d:%02d。", time.Now().Add(time.Hour).Hour(), startMinute)
-	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+	GAME.PlayerChatReq(player, &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // UserTimerPubgUpdateArea 更新游戏区域
@@ -347,6 +347,8 @@ func (p *PluginPubg) StartPubg() {
 	logger.Debug("StartPubg, seq: %v", p.seq)
 	world := WORLD_MANAGER.GetAiWorld()
 	p.world = world
+	info := "游戏开始。"
+	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 	for _, pubgWorldGadgetDataConfig := range gdconf.GetPubgWorldGadgetDataMap() {
 		rn := random.GetRandomInt32(1, 100)
 		if rn > pubgWorldGadgetDataConfig.Probability {
@@ -380,8 +382,6 @@ func (p *PluginPubg) StartPubg() {
 		})
 		p.playerHitTimeMap[player.PlayerId] = 0
 	}
-	info := "游戏开始。"
-	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // StopPubg 结束pubg游戏
@@ -390,7 +390,7 @@ func (p *PluginPubg) StopPubg() {
 		return
 	}
 	logger.Debug("StopPubg, seq: %v", p.seq)
-	world := p.world
+	owner := p.world.GetOwner()
 	p.world = nil
 	p.blueAreaCenterPos = &model.Vector{X: 0.0, Y: 0.0, Z: 0.0}
 	p.blueAreaRadius = 0.0
@@ -403,9 +403,9 @@ func (p *PluginPubg) StopPubg() {
 	p.areaPointList = make([]*proto.MapMarkPoint, 0)
 	p.entityIdWorldGadgetIdMap = make(map[uint32]int32)
 	p.playerHitTimeMap = make(map[uint32]int64)
-	p.CreateUserTimer(world.GetOwner().PlayerId, 60, p.UserTimerPubgEnd)
+	p.CreateUserTimer(owner.PlayerId, 60, p.UserTimerPubgEnd)
 	info := "游戏结束。"
-	GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+	GAME.PlayerChatReq(owner, &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 }
 
 // IsStartPubg pubg游戏是否开启

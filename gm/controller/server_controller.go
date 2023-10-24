@@ -13,7 +13,7 @@ func (c *Controller) serverStopState(ctx *gin.Context) {
 	stopServerInfo, err := c.discoveryClient.GetStopServerInfo(ctx.Request.Context(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get stop server info error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: stopServerInfo})
@@ -29,7 +29,7 @@ func (c *Controller) serverStopChange(ctx *gin.Context) {
 	req := new(ServerStopChangeReq)
 	err := ctx.ShouldBindJSON(req)
 	if err != nil {
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "参数解析错误", Data: err})
 		return
 	}
 	_, err = c.discoveryClient.SetStopServerInfo(ctx.Request.Context(), &api.StopServerInfo{
@@ -39,7 +39,7 @@ func (c *Controller) serverStopChange(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("set stop server info error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
@@ -49,7 +49,7 @@ func (c *Controller) serverWhiteList(ctx *gin.Context) {
 	whiteList, err := c.discoveryClient.GetWhiteList(ctx.Request.Context(), &api.NullMsg{})
 	if err != nil {
 		logger.Error("get white list error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: whiteList.IpAddrList})
@@ -63,7 +63,7 @@ func (c *Controller) serverWhiteAdd(ctx *gin.Context) {
 	req := new(ServerWhiteAdd)
 	err := ctx.ShouldBindJSON(req)
 	if err != nil {
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "参数解析错误", Data: err})
 		return
 	}
 	_, err = c.discoveryClient.SetWhiteList(ctx.Request.Context(), &api.SetWhiteListReq{
@@ -72,7 +72,7 @@ func (c *Controller) serverWhiteAdd(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("set white list error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
@@ -86,7 +86,7 @@ func (c *Controller) serverWhiteDel(ctx *gin.Context) {
 	req := new(ServerWhiteDel)
 	err := ctx.ShouldBindJSON(req)
 	if err != nil {
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "参数解析错误", Data: err})
 		return
 	}
 	_, err = c.discoveryClient.SetWhiteList(ctx.Request.Context(), &api.SetWhiteListReq{
@@ -95,7 +95,7 @@ func (c *Controller) serverWhiteDel(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("set white list error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
@@ -109,7 +109,7 @@ func (c *Controller) serverDispatchCancel(ctx *gin.Context) {
 	req := new(ServerDispatchCancel)
 	err := ctx.ShouldBindJSON(req)
 	if err != nil {
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "参数解析错误", Data: err})
 		return
 	}
 	_, err = c.discoveryClient.ServerDispatchCancel(ctx.Request.Context(), &api.ServerDispatchCancelReq{
@@ -117,7 +117,7 @@ func (c *Controller) serverDispatchCancel(ctx *gin.Context) {
 	})
 	if err != nil {
 		logger.Error("server dispatch cancel error: %v", err)
-		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "", Data: err})
+		ctx.JSON(http.StatusOK, &CommonRsp{Code: -1, Msg: "服务器内部错误", Data: err})
 		return
 	}
 	ctx.JSON(http.StatusOK, &CommonRsp{Code: 0, Msg: "", Data: nil})
