@@ -24,7 +24,6 @@ const (
 type WorldManager struct {
 	worldMap            map[uint64]*World
 	snowflake           *alg.SnowflakeWorker
-	aiWorld             *World                     // 本服的Ai玩家世界
 	sceneBlockAoiMap    map[uint32]*alg.AoiManager // 全局各场景地图的aoi管理器
 	multiplayerWorldNum uint32                     // 本服务器的多人世界数量
 }
@@ -92,20 +91,15 @@ func (w *WorldManager) DestroyWorld(worldId uint64) {
 	}
 }
 
-// GetAiWorld 获取本服务器的Ai世界
-func (w *WorldManager) GetAiWorld() *World {
-	return w.aiWorld
-}
-
 // InitAiWorld 初始化Ai世界
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
-	w.aiWorld = w.GetWorldById(owner.WorldId)
-	w.aiWorld.ChangeToMultiplayer()
-	w.aiWorld.NewPhysicsEngine()
+	aiWorld := w.GetWorldById(owner.WorldId)
+	aiWorld.ChangeToMultiplayer()
+	aiWorld.NewPhysicsEngine()
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
-	return world.owner.PlayerId < PlayerBaseUid
+	return AI_MANAGER.IsAi(world.owner.PlayerId)
 }
 
 func (w *WorldManager) GetSceneBlockAoiMap() map[uint32]*alg.AoiManager {

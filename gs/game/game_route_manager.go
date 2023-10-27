@@ -196,7 +196,7 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 		serverMsg := netMsg.ServerMsg
 		switch netMsg.EventId {
 		case mq.ServerUserOnlineStateChangeNotify:
-			logger.Debug("remote user online state change, uid: %v, online: %v", serverMsg.UserId, serverMsg.IsOnline)
+			logger.Debug("remote user online gameState change, uid: %v, online: %v", serverMsg.UserId, serverMsg.IsOnline)
 			USER_MANAGER.SetRemoteUserOnlineState(serverMsg.UserId, serverMsg.IsOnline, netMsg.OriginServerAppId)
 		case mq.ServerAppidBindNotify:
 			GAME.ServerAppidBindNotify(serverMsg.UserId, serverMsg.MultiServerAppId)
@@ -220,6 +220,12 @@ func (r *RouteManager) RouteHandle(netMsg *mq.NetMsg) {
 				ParamList:  serverMsg.GmCmdParamList,
 				ResultChan: nil,
 			}
+		case mq.ServerGetMatchGameListRsp:
+			GAME.ServerGetMatchGameListRsp(serverMsg.UserId, serverMsg.MatchGameList)
+		case mq.ServerGetMatchRoomAiUidRsp:
+			GAME.ServerGetMatchRoomAiUidRsp(serverMsg.UserId, serverMsg.MatchAiUid)
+		case mq.ServerMatchCreateAiReq:
+			GAME.ServerMatchCreateAiReq(serverMsg.MatchGameType, serverMsg.MatchGameId, serverMsg.MatchRoomId, serverMsg.MatchAiInfo, netMsg.OriginServerAppId)
 		}
 	}
 }

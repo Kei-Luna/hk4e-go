@@ -159,28 +159,35 @@ func (t *TickManager) OnGameServerTick() {
 	now := tm.UnixMilli()
 	if t.globalTickCount%(50/ServerTickTime) == 0 {
 		t.onTick50MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick50MilliSecond, now)
 	}
 	if t.globalTickCount%(100/ServerTickTime) == 0 {
 		t.onTick100MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick100MilliSecond, now)
 	}
 	if t.globalTickCount%(200/ServerTickTime) == 0 {
 		t.onTick200MilliSecond(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick200MilliSecond, now)
 	}
 	if t.globalTickCount%(1000/ServerTickTime) == 0 {
 		t.onTickSecond(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickSecond)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickSecond, now)
 	}
 	if t.globalTickCount%(5000/ServerTickTime) == 0 {
 		t.onTick5Second(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick5Second, now)
 	}
 	if t.globalTickCount%(10000/ServerTickTime) == 0 {
 		t.onTick10Second(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTick10Second, now)
 	}
 	if t.globalTickCount%(60000/ServerTickTime) == 0 {
 		t.onTickMinute(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinute, now)
 	}
 	if t.globalTickCount%(60000*60/ServerTickTime) == 0 {
 		t.onTickHour(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHour, now)
 	}
 	for userId, userTick := range t.userTickMap {
 		if len(userTick.globalTick.C) == 0 {
@@ -206,16 +213,19 @@ func (t *TickManager) OnGameServerTick() {
 	}
 	if tm.Minute() != t.tm.Minute() {
 		t.onMinuteChange(now)
-		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinuteChange)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMinuteChange, now)
 	}
 	if tm.Hour() != t.tm.Hour() {
 		t.onHourChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickHourChange, now)
 	}
 	if tm.Day() != t.tm.Day() {
 		t.onDayChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickDayChange, now)
 	}
 	if tm.Month() != t.tm.Month() {
 		t.onMonthChange(now)
+		PLUGIN_MANAGER.HandleGlobalTick(PluginGlobalTickMonthChange, now)
 	}
 	t.tm = tm
 }
@@ -265,22 +275,11 @@ func (t *TickManager) onTick5Second(now int64) {
 			GAME.ScenePlayerLocationNotify(world)
 		}
 	}
-	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
-	if err != nil {
-		logger.Error("get plugin pubg error: %v", err)
-		return
-	}
-	pluginPubg := iPlugin.(*PluginPubg)
-	agree := true
-	if pluginPubg.IsStartPubg() {
-		agree = false
-	}
-	aiWorld := WORLD_MANAGER.GetAiWorld()
-	if aiWorld.GetWorldPlayerNum() >= 100 {
-		agree = false
-	}
-	for applyUid := range aiWorld.GetOwner().CoopApplyMap {
-		GAME.PlayerDealEnterWorld(aiWorld.GetOwner(), applyUid, agree)
+	// ai世界自动同意进入
+	for _, player := range AI_MANAGER.aiMap {
+		for applyUid := range player.CoopApplyMap {
+			GAME.PlayerDealEnterWorld(player, applyUid, true)
+		}
 	}
 }
 
@@ -325,29 +324,12 @@ func (t *TickManager) onTick100MilliSecond(now int64) {
 			}
 		}
 	}
-
-	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
-	if err != nil {
-		logger.Error("get plugin pubg error: %v", err)
-		return
-	}
-	pluginPubg := iPlugin.(*PluginPubg)
-	if !pluginPubg.IsStartPubg() {
-		return
-	}
-	world := WORLD_MANAGER.GetAiWorld()
-	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-	hitList := bulletPhysicsEngine.Update(now)
-	for _, rigidBody := range hitList {
-		scene := world.GetSceneById(rigidBody.sceneId)
-		pluginPubg.PubgHit(scene, rigidBody.hitAvatarEntityId, rigidBody.avatarEntityId, true)
-	}
 }
 
 func (t *TickManager) onTick50MilliSecond(now int64) {
 	// 音乐播放器
 	for i := 0; i < len(AUDIO_CHAN); i++ {
-		world := WORLD_MANAGER.GetAiWorld()
+		world := WORLD_MANAGER.GetWorldById(GAME.ai.WorldId)
 		GAME.SendToWorldA(world, cmd.SceneAudioNotify, 0, &proto.SceneAudioNotify{
 			Type:      5,
 			SourceUid: world.GetOwner().PlayerId,

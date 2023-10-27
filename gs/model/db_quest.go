@@ -87,7 +87,7 @@ func (q *DbQuest) StartQuest(questId uint32) {
 func (q *DbQuest) DeleteQuest(questId uint32) {
 	_, exist := q.QuestMap[questId]
 	if !exist {
-		logger.Error("quest is not exist, questId: %v", questId)
+		logger.Error("quest not exist, questId: %v", questId)
 		return
 	}
 	delete(q.QuestMap, questId)

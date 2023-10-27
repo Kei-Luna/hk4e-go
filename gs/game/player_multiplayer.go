@@ -16,6 +16,16 @@ import (
 
 /************************************************** 接口请求 **************************************************/
 
+// ServerGetMatchRoomAiUidRsp 获取房间ai的uid响应
+func (g *Game) ServerGetMatchRoomAiUidRsp(userId uint32, aiUid uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	g.PlayerApplyEnterWorld(player, aiUid)
+}
+
 func (g *Game) PlayerApplyEnterMpReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerApplyEnterMpReq)
 	targetUid := req.TargetUid
@@ -24,6 +34,20 @@ func (g *Game) PlayerApplyEnterMpReq(player *model.Player, payloadMsg pb.Message
 		TargetUid: targetUid,
 	}
 	g.SendMsg(cmd.PlayerApplyEnterMpRsp, player.PlayerId, player.ClientSeq, playerApplyEnterMpRsp)
+
+	// 确保匹配游戏id存在 发送到匹配服异步获取房间ai的uid
+	_, exist := AI_MANAGER.gameRoomAiUidMap[targetUid]
+	if exist && player.MultiServerAppId != "" {
+		MESSAGE_QUEUE.SendToMulti(player.MultiServerAppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerGetMatchRoomAiUidReq,
+			ServerMsg: &mq.ServerMsg{
+				UserId:      player.PlayerId,
+				MatchGameId: targetUid,
+			},
+		})
+		return
+	}
 
 	g.PlayerApplyEnterWorld(player, targetUid)
 }
@@ -100,6 +124,21 @@ func (g *Game) PlayerGetForceQuitBanInfoReq(player *model.Player, payloadMsg pb.
 }
 
 func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
+	// 获取玩家现在所在的世界
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdBackMyWorld, &PluginEventBackMyWorld{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		HostWorld:   world,
+	}) {
+		return
+	}
+
 	// 其他玩家
 	ok := g.PlayerLeaveWorld(player, false)
 
@@ -107,6 +146,21 @@ func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
 		return
 	}
+
+	// 通知匹配服玩家离开游戏ai的世界
+	exist, gameId, roomId := AI_MANAGER.GetAiUidGameId(world.GetOwner().PlayerId)
+	if exist && player.MultiServerAppId != "" {
+		MESSAGE_QUEUE.SendToMulti(player.MultiServerAppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerMatchPlayerExitGameNotify,
+			ServerMsg: &mq.ServerMsg{
+				UserId:      player.PlayerId,
+				MatchGameId: gameId,
+				MatchRoomId: roomId,
+			},
+		})
+	}
+
 	g.SendSucc(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{})
 }
 
@@ -163,6 +217,15 @@ func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
 func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 	hostWorld := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
 	if hostPlayer.SceneLoadState == model.SceneEnterDone {
+		// 触发事件
+		if PLUGIN_MANAGER.TriggerEvent(PluginEventIdJoinOtherWorld, &PluginEventJoinOtherWorld{
+			PluginEvent: NewPluginEvent(),
+			Player:      player,
+			HostPlayer:  hostPlayer,
+		}) {
+			return
+		}
+
 		player.SceneJump = true
 		player.SceneId = hostPlayer.SceneId
 		player.SceneLoadState = model.SceneNone
@@ -170,6 +233,20 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 		player.Pos.X, player.Pos.Y, player.Pos.Z = hostPlayer.Pos.X, hostPlayer.Pos.Y, hostPlayer.Pos.Z
 		player.Rot.X, player.Rot.Y, player.Rot.Z = hostPlayer.Rot.X, hostPlayer.Rot.Y, hostPlayer.Rot.Z
 		g.WorldAddPlayer(hostWorld, player)
+
+		// 通知匹配服玩家加入游戏ai的世界
+		exist, gameId, roomId := AI_MANAGER.GetAiUidGameId(hostPlayer.PlayerId)
+		if exist && player.MultiServerAppId != "" {
+			MESSAGE_QUEUE.SendToMulti(player.MultiServerAppId, &mq.NetMsg{
+				MsgType: mq.MsgTypeServer,
+				EventId: mq.ServerMatchPlayerJoinGameNotify,
+				ServerMsg: &mq.ServerMsg{
+					UserId:      player.PlayerId,
+					MatchGameId: gameId,
+					MatchRoomId: roomId,
+				},
+			})
+		}
 
 		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
 			player,

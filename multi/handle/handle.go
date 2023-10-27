@@ -1,27 +1,37 @@
 package handle
 
 import (
+	"context"
 	"hk4e/common/mq"
+	"hk4e/common/rpc"
 	"hk4e/gate/kcp"
 	"hk4e/node/api"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/cmd"
+	"time"
 
 	pb "google.golang.org/protobuf/proto"
 )
 
 type Handle struct {
-	messageQueue   *mq.MessageQueue
-	playerAcCtxMap map[uint32]*AnticheatContext
-	worldStatic    *WorldStatic
+	messageQueue         *mq.MessageQueue
+	discoveryClient      *rpc.DiscoveryClient
+	playerAcCtxMap       map[uint32]*AnticheatContext
+	worldStatic          *WorldStatic
+	match                *Match
+	minLoadGsServerAppId string
 }
 
-func NewHandle(messageQueue *mq.MessageQueue) (r *Handle) {
+func NewHandle(messageQueue *mq.MessageQueue, discoveryClient *rpc.DiscoveryClient) (r *Handle) {
 	r = new(Handle)
 	r.messageQueue = messageQueue
+	r.discoveryClient = discoveryClient
 	r.playerAcCtxMap = make(map[uint32]*AnticheatContext)
 	r.worldStatic = NewWorldStatic()
 	r.worldStatic.InitTerrain()
+	r.syncMinLoadServerAppid()
+	go r.autoSyncMinLoadServerAppid()
+	r.match = NewMatch(r)
 	go r.run()
 	return r
 }
@@ -59,8 +69,45 @@ func (h *Handle) run() {
 				} else {
 					h.DelPlayerAcCtx(serverMsg.UserId)
 				}
+			case mq.ServerGetMatchGameListReq:
+				h.ServerGetMatchGameListReq(serverMsg.UserId, netMsg.OriginServerAppId)
+			case mq.ServerGetMatchRoomAiUidReq:
+				h.ServerGetMatchRoomAiUidReq(serverMsg.UserId, serverMsg.MatchGameId, netMsg.OriginServerAppId)
+			case mq.ServerMatchCreateAiRsp:
+				h.ServerMatchCreateAiRsp(serverMsg.MatchGameId, serverMsg.MatchRoomId, serverMsg.MatchAiUid)
+			case mq.ServerMatchPlayerJoinGameNotify:
+				h.ServerMatchPlayerJoinGameNotify(serverMsg.UserId, serverMsg.MatchGameId, serverMsg.MatchRoomId)
+			case mq.ServerMatchPlayerExitGameNotify:
+				h.ServerMatchPlayerExitGameNotify(serverMsg.UserId, serverMsg.MatchGameId, serverMsg.MatchRoomId)
+			case mq.ServerMatchGameStartNotify:
+				h.ServerMatchGameStartNotify(serverMsg.MatchGameId, serverMsg.MatchRoomId)
+			case mq.ServerMatchGameStopNotify:
+				h.ServerMatchGameStopNotify(serverMsg.MatchGameId, serverMsg.MatchRoomId)
 			}
 		}
+	}
+}
+
+func (h *Handle) syncMinLoadServerAppid() {
+	gsServerAppId, err := h.discoveryClient.GetServerAppId(context.TODO(), &api.GetServerAppIdReq{
+		ServerType: api.GS,
+	})
+	if err != nil {
+		logger.Error("get gs server appid error: %v", err)
+		h.minLoadGsServerAppId = ""
+	} else {
+		h.minLoadGsServerAppId = gsServerAppId.AppId
+	}
+}
+
+func (h *Handle) autoSyncMinLoadServerAppid() {
+	ticker := time.NewTicker(time.Second * 15)
+	for {
+		<-ticker.C
+		h.syncMinLoadServerAppid()
+
+		// 同步完负载最小的gs后重新尝试请求创建ai
+		h.match.HandleWaitCreateAiRoom()
 	}
 }
 

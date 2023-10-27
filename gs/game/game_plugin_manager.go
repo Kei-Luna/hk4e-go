@@ -3,6 +3,8 @@ package game
 import (
 	"errors"
 	"fmt"
+	"hk4e/common/constant"
+	"hk4e/common/mq"
 	"reflect"
 	"sort"
 
@@ -35,6 +37,11 @@ const (
 	PluginEventIdAvatarDieAnimationEnd
 	PluginEventIdGadgetInteract
 	PluginEventIdPostEnterScene
+	PluginEventIdMatchCreateAi
+	PluginEventIdJoinOtherWorld
+	PluginEventIdEvtDoSkillSucc
+	PluginEventIdBackMyWorld
+	PluginEventIdUserOffline
 )
 
 // PluginEventKillAvatar 角色被杀死
@@ -71,6 +78,43 @@ type PluginEventPostEnterScene struct {
 	*PluginEvent
 	Player *model.Player            // 玩家
 	Req    *proto.PostEnterSceneReq // 请求
+}
+
+// PluginEventMatchCreateAi 匹配服请求创建ai
+type PluginEventMatchCreateAi struct {
+	*PluginEvent
+	GameType uint8         // 游戏类型
+	GameId   uint32        // 游戏id
+	RoomId   uint32        // 房间id
+	Ai       *model.Player // ai
+}
+
+// PluginEventJoinOtherWorld 加入其他人的世界
+type PluginEventJoinOtherWorld struct {
+	*PluginEvent
+	Player     *model.Player // 玩家
+	HostPlayer *model.Player // 主机玩家
+}
+
+// PluginEventEvtDoSkillSucc 使用技能完毕
+type PluginEventEvtDoSkillSucc struct {
+	*PluginEvent
+	Player *model.Player               // 玩家
+	Ntf    *proto.EvtDoSkillSuccNotify // 通知
+}
+
+// PluginEventBackMyWorld 玩家返回自己的世界
+type PluginEventBackMyWorld struct {
+	*PluginEvent
+	Player    *model.Player // 玩家
+	HostWorld *World        // 主机世界
+}
+
+// PluginEventUserOffline 玩家离线
+type PluginEventUserOffline struct {
+	*PluginEvent
+	Player       *model.Player // 玩家
+	ChangeGsInfo *ChangeGsInfo // 改变gs信息
 }
 
 type PluginEventFunc func(event IPluginEvent)
@@ -131,7 +175,17 @@ type PluginGlobalTick uint8
 
 const (
 	PluginGlobalTickSecond = PluginGlobalTick(iota)
+	PluginGlobalTick50MilliSecond
+	PluginGlobalTick100MilliSecond
+	PluginGlobalTick200MilliSecond
+	PluginGlobalTick5Second
+	PluginGlobalTick10Second
+	PluginGlobalTickMinute
+	PluginGlobalTickHour
 	PluginGlobalTickMinuteChange
+	PluginGlobalTickHourChange
+	PluginGlobalTickDayChange
+	PluginGlobalTickMonthChange
 )
 
 // PluginUserTimerFunc 用户timer处理函数
@@ -139,18 +193,18 @@ type PluginUserTimerFunc func(player *model.Player, data []any)
 
 // Plugin 插件结构
 type Plugin struct {
-	isEnable              bool                                 // 是否启用
-	eventMap              map[PluginEventId][]*PluginEventInfo // 事件集合
-	globalTickMap         map[PluginGlobalTick][]func()        // 全局tick集合
-	userTimerMap          map[uint64]PluginUserTimerFunc       // 用户timer集合
-	commandControllerList []*CommandController                 // 命令控制器列表
+	isEnable              bool                                   // 是否启用
+	eventMap              map[PluginEventId][]*PluginEventInfo   // 事件集合
+	globalTickMap         map[PluginGlobalTick][]func(now int64) // 全局tick集合
+	userTimerMap          map[uint64]PluginUserTimerFunc         // 用户timer集合
+	commandControllerList []*CommandController                   // 命令控制器列表
 }
 
 func NewPlugin() *Plugin {
 	return &Plugin{
 		isEnable:              true,
 		eventMap:              make(map[PluginEventId][]*PluginEventInfo),
-		globalTickMap:         make(map[PluginGlobalTick][]func()),
+		globalTickMap:         make(map[PluginGlobalTick][]func(now int64)),
 		userTimerMap:          make(map[uint64]PluginUserTimerFunc),
 		commandControllerList: make([]*CommandController, 0),
 	}
@@ -188,11 +242,11 @@ func (p *Plugin) ListenEvent(eventId PluginEventId, priority PluginEventPriority
 }
 
 // AddGlobalTick 添加全局tick
-func (p *Plugin) AddGlobalTick(tick PluginGlobalTick, tickFuncList ...func()) {
+func (p *Plugin) AddGlobalTick(tick PluginGlobalTick, tickFuncList ...func(now int64)) {
 	for _, tickFunc := range tickFuncList {
 		_, exist := p.globalTickMap[tick]
 		if !exist {
-			p.globalTickMap[tick] = make([]func(), 0)
+			p.globalTickMap[tick] = make([]func(now int64), 0)
 		}
 		p.globalTickMap[tick] = append(p.globalTickMap[tick], tickFunc)
 	}
@@ -211,6 +265,44 @@ func (p *Plugin) CreateUserTimer(userId uint32, delay uint32, timerFunc PluginUs
 // RegCommandController 注册命令控制器
 func (p *Plugin) RegCommandController(controller *CommandController) {
 	COMMAND_MANAGER.RegController(controller)
+}
+
+// MatchGameStart 发送匹配服游戏开始通知
+func (p *Plugin) MatchGameStart(ai *model.Player, gameId uint32, roomId uint32) {
+	if ai.MultiServerAppId == "" {
+		logger.Error("ai multiServerAppId empty, gameId: %v, roomId: %v, uid: %v", gameId, roomId, ai.PlayerId)
+		return
+	}
+	// 禁止世界进入玩家
+	ai.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE] = 0
+
+	MESSAGE_QUEUE.SendToMulti(ai.MultiServerAppId, &mq.NetMsg{
+		MsgType: mq.MsgTypeServer,
+		EventId: mq.ServerMatchGameStartNotify,
+		ServerMsg: &mq.ServerMsg{
+			MatchGameId: gameId,
+			MatchRoomId: roomId,
+		},
+	})
+}
+
+// MatchGameStop 发送匹配服游戏结束通知
+func (p *Plugin) MatchGameStop(ai *model.Player, gameId uint32, roomId uint32) {
+	if ai.MultiServerAppId == "" {
+		logger.Error("ai multiServerAppId empty, gameId: %v, roomId: %v, uid: %v", gameId, roomId, ai.PlayerId)
+		return
+	}
+	// 清除ai
+	AI_MANAGER.DeleteAi(ai.PlayerId)
+
+	MESSAGE_QUEUE.SendToMulti(ai.MultiServerAppId, &mq.NetMsg{
+		MsgType: mq.MsgTypeServer,
+		EventId: mq.ServerMatchGameStopNotify,
+		ServerMsg: &mq.ServerMsg{
+			MatchGameId: gameId,
+			MatchRoomId: roomId,
+		},
+	})
 }
 
 type PluginManager struct {
@@ -336,7 +428,7 @@ func (p *PluginManager) TriggerEvent(eventId PluginEventId, event IPluginEvent) 
 }
 
 // HandleGlobalTick 处理全局tick
-func (p *PluginManager) HandleGlobalTick(tick PluginGlobalTick) {
+func (p *PluginManager) HandleGlobalTick(tick PluginGlobalTick, now int64) {
 	for _, iPlugin := range p.pluginMap {
 		plugin := iPlugin.GetPlugin()
 		// 插件未启用则跳过
@@ -349,7 +441,7 @@ func (p *PluginManager) HandleGlobalTick(tick PluginGlobalTick) {
 			continue
 		}
 		for _, tickFunc := range tickFuncList {
-			tickFunc()
+			tickFunc(now)
 		}
 	}
 }

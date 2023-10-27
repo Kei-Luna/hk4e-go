@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"regexp"
 	"time"
 	"unicode/utf8"
@@ -371,67 +370,54 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 	}
 }
 
-func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Message) {
-	count := 0
-	rsp := &proto.GetOnlinePlayerListRsp{
-		PlayerInfoList: make([]*proto.OnlinePlayerInfo, 0),
+// ServerGetMatchGameListRsp 获取匹配游戏列表响应
+func (g *Game) ServerGetMatchGameListRsp(userId uint32, matchGameInfoList []*mq.MatchGameInfo) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
 	}
-	// 最先添加全服ai玩家
-	aiUidList := USER_MANAGER.GetAllRemoteAiUidList()
-	aiUidList = append(aiUidList, g.GetAi().PlayerId)
-	for _, aiUid := range aiUidList {
-		aiGsId := aiUid - AiBaseUid
-		roomNumber := aiGsId - 1
-		startMinute := roomNumber % 6 * 10
-		name := fmt.Sprintf("房间：%v", roomNumber)
-		sign := fmt.Sprintf("开启时间：%02d:%02d。", time.Now().Hour(), startMinute)
-		rsp.PlayerInfoList = append(rsp.PlayerInfoList, &proto.OnlinePlayerInfo{
-			Uid:                 aiUid,
-			Nickname:            name,
+	playerInfoList := make([]*proto.OnlinePlayerInfo, 0, len(matchGameInfoList))
+	// 匹配游戏信息
+	for _, info := range matchGameInfoList {
+		playerInfoList = append(playerInfoList, &proto.OnlinePlayerInfo{
+			Uid:                 info.GameId,
+			Nickname:            info.AiInfo.Name,
 			PlayerLevel:         1,
-			AvatarId:            10000007,
+			AvatarId:            info.AiInfo.HeadImage,
 			MpSettingType:       proto.MpSettingType_MP_SETTING_ENTER_AFTER_APPLY,
-			NameCardId:          210001,
-			Signature:           sign,
-			ProfilePicture:      &proto.ProfilePicture{AvatarId: 10000007},
-			CurPlayerNumInWorld: 1,
+			NameCardId:          info.AiInfo.NameCard,
+			Signature:           info.AiInfo.Sign,
+			ProfilePicture:      &proto.ProfilePicture{AvatarId: info.AiInfo.HeadImage},
+			CurPlayerNumInWorld: info.PlayerCount,
 		})
-		count++
 	}
-	onlinePlayerList := make([]*model.Player, 0)
-	// 优先获取本地的在线玩家
-	for _, onlinePlayer := range USER_MANAGER.GetAllOnlineUserList() {
-		if onlinePlayer.PlayerId < PlayerBaseUid || onlinePlayer.PlayerId > MaxPlayerBaseUid {
-			continue
-		}
-		if onlinePlayer.PlayerId == player.PlayerId {
-			continue
-		}
-		onlinePlayerList = append(onlinePlayerList, onlinePlayer)
-		count++
-		if count >= 50 {
-			break
-		}
-	}
-	if count < 50 {
-		// 本地不够时获取远程的在线玩家
-		for _, onlinePlayer := range USER_MANAGER.GetRemoteOnlineUserList(50 - count) {
-			if onlinePlayer.PlayerId == player.PlayerId {
-				continue
-			}
-			onlinePlayerList = append(onlinePlayerList, onlinePlayer)
-			count++
-			if count >= 50 {
-				break
-			}
-		}
-	}
+	// 添加本服其他的玩家
+	playerInfoList = append(playerInfoList, g.GetOnlinePlayerInfoList(player, len(playerInfoList))...)
 
-	for _, onlinePlayer := range onlinePlayerList {
-		onlinePlayerInfo := g.PacketOnlinePlayerInfo(onlinePlayer)
-		rsp.PlayerInfoList = append(rsp.PlayerInfoList, onlinePlayerInfo)
+	getOnlinePlayerListRsp := &proto.GetOnlinePlayerListRsp{
+		PlayerInfoList: playerInfoList,
 	}
-	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, rsp)
+	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, getOnlinePlayerListRsp)
+}
+
+// GetOnlinePlayerListReq 获取在线玩家列表请求
+func (g *Game) GetOnlinePlayerListReq(player *model.Player, payloadMsg pb.Message) {
+	// 发送到匹配服异步获取游戏列表
+	if player.MultiServerAppId != "" {
+		MESSAGE_QUEUE.SendToMulti(player.MultiServerAppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerGetMatchGameListReq,
+			ServerMsg: &mq.ServerMsg{
+				UserId: player.PlayerId,
+			},
+		})
+		return
+	}
+	getOnlinePlayerListRsp := &proto.GetOnlinePlayerListRsp{
+		PlayerInfoList: g.GetOnlinePlayerInfoList(player, 0),
+	}
+	g.SendMsg(cmd.GetOnlinePlayerListRsp, player.PlayerId, player.ClientSeq, getOnlinePlayerListRsp)
 }
 
 func (g *Game) GetOnlinePlayerInfoReq(player *model.Player, payloadMsg pb.Message) {
@@ -504,6 +490,53 @@ func (g *Game) ServerAddFriendNotify(addFriendInfo *mq.AddFriendInfo) {
 }
 
 /************************************************** 打包封装 **************************************************/
+
+// GetOnlinePlayerInfoList 获取在线玩家信息列表
+func (g *Game) GetOnlinePlayerInfoList(player *model.Player, count int) []*proto.OnlinePlayerInfo {
+	onlinePlayerList := make([]*model.Player, 0)
+
+	addOnlinePlayer := func(onlinePlayer *model.Player) {
+		if onlinePlayer.PlayerId < PlayerBaseUid || onlinePlayer.PlayerId > MaxPlayerBaseUid {
+			return
+		}
+		if onlinePlayer.PlayerId == player.PlayerId {
+			return
+		}
+		// 如果在其他人的世界则不添加
+		world := WORLD_MANAGER.GetWorldById(onlinePlayer.WorldId)
+		if world == nil {
+			return
+		}
+		if world.GetOwner().PlayerId != onlinePlayer.PlayerId {
+			return
+		}
+		onlinePlayerList = append(onlinePlayerList, onlinePlayer)
+		count++
+	}
+
+	// 优先获取本地的在线玩家
+	for _, onlinePlayer := range USER_MANAGER.GetAllOnlineUserList() {
+		addOnlinePlayer(onlinePlayer)
+		if count >= 50 {
+			break
+		}
+	}
+	if count < 50 {
+		// 本地不够时获取远程的在线玩家
+		for _, onlinePlayer := range USER_MANAGER.GetRemoteOnlineUserList(50 - count) {
+			addOnlinePlayer(onlinePlayer)
+			if count >= 50 {
+				break
+			}
+		}
+	}
+	playerInfoList := make([]*proto.OnlinePlayerInfo, 0, len(onlinePlayerList))
+	for _, onlinePlayer := range onlinePlayerList {
+		onlinePlayerInfo := g.PacketOnlinePlayerInfo(onlinePlayer)
+		playerInfoList = append(playerInfoList, onlinePlayerInfo)
+	}
+	return playerInfoList
+}
 
 func (g *Game) PacketOnlinePlayerInfo(player *model.Player) *proto.OnlinePlayerInfo {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)

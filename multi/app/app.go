@@ -69,7 +69,7 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.MULTI, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	_ = handle.NewHandle(messageQueue)
+	_ = handle.NewHandle(messageQueue, discoveryClient)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)

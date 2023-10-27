@@ -677,10 +677,6 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 
-	if WORLD_MANAGER.IsAiWorld(world) && player.CmdPerm != uint8(CommandPermGM) {
-		return
-	}
-
 	newSceneId := sceneId
 	oldSceneId := player.SceneId
 	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}

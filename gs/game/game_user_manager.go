@@ -174,6 +174,15 @@ type PlayerOfflineInfo struct {
 
 // OfflineUser 玩家离线
 func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsInfo) {
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdUserOffline, &PluginEventUserOffline{
+		PluginEvent:  NewPluginEvent(),
+		Player:       player,
+		ChangeGsInfo: changeGsInfo,
+	}) {
+		return
+	}
+
 	if player.OfflineNotSave {
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserOfflineSaveToDbFinish,
@@ -232,22 +241,22 @@ func (u *UserManager) ChangeUserDbState(player *model.Player, state int) {
 		} else if state == model.DbNormal {
 			player.DbState = model.DbNormal
 		} else {
-			logger.Error("player db state change not allow, before: %v, after: %v", player.DbState, state)
+			logger.Error("player db gameState change not allow, before: %v, after: %v", player.DbState, state)
 		}
 	case model.DbInsert:
-		logger.Error("player db state change not allow, before: %v, after: %v", player.DbState, state)
+		logger.Error("player db gameState change not allow, before: %v, after: %v", player.DbState, state)
 		break
 	case model.DbDelete:
 		if state == model.DbNormal {
 			player.DbState = model.DbNormal
 		} else {
-			logger.Error("player db state change not allow, before: %v, after: %v", player.DbState, state)
+			logger.Error("player db gameState change not allow, before: %v, after: %v", player.DbState, state)
 		}
 	case model.DbNormal:
 		if state == model.DbDelete {
 			player.DbState = model.DbDelete
 		} else {
-			logger.Error("player db state change not allow, before: %v, after: %v", player.DbState, state)
+			logger.Error("player db gameState change not allow, before: %v, after: %v", player.DbState, state)
 		}
 	}
 }
@@ -319,12 +328,10 @@ func (u *UserManager) SetRemoteUserOnlineState(userId uint32, isOnline bool, app
 func (u *UserManager) GetAllRemoteAiUidList() []uint32 {
 	userIdList := make([]uint32, 0)
 	u.remotePlayerMapLock.RLock()
-	for userId := uint32(AiBaseUid); userId < AiBaseUid+1000; userId++ {
-		_, exist := u.remotePlayerMap[userId]
-		if !exist {
-			continue
+	for userId := range u.remotePlayerMap {
+		if userId <= PlayerBaseUid {
+			userIdList = append(userIdList, userId)
 		}
-		userIdList = append(userIdList, userId)
 	}
 	u.remotePlayerMapLock.RUnlock()
 	return userIdList
@@ -546,7 +553,7 @@ func (u *UserManager) SaveUserToDbSync(player *model.Player) {
 			return
 		}
 	} else {
-		logger.Error("invalid player db state: %v", player.DbState)
+		logger.Error("invalid player db gameState: %v", player.DbState)
 	}
 }
 

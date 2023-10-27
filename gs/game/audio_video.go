@@ -295,7 +295,7 @@ func UpdateFrame(fileData []byte, basePos *model.Vector, rgb bool) {
 	if err != nil {
 		return
 	}
-	world := WORLD_MANAGER.GetAiWorld()
+	world := WORLD_MANAGER.GetWorldById(GAME.ai.WorldId)
 	scene := world.GetSceneById(3)
 	for _, v := range SCREEN_ENTITY_ID_LIST {
 		scene.DestroyEntity(v)

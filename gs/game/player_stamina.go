@@ -379,7 +379,7 @@ func (g *Game) HandleDrown(player *model.Player, stamina uint32) {
 	if player.StaminaInfo.State != proto.MotionState_MOTION_SWIM_MOVE && player.StaminaInfo.State != proto.MotionState_MOTION_SWIM_DASH {
 		return
 	}
-	logger.Debug("player drown, curStamina: %v, state: %v", stamina, player.StaminaInfo.State)
+	logger.Debug("player drown, curStamina: %v, gameState: %v", stamina, player.StaminaInfo.State)
 	// 设置角色为死亡
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {

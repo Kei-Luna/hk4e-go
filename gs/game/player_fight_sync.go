@@ -692,54 +692,19 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 		return
 	}
 	// logger.Debug("EvtDoSkillSuccNotify: %+v", ntf)
+
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdEvtDoSkillSucc, &PluginEventEvtDoSkillSucc{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Ntf:         ntf,
+	}) {
+		return
+	}
+
 	// 处理技能开始的耐力消耗
 	g.SkillStartStamina(player, ntf.CasterId, ntf.SkillId)
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_SKILL, "", int32(ntf.SkillId))
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		return
-	}
-	if !WORLD_MANAGER.IsAiWorld(world) {
-		return
-	}
-	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
-	if err != nil {
-		logger.Error("get plugin pubg error: %v", err)
-		return
-	}
-	pluginPubg := iPlugin.(*PluginPubg)
-	if !pluginPubg.IsStartPubg() {
-		return
-	}
-	worldAvatar := world.GetWorldAvatarByEntityId(ntf.CasterId)
-	if worldAvatar == nil {
-		return
-	}
-	avatarDataConfig := gdconf.GetAvatarDataById(int32(worldAvatar.GetAvatarId()))
-	if avatarDataConfig == nil {
-		return
-	}
-	logger.Debug("avatar normal attack, avatarId: %v, weaponType: %v, uid: %v", avatarDataConfig.AvatarId, avatarDataConfig.WeaponType, player.PlayerId)
-	switch avatarDataConfig.WeaponType {
-	case constant.WEAPON_TYPE_SWORD_ONE_HAND, constant.WEAPON_TYPE_CLAYMORE, constant.WEAPON_TYPE_POLE, constant.WEAPON_TYPE_CATALYST, constant.WEAPON_TYPE_BOW:
-		scene := world.GetSceneById(player.SceneId)
-		avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
-		for _, entity := range scene.GetAllEntity() {
-			if entity.GetId() == avatarEntity.GetId() || entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
-				continue
-			}
-			distance3D := math.Sqrt(
-				(avatarEntity.GetPos().X-entity.GetPos().X)*(avatarEntity.GetPos().X-entity.GetPos().X) +
-					(avatarEntity.GetPos().Y-entity.GetPos().Y)*(avatarEntity.GetPos().Y-entity.GetPos().Y) +
-					(avatarEntity.GetPos().Z-entity.GetPos().Z)*(avatarEntity.GetPos().Z-entity.GetPos().Z),
-			)
-			if distance3D > PUBG_NORMAL_ATTACK_DISTANCE {
-				continue
-			}
-			pluginPubg.PubgHit(scene, entity.GetId(), avatarEntity.GetId(), false)
-		}
-	default:
-	}
 }
 
 func (g *Game) EvtAvatarEnterFocusNotify(player *model.Player, payloadMsg pb.Message) {

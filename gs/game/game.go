@@ -37,6 +37,7 @@ var TICK_MANAGER *TickManager = nil
 var COMMAND_MANAGER *CommandManager = nil
 var GCG_MANAGER *GCGManager = nil
 var PLUGIN_MANAGER *PluginManager = nil
+var AI_MANAGER *AiManager = nil
 var MESSAGE_QUEUE *mq.MessageQueue
 
 var ONLINE_PLAYER_NUM int32 = 0 // 当前在线玩家数
@@ -73,13 +74,12 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	COMMAND_MANAGER = NewCommandManager()
 	GCG_MANAGER = NewGCGManager()
 	PLUGIN_MANAGER = NewPluginManager()
+	AI_MANAGER = NewAiManager()
 	RegLuaScriptLibFunc()
-	// 创建本服的Ai世界
-	uid := AiBaseUid + gsId
+	// 创建本服的Ai
 	name := AiName
 	sign := AiSign + " GS:" + strconv.Itoa(int(gsId))
-	r.ai = r.CreateRobot(uid, name, sign)
-	WORLD_MANAGER.InitAiWorld(r.ai)
+	r.ai = AI_MANAGER.CreateAi(name, sign, 10000007, 210001, "")
 	COMMAND_MANAGER.SetSystem(r.ai)
 	// 初始化插件 最后再调用以免插件需要访问其他模块导致出错
 	PLUGIN_MANAGER.InitPlugin()
@@ -100,35 +100,6 @@ func (g *Game) GetGsAppid() string {
 // GetAi 获取本服的Ai玩家对象
 func (g *Game) GetAi() *model.Player {
 	return g.ai
-}
-
-func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
-	g.OnLogin(uid, 0, "", nil, new(proto.PlayerLoginReq), true)
-	robot := USER_MANAGER.GetOnlineUser(uid)
-	robot.DbState = model.DbNormal
-	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
-	robot.Signature = sign
-	world := WORLD_MANAGER.GetWorldById(robot.WorldId)
-	g.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
-		MotionInfo: &proto.MotionInfo{
-			Pos: &proto.Vector{X: 500.0, Y: 900.0, Z: -500.0},
-			Rot: new(proto.Vector),
-		},
-		EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
-	})
-	return robot
 }
 
 func (g *Game) run() {

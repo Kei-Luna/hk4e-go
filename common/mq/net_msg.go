@@ -61,6 +61,16 @@ const (
 	ServerStopNotify                          // 停服通知
 	ServerDispatchCancelNotify                // 服务器取消调度通知
 	ServerGmCmdNotify                         // 服务器GM指令执行通知
+	ServerGetMatchGameListReq                 // 服务器匹配服游戏列表请求
+	ServerGetMatchGameListRsp                 // 服务器匹配服游戏列表响应
+	ServerGetMatchRoomAiUidReq                // 服务器匹配服房间ai的uid请求
+	ServerGetMatchRoomAiUidRsp                // 服务器匹配服房间ai的uid响应
+	ServerMatchCreateAiReq                    // 服务器匹配服创建ai请求
+	ServerMatchCreateAiRsp                    // 服务器匹配服创建ai响应
+	ServerMatchPlayerJoinGameNotify           // 服务器匹配服玩家加入游戏通知
+	ServerMatchPlayerExitGameNotify           // 服务器匹配服玩家离开游戏通知
+	ServerMatchGameStartNotify                // 服务器匹配服游戏开始通知
+	ServerMatchGameStopNotify                 // 服务器匹配服游戏结束通知
 )
 
 type ServerMsg struct {
@@ -76,6 +86,12 @@ type ServerMsg struct {
 	AppVersion          string
 	GmCmdFuncName       string
 	GmCmdParamList      []string
+	MatchGameList       []*MatchGameInfo
+	MatchGameId         uint32
+	MatchRoomId         uint32
+	MatchAiUid          uint32
+	MatchAiInfo         *AiInfo
+	MatchGameType       uint8
 }
 
 type OriginInfo struct {
@@ -126,4 +142,19 @@ type ForwardDispatchInfo struct {
 	GateIp      string
 	GatePort    uint32
 	DispatchKey []byte
+}
+
+// MatchGameInfo 匹配游戏信息
+type MatchGameInfo struct {
+	GameId      uint32  // 游戏id
+	PlayerCount uint32  // 玩家数量
+	AiInfo      *AiInfo // Ai信息
+}
+
+// AiInfo ai信息
+type AiInfo struct {
+	Name      string // 游戏名
+	Sign      string // 描述签名
+	HeadImage uint32 // 头像id
+	NameCard  uint32 // 名片id
 }

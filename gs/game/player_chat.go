@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"time"
 
 	"hk4e/common/mq"
@@ -179,6 +180,12 @@ func (g *Game) PlayerChatReq(player *model.Player, payloadMsg pb.Message) {
 }
 
 /************************************************** 游戏功能 **************************************************/
+
+// SendWorldChat 发送世界聊天
+func (g *Game) SendWorldChat(world *World, msg string, param ...any) {
+	info := fmt.Sprintf(msg, param...)
+	g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+}
 
 // SendPrivateChat 发送私聊文本消息给玩家
 func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content any) {
