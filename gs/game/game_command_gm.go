@@ -30,17 +30,6 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId uint32, posX, posY, posZ float6
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
-		return
-	}
-
-	// ai世界禁止用命令传送
-	if WORLD_MANAGER.IsAiWorld(world) && player.CmdPerm != uint8(CommandPermGM) {
-		return
-	}
-
 	GAME.TeleportPlayer(
 		player,
 		proto.EnterReason_ENTER_REASON_GM,
@@ -554,7 +543,10 @@ func (g *GMCmd) AvUpdateFrame(fileDataBase64 string, rgb bool, posX, posY, posZ 
 	UpdateFrame(fileData, basePos, rgb)
 }
 
-func (g *GMCmd) CreateRobotInAiWorld(aiUid uint32, name string, avatarId uint32, posX, posY, posZ float64) {
+func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32, posX, posY, posZ float64) {
+	if uid == 0 {
+		return
+	}
 	if name == "" {
 		name = random.GetRandomStr(8)
 	}
@@ -564,14 +556,9 @@ func (g *GMCmd) CreateRobotInAiWorld(aiUid uint32, name string, avatarId uint32,
 			break
 		}
 	}
-	ai := USER_MANAGER.GetOnlineUser(aiUid)
-	if ai == nil {
-		logger.Error("ai is nil, uid: %v", aiUid)
-		return
-	}
-	world := WORLD_MANAGER.GetWorldById(ai.WorldId)
-	robot := AI_MANAGER.CreateAi(name, name, 10000007, 210001, "")
-	GAME.AddPlayerAvatar(robot.PlayerId, avatarId)
+	aiWorld := WORLD_MANAGER.GetAiWorld()
+	robot := GAME.CreateRobot(uid, name, name)
+	GAME.AddPlayerAvatar(uid, avatarId)
 	dbAvatar := robot.GetDbAvatar()
 	GAME.SetUpAvatarTeamReq(robot, &proto.SetUpAvatarTeamReq{
 		TeamId:             1,
@@ -582,23 +569,23 @@ func (g *GMCmd) CreateRobotInAiWorld(aiUid uint32, name string, avatarId uint32,
 		AvatarId: avatarId,
 	})
 	GAME.JoinPlayerSceneReq(robot, &proto.JoinPlayerSceneReq{
-		TargetUid: world.GetOwner().PlayerId,
+		TargetUid: aiWorld.GetOwner().PlayerId,
 	})
 	GAME.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
 	GAME.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
 	GAME.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
 	GAME.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
+		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
-	activeAvatarId := world.GetPlayerActiveAvatarId(robot)
+	activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
 	entityMoveInfo := &proto.EntityMoveInfo{
-		EntityId: world.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
+		EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
 		MotionInfo: &proto.MotionInfo{
 			Pos:   &proto.Vector{X: float32(posX), Y: float32(posY), Z: float32(posZ)},
 			Rot:   &proto.Vector{X: float32(0.0), Y: float32(0.0), Z: float32(0.0)},
@@ -651,37 +638,45 @@ func (g *GMCmd) SendMsgToPlayer(cmdName string, userId uint32, msgJson string) {
 	GAME.SendMsg(cmdId, userId, 0, msg)
 }
 
-func (g *GMCmd) SetPhysicsEngineParam(aiUid uint32, pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
-	ai := USER_MANAGER.GetOnlineUser(aiUid)
-	if ai == nil {
-		logger.Error("ai is nil, uid: %v", aiUid)
+func (g *GMCmd) StartPubg(v bool) {
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
 		return
 	}
-	world := WORLD_MANAGER.GetWorldById(ai.WorldId)
+	pluginPubg := iPlugin.(*PluginPubg)
+	pluginPubg.StartPubg()
+}
+
+func (g *GMCmd) StopPubg(v bool) {
+	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
+	if err != nil {
+		logger.Error("get plugin pubg error: %v", err)
+		return
+	}
+	pluginPubg := iPlugin.(*PluginPubg)
+	pluginPubg.StopPubg()
+}
+
+func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
+	world := WORLD_MANAGER.GetAiWorld()
 	engine := world.GetBulletPhysicsEngine()
 	engine.SetPhysicsEngineParam(pathTracing, acc, drag, pao, is, ayo)
 }
 
-func (g *GMCmd) ShowAvatarCollider(aiUid uint32) {
-	ai := USER_MANAGER.GetOnlineUser(aiUid)
-	if ai == nil {
-		logger.Error("ai is nil, uid: %v", aiUid)
-		return
-	}
-	world := WORLD_MANAGER.GetWorldById(ai.WorldId)
+func (g *GMCmd) ShowAvatarCollider(v bool) {
+	world := WORLD_MANAGER.GetAiWorld()
 	engine := world.GetBulletPhysicsEngine()
 	engine.ShowAvatarCollider()
 }
 
-func (g *GMCmd) AiWorldAoiDebug(aiUid uint32) {
-	ai := USER_MANAGER.GetOnlineUser(aiUid)
-	if ai == nil {
-		logger.Error("ai is nil, uid: %v", aiUid)
+func (g *GMCmd) AiWorldAoiDebug(v bool) {
+	aiWorld := WORLD_MANAGER.GetAiWorld()
+	if aiWorld == nil {
 		return
 	}
-	world := WORLD_MANAGER.GetWorldById(ai.WorldId)
-	scene := world.GetSceneById(world.GetOwner().SceneId)
-	aiWorldAoi := world.GetAiWorldAoi()
+	scene := aiWorld.GetSceneById(aiWorld.GetOwner().SceneId)
+	aiWorldAoi := aiWorld.GetAiWorldAoi()
 	gridMap := aiWorldAoi.Debug()
 	logger.Debug("total grid num: %v", len(gridMap))
 	for _, grid := range gridMap {
