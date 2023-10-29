@@ -1,11 +1,7 @@
 package game
 
 import (
-	"sync/atomic"
-	"time"
-
 	"hk4e/common/constant"
-	"hk4e/common/mq"
 	"hk4e/common/region"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -20,7 +16,7 @@ func (g *Game) PlayerLoginReq(userId uint32, clientSeq uint32, gateAppId string,
 	logger.Info("player login req, uid: %v, gateAppId: %v", userId, gateAppId)
 	req := payloadMsg.(*proto.PlayerLoginReq)
 	logger.Debug("login data: %v", req)
-	USER_MANAGER.OnlineUser(userId, clientSeq, gateAppId, req)
+	USER_MANAGER.UserLoginLoad(userId, clientSeq, gateAppId, req)
 }
 
 func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message) {
@@ -83,16 +79,18 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	}
 
 	if player == nil {
+		logger.Info("reg new player, uid: %v", userId)
 		player = g.CreatePlayer(userId)
 		USER_MANAGER.ChangeUserDbState(player, model.DbInsert)
 	}
-	USER_MANAGER.AddUser(player)
+	USER_MANAGER.OnlineUser(player)
+
+	TICK_MANAGER.CreateUserGlobalTick(userId)
+	TICK_MANAGER.CreateUserTimer(userId, UserTimerActionTest, 100, player.NickName)
+
+	player.GateAppId = gateAppId
 
 	SELF = player
-
-	player.OnlineTime = uint32(time.Now().UnixMilli())
-	player.Online = true
-	player.GateAppId = gateAppId
 
 	// 初始化
 	player.InitOnlineData()
@@ -106,9 +104,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
-
-	TICK_MANAGER.CreateUserGlobalTick(userId)
-	TICK_MANAGER.CreateUserTimer(userId, UserTimerActionTest, 100, player.NickName)
 
 	if player.IsBorn {
 		g.LoginNotify(userId, clientSeq, player)
@@ -150,16 +145,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		Birthday:                "2000-01-01",
 	}
 	g.SendMsg(cmd.PlayerLoginRsp, userId, clientSeq, playerLoginRsp)
-
-	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
-		MsgType: mq.MsgTypeServer,
-		EventId: mq.ServerUserOnlineStateChangeNotify,
-		ServerMsg: &mq.ServerMsg{
-			UserId:   userId,
-			IsOnline: true,
-		},
-	})
-	atomic.AddInt32(&ONLINE_PLAYER_NUM, 1)
 
 	SELF = nil
 }
@@ -229,16 +214,15 @@ func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	TICK_MANAGER.DestroyUserGlobalTick(userId)
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world != nil {
 		g.WorldRemovePlayer(world, player)
 	}
-	player.OfflineTime = uint32(time.Now().Unix())
-	player.Online = false
-	player.TotalOnlineTime += uint32(time.Now().UnixMilli()) - player.OnlineTime
-	USER_MANAGER.OfflineUser(player, changeGsInfo)
-	atomic.AddInt32(&ONLINE_PLAYER_NUM, -1)
+
+	TICK_MANAGER.DestroyUserGlobalTick(userId)
+
+	USER_MANAGER.UserOfflineSave(player, changeGsInfo)
 }
 
 func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player) {

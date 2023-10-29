@@ -2,9 +2,12 @@ package game
 
 import (
 	"context"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"hk4e/common/mq"
 	"hk4e/gs/dao"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -99,8 +102,8 @@ type PlayerLoginInfo struct {
 	Ok        bool
 }
 
-// OnlineUser 玩家上线
-func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId string, req *proto.PlayerLoginReq) {
+// UserLoginLoad 玩家登录数据库异步加载
+func (u *UserManager) UserLoginLoad(userId uint32, clientSeq uint32, gateAppId string, req *proto.PlayerLoginReq) {
 	_, exist := u.playerMap[userId]
 	// 正常登录
 	if exist {
@@ -113,7 +116,7 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 		if !ok {
 			logger.Error("lock redis offline player data error, uid: %v", userId)
 			LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
-				EventId: LoadLoginUserFromDbFinish,
+				EventId: UserLoginLoadFromDbFinish,
 				Msg: &PlayerLoginInfo{
 					UserId:    userId,
 					ClientSeq: clientSeq,
@@ -127,7 +130,7 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 		if err != nil {
 			logger.Error("can not load user from db, uid: %v", userId)
 			LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
-				EventId: LoadLoginUserFromDbFinish,
+				EventId: UserLoginLoadFromDbFinish,
 				Msg: &PlayerLoginInfo{
 					UserId:    userId,
 					ClientSeq: clientSeq,
@@ -143,11 +146,9 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 			u.SaveUserToRedisSync(player)
 			u.ChangeUserDbState(player, model.DbNormal)
 			player.ChatMsgMap = u.LoadUserChatMsgFromDbSync(userId)
-		} else {
-			logger.Info("reg new player, uid: %v", userId)
 		}
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
-			EventId: LoadLoginUserFromDbFinish,
+			EventId: UserLoginLoadFromDbFinish,
 			Msg: &PlayerLoginInfo{
 				UserId:    userId,
 				Player:    player,
@@ -162,6 +163,22 @@ func (u *UserManager) OnlineUser(userId uint32, clientSeq uint32, gateAppId stri
 	}()
 }
 
+// OnlineUser 玩家上线
+func (u *UserManager) OnlineUser(player *model.Player) {
+	player.Online = true
+	player.OnlineTime = uint32(time.Now().UnixMilli())
+	USER_MANAGER.AddUser(player)
+	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
+		MsgType: mq.MsgTypeServer,
+		EventId: mq.ServerUserOnlineStateChangeNotify,
+		ServerMsg: &mq.ServerMsg{
+			UserId:   player.PlayerId,
+			IsOnline: true,
+		},
+	})
+	atomic.AddInt32(&ONLINE_PLAYER_NUM, 1)
+}
+
 type ChangeGsInfo struct {
 	IsChangeGs     bool
 	JoinHostUserId uint32
@@ -172,8 +189,11 @@ type PlayerOfflineInfo struct {
 	ChangeGsInfo *ChangeGsInfo
 }
 
-// OfflineUser 玩家离线
-func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsInfo) {
+// UserOfflineSave 玩家离线数据库保存
+func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *ChangeGsInfo) {
+	player.Online = false
+	player.OfflineTime = uint32(time.Now().Unix())
+	player.TotalOnlineTime += uint32(time.Now().UnixMilli()) - player.OnlineTime
 	if player.OfflineNotSave {
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserOfflineSaveToDbFinish,
@@ -216,6 +236,34 @@ func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsIn
 			},
 		}
 	}()
+}
+
+// OfflineUser 玩家离线
+func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsInfo) {
+	USER_MANAGER.DeleteUser(player.PlayerId)
+	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
+		MsgType: mq.MsgTypeServer,
+		EventId: mq.ServerUserOnlineStateChangeNotify,
+		ServerMsg: &mq.ServerMsg{
+			UserId:   player.PlayerId,
+			IsOnline: false,
+		},
+	})
+	atomic.AddInt32(&ONLINE_PLAYER_NUM, -1)
+	if changeGsInfo.IsChangeGs {
+		gsAppId := USER_MANAGER.GetRemoteUserGsAppId(changeGsInfo.JoinHostUserId)
+		MESSAGE_QUEUE.SendToGate(player.GateAppId, &mq.NetMsg{
+			MsgType: mq.MsgTypeServer,
+			EventId: mq.ServerUserGsChangeNotify,
+			ServerMsg: &mq.ServerMsg{
+				UserId:          player.PlayerId,
+				GameServerAppId: gsAppId,
+				JoinHostUserId:  changeGsInfo.JoinHostUserId,
+			},
+		})
+		logger.Info("user change gs notify to gate, uid: %v, gate appid: %v, gs appid: %v, host uid: %v",
+			player.PlayerId, player.GateAppId, gsAppId, changeGsInfo.JoinHostUserId)
+	}
 }
 
 // ChangeUserDbState 玩家存档状态机 主要用于玩家定时保存时进行分类处理
@@ -521,6 +569,110 @@ func (u *UserManager) saveUserHandle() {
 			}
 		}
 	}()
+}
+
+const (
+	UserCopyGoroutineLimit = 4
+)
+
+type PlayerLastSaveTimeSortList []*model.Player
+
+func (p PlayerLastSaveTimeSortList) Len() int {
+	return len(p)
+}
+
+func (p PlayerLastSaveTimeSortList) Less(i, j int) bool {
+	return p[i].LastSaveTime < p[j].LastSaveTime
+}
+
+func (p PlayerLastSaveTimeSortList) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (u *UserManager) UserCopyAndSave(exitSave bool) {
+	startTime := time.Now().UnixNano()
+	playerList := make(PlayerLastSaveTimeSortList, 0)
+	for _, player := range USER_MANAGER.GetAllOnlineUserList() {
+		if player.PlayerId < PlayerBaseUid {
+			continue
+		}
+		playerList = append(playerList, player)
+	}
+	sort.Stable(playerList)
+	// 拷贝一份数据避免并发访问
+	insertPlayerList := make([][]byte, 0)
+	updatePlayerList := make([][]byte, 0)
+	saveCount := 0
+	times := len(playerList) / UserCopyGoroutineLimit
+	if times == 0 && len(playerList) > 0 {
+		times = 1
+	}
+	for index := 0; index < times; index++ {
+		totalCostTime := time.Now().UnixNano() - startTime
+		if totalCostTime > time.Millisecond.Nanoseconds()*10 {
+			// 总耗时超过10ms就中止本轮保存
+			logger.Info("user copy loop overtime exit, total cost time: %v ns", totalCostTime)
+			break
+		}
+		// 分批次并发序列化玩家数据
+		oncePlayerListEndIndex := 0
+		if index < times-1 {
+			oncePlayerListEndIndex = (index + 1) * UserCopyGoroutineLimit
+		} else {
+			oncePlayerListEndIndex = len(playerList)
+		}
+		oncePlayerList := playerList[index*UserCopyGoroutineLimit : oncePlayerListEndIndex]
+		var playerDataMapLock sync.Mutex
+		playerDataMap := make(map[uint32][]byte)
+		var wg sync.WaitGroup
+		for _, player := range oncePlayerList {
+			wg.Add(1)
+			go func(player *model.Player) {
+				defer func() {
+					wg.Done()
+				}()
+				playerData, err := msgpack.Marshal(player)
+				if err != nil {
+					logger.Error("marshal player data error: %v", err)
+					return
+				}
+				playerDataMapLock.Lock()
+				playerDataMap[player.PlayerId] = playerData
+				playerDataMapLock.Unlock()
+			}(player)
+		}
+		wg.Wait()
+		for _, player := range oncePlayerList {
+			playerData, exist := playerDataMap[player.PlayerId]
+			if !exist {
+				continue
+			}
+			switch player.DbState {
+			case model.DbNone:
+				break
+			case model.DbInsert:
+				insertPlayerList = append(insertPlayerList, playerData)
+				player.DbState = model.DbNormal
+				player.LastSaveTime = uint32(time.Now().UnixMilli())
+				saveCount++
+			case model.DbDelete:
+				USER_MANAGER.DeleteUser(player.PlayerId)
+			case model.DbNormal:
+				updatePlayerList = append(updatePlayerList, playerData)
+				player.LastSaveTime = uint32(time.Now().UnixMilli())
+				saveCount++
+			}
+		}
+	}
+	saveUserData := &SaveUserData{
+		insertPlayerList: insertPlayerList,
+		updatePlayerList: updatePlayerList,
+		exitSave:         exitSave,
+	}
+	USER_MANAGER.GetSaveUserChan() <- saveUserData
+	endTime := time.Now().UnixNano()
+	costTime := endTime - startTime
+	logger.Info("run save user copy cost time: %v ns, save user count: %v", costTime, saveCount)
 }
 
 func (u *UserManager) LoadUserFromDbSync(userId uint32) (*model.Player, error) {

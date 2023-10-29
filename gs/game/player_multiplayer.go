@@ -162,6 +162,10 @@ func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 	hostWorld := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
+	if hostWorld == nil {
+		logger.Error("host world is nil, worldId: %v, uid: %v", hostPlayer.WorldId, player.PlayerId)
+		return
+	}
 	if hostPlayer.SceneLoadState == model.SceneEnterDone {
 		player.SceneJump = true
 		player.SceneId = hostPlayer.SceneId
@@ -246,7 +250,7 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 	targetWorld := WORLD_MANAGER.GetWorldById(targetPlayer.WorldId)
 	if targetWorld == nil {
 		// 目标玩家世界状态异常
-		logger.Error("target world is nil, target worldId: %v, uid: %v", targetPlayer.WorldId, player.PlayerId)
+		logger.Error("target world is nil, worldId: %v, uid: %v", targetPlayer.WorldId, player.PlayerId)
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
@@ -338,7 +342,7 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 
 func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 	world := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
-	if world.GetMultiplayer() {
+	if world == nil || world.GetMultiplayer() {
 		return
 	}
 	world.ChangeToMultiplayer()
@@ -655,7 +659,7 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 			return
 		}
 		applyPlayerWorld := WORLD_MANAGER.GetWorldById(applyPlayer.WorldId)
-		if applyPlayerWorld.GetMultiplayer() {
+		if applyPlayerWorld == nil || applyPlayerWorld.GetMultiplayer() {
 			playerApplyEnterMpResultNotify := &proto.PlayerApplyEnterMpResultNotify{
 				TargetUid:      playerMpInfo.HostUserId,
 				TargetNickname: playerMpInfo.HostNickname,
