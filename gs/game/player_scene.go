@@ -38,7 +38,7 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
+	if world.IsMultiplayerWorld() && world.IsPlayerFirstEnter(player) {
 		playerPreEnterMpNotify := &proto.PlayerPreEnterMpNotify{
 			State:    proto.PlayerPreEnterMpNotify_START,
 			Uid:      player.PlayerId,
@@ -55,7 +55,10 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 	if ctx.OldSceneId != 0 {
 		oldScene := world.GetSceneById(ctx.OldSceneId)
 		delEntityIdList := make([]uint32, 0)
-		for entityId := range g.GetVisionEntity(oldScene, ctx.OldPos) {
+		for entityId, entity := range g.GetVisionEntity(oldScene, ctx.OldPos) {
+			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
+				continue
+			}
 			delEntityIdList = append(delEntityIdList, entityId)
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
@@ -63,18 +66,19 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		if !WORLD_MANAGER.IsAiWorld(world) {
 			// 卸载旧位置附近的group
 			for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
-				if !world.GetMultiplayer() {
+				if !world.IsMultiplayerWorld() {
 					// 单人世界直接卸载group
 					g.RemoveSceneGroup(player, oldScene, groupConfig)
 				} else {
 					// 多人世界group附近没有任何玩家则卸载
 					remove := true
 					for _, otherPlayer := range oldScene.GetAllPlayer() {
-						dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
+						pos := g.GetPlayerPos(otherPlayer)
+						dx := int32(pos.X) - int32(groupConfig.Pos.X)
 						if dx < 0 {
 							dx *= -1
 						}
-						dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
+						dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
 						if dy < 0 {
 							dy *= -1
 						}
@@ -116,7 +120,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	scene := world.GetSceneById(player.SceneId)
 
-	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
+	if world.IsMultiplayerWorld() && world.IsPlayerFirstEnter(player) {
 		guestBeginEnterSceneNotify := &proto.GuestBeginEnterSceneNotify{
 			SceneId: player.SceneId,
 			Uid:     player.PlayerId,
@@ -138,10 +142,10 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 			onlinePlayerInfo := &proto.OnlinePlayerInfo{
 				Uid:                 worldPlayer.PlayerId,
 				Nickname:            worldPlayer.NickName,
-				PlayerLevel:         worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+				PlayerLevel:         worldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 				AvatarId:            worldPlayer.HeadImage,
-				MpSettingType:       proto.MpSettingType(worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
-				NameCardId:          worldPlayer.NameCard,
+				MpSettingType:       proto.MpSettingType(worldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
+				NameCardId:          worldPlayer.GetDbSocial().NameCard,
 				Signature:           worldPlayer.Signature,
 				ProfilePicture:      &proto.ProfilePicture{AvatarId: worldPlayer.HeadImage},
 				CurPlayerNumInWorld: uint32(world.GetWorldPlayerNum()),
@@ -155,17 +159,9 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 			WorldPropMap: make(map[uint32]*proto.PropValue),
 		}
 		// 世界等级
-		worldDataNotify.WorldPropMap[1] = &proto.PropValue{
-			Type:  1,
-			Val:   int64(world.GetWorldLevel()),
-			Value: &proto.PropValue_Ival{Ival: int64(world.GetWorldLevel())},
-		}
+		worldDataNotify.WorldPropMap[1] = g.PacketPropValue(1, world.GetWorldLevel())
 		// 是否多人游戏
-		worldDataNotify.WorldPropMap[2] = &proto.PropValue{
-			Type:  2,
-			Val:   object.ConvBoolToInt64(world.GetMultiplayer()),
-			Value: &proto.PropValue_Ival{Ival: object.ConvBoolToInt64(world.GetMultiplayer())},
-		}
+		worldDataNotify.WorldPropMap[2] = g.PacketPropValue(2, object.ConvBoolToInt64(world.IsMultiplayerWorld()))
 		g.SendMsg(cmd.WorldDataNotify, player.PlayerId, player.ClientSeq, worldDataNotify)
 
 		playerWorldSceneInfoListNotify := &proto.PlayerWorldSceneInfoListNotify{
@@ -247,7 +243,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendMsg(cmd.PlayerEnterSceneInfoNotify, player.PlayerId, player.ClientSeq, playerEnterSceneInfoNotify)
 
 		// 设置玩家天气
-		weatherAreaId := g.GetPlayerInWeatherAreaId(player, player.Pos)
+		weatherAreaId := g.GetPlayerInWeatherAreaId(player, player.GetPos())
 		climateType := GAME.GetWeatherAreaClimate(weatherAreaId)
 		GAME.SetPlayerWeather(player, weatherAreaId, climateType)
 	}
@@ -310,12 +306,14 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	activeWorldAvatar := world.GetPlayerWorldAvatar(player, activeAvatarId)
 
+	pos := player.GetPos()
+
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		logger.Debug("ai world aoi add player, newPos: %+v, uid: %v", player.Pos, player.PlayerId)
-		ok := aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		logger.Debug("ai world aoi add player, newPos: %+v, uid: %v", pos, player.PlayerId)
+		ok := aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(pos.X), float32(pos.Y), float32(pos.Z))
 		if !ok {
-			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, pos)
 		}
 	}
 
@@ -323,7 +321,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	if !WORLD_MANAGER.IsAiWorld(world) {
 		// 加载附近的group
-		for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), player.Pos) {
+		for _, groupConfig := range g.GetNeighborGroup(scene.GetId(), pos) {
 			g.AddSceneGroup(player, scene, groupConfig)
 		}
 		for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
@@ -333,19 +331,12 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 
 	// 同步客户端视野内的场景实体
-	visionEntityMap := g.GetVisionEntity(scene, player.Pos)
+	visionEntityMap := g.GetVisionEntity(scene, pos)
 	entityIdList := make([]uint32, 0)
 	for entityId, entity := range visionEntityMap {
-		if entityId == activeWorldAvatar.GetAvatarEntityId() {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
-
-		if WORLD_MANAGER.IsAiWorld(world) {
-			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-				continue
-			}
-		}
-
 		entityIdList = append(entityIdList, entityId)
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
@@ -357,7 +348,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
 		entityIdList := make([]uint32, 0)
 		for _, otherWorldAvatarAny := range otherWorldAvatarMap {
 			otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -402,7 +393,7 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	if world.GetMultiplayer() && world.IsPlayerFirstEnter(player) {
+	if world.IsMultiplayerWorld() && world.IsPlayerFirstEnter(player) {
 		guestPostEnterSceneNotify := &proto.GuestPostEnterSceneNotify{
 			SceneId: player.SceneId,
 			Uid:     player.PlayerId,
@@ -557,7 +548,6 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 				}
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer))
 				entityList = append(entityList, sceneEntityInfoAvatar)
-			case constant.ENTITY_TYPE_WEAPON:
 			case constant.ENTITY_TYPE_MONSTER:
 				sceneEntityInfoMonster := g.PacketSceneEntityInfoMonster(scene, entity.GetId())
 				entityList = append(entityList, sceneEntityInfoMonster)
@@ -567,6 +557,9 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 			case constant.ENTITY_TYPE_GADGET:
 				sceneEntityInfoGadget := g.PacketSceneEntityInfoGadget(player, scene, entity.GetId())
 				entityList = append(entityList, sceneEntityInfoGadget)
+			default:
+				logger.Error("not support entity type: %v, stack: %v", entity.GetEntityType(), logger.Stack())
+				continue
 			}
 		}
 		if broadcast {
@@ -797,8 +790,8 @@ func (g *Game) CreateSceneVehicle(scene *Scene) []uint32 {
 	owner := world.GetOwner()
 	dbWorld := owner.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(scene.GetId())
-	entityIdList := make([]uint32, 0, len(dbScene.GetVehicleMap()))
-	for _, vehicle := range dbScene.GetVehicleMap() {
+	entityIdList := make([]uint32, 0, len(dbScene.VehicleMap))
+	for _, vehicle := range dbScene.VehicleMap {
 		// 创建载具
 		entityId := scene.CreateEntityGadgetVehicle(vehicle.OwnerUid, vehicle.Pos, vehicle.Rot, vehicle.VehicleId)
 		if entityId == 0 {
@@ -1161,11 +1154,10 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 		return 0
 	}
 	if pos == nil {
-		pos = &model.Vector{
-			X: player.Pos.X + random.GetRandomFloat64(1.0, 10.0),
-			Y: player.Pos.Y + 1.0,
-			Z: player.Pos.Z + random.GetRandomFloat64(1.0, 10.0),
-		}
+		pos = g.GetPlayerPos(player)
+		pos.X += random.GetRandomFloat64(1.0, 10.0)
+		pos.Y += 1.0
+		pos.Z += random.GetRandomFloat64(1.0, 10.0)
 	}
 	rot := new(model.Vector)
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
@@ -1198,11 +1190,10 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 	}
 	scene := world.GetSceneById(player.SceneId)
 	if pos == nil {
-		pos = &model.Vector{
-			X: player.Pos.X + random.GetRandomFloat64(1.0, 10.0),
-			Y: player.Pos.Y + 1.0,
-			Z: player.Pos.Z + random.GetRandomFloat64(1.0, 10.0),
-		}
+		pos = g.GetPlayerPos(player)
+		pos.X += random.GetRandomFloat64(1.0, 10.0)
+		pos.Y += 1.0
+		pos.Z += random.GetRandomFloat64(1.0, 10.0)
 	}
 	rot := new(model.Vector)
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
@@ -1393,14 +1384,15 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType
 		OldSceneId: 0,
 		Uid:        player.PlayerId,
 	})
+	pos := player.GetPos()
 	playerEnterSceneNotify := &proto.PlayerEnterSceneNotify{
 		SceneId:                player.SceneId,
-		Pos:                    &proto.Vector{X: float32(player.Pos.X), Y: float32(player.Pos.Y), Z: float32(player.Pos.Z)},
+		Pos:                    &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
 		SceneBeginTime:         uint64(scene.GetSceneCreateTime()),
 		Type:                   enterType,
 		TargetUid:              player.PlayerId,
 		EnterSceneToken:        enterSceneToken,
-		WorldLevel:             player.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
+		WorldLevel:             player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
 		EnterReason:            player.SceneEnterReason,
 		IsFirstLoginEnterScene: true,
 		WorldType:              1,
@@ -1469,12 +1461,12 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		PrevSceneId:     prevSceneId,
 		PrevPos:         &proto.Vector{X: float32(prevPos.X), Y: float32(prevPos.Y), Z: float32(prevPos.Z)},
 		SceneId:         targetPlayer.SceneId,
-		Pos:             &proto.Vector{X: float32(targetPlayer.Pos.X), Y: float32(targetPlayer.Pos.Y), Z: float32(targetPlayer.Pos.Z)},
+		Pos:             &proto.Vector{X: float32(targetPlayer.GetPos().X), Y: float32(targetPlayer.GetPos().Y), Z: float32(targetPlayer.GetPos().Z)},
 		SceneBeginTime:  uint64(scene.GetSceneCreateTime()),
 		Type:            enterType,
 		TargetUid:       targetPlayer.PlayerId,
 		EnterSceneToken: enterSceneToken,
-		WorldLevel:      targetPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
+		WorldLevel:      targetPlayer.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
 		EnterReason:     player.SceneEnterReason,
 		WorldType:       1,
 		DungeonId:       dungeonId,
@@ -1540,41 +1532,11 @@ func (g *Game) PacketSceneEntityInfoAvatar(scene *Scene, player *model.Player, a
 			State: proto.MotionState(entity.GetMoveState()),
 		},
 		PropList: []*proto.PropPair{
-			{
-				Type: uint32(constant.PLAYER_PROP_LEVEL),
-				PropValue: &proto.PropValue{
-					Type:  uint32(constant.PLAYER_PROP_LEVEL),
-					Value: &proto.PropValue_Ival{Ival: int64(avatar.Level)},
-					Val:   int64(avatar.Level)},
-			},
-			{
-				Type: uint32(constant.PLAYER_PROP_EXP),
-				PropValue: &proto.PropValue{
-					Type:  uint32(constant.PLAYER_PROP_EXP),
-					Value: &proto.PropValue_Ival{Ival: int64(avatar.Exp)},
-					Val:   int64(avatar.Exp)},
-			},
-			{
-				Type: uint32(constant.PLAYER_PROP_BREAK_LEVEL),
-				PropValue: &proto.PropValue{
-					Type:  uint32(constant.PLAYER_PROP_BREAK_LEVEL),
-					Value: &proto.PropValue_Ival{Ival: int64(avatar.Promote)},
-					Val:   int64(avatar.Promote)},
-			},
-			{
-				Type: uint32(constant.PLAYER_PROP_SATIATION_VAL),
-				PropValue: &proto.PropValue{
-					Type:  uint32(constant.PLAYER_PROP_SATIATION_VAL),
-					Value: &proto.PropValue_Ival{Ival: int64(avatar.Satiation)},
-					Val:   int64(avatar.Satiation)},
-			},
-			{
-				Type: uint32(constant.PLAYER_PROP_SATIATION_PENALTY_TIME),
-				PropValue: &proto.PropValue{
-					Type:  uint32(constant.PLAYER_PROP_SATIATION_PENALTY_TIME),
-					Value: &proto.PropValue_Ival{Ival: int64(avatar.SatiationPenalty)},
-					Val:   int64(avatar.SatiationPenalty)},
-			},
+			{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_LEVEL, avatar.Level)},
+			{Type: uint32(constant.PLAYER_PROP_EXP), PropValue: g.PacketPropValue(constant.PLAYER_PROP_EXP, avatar.Exp)},
+			{Type: uint32(constant.PLAYER_PROP_BREAK_LEVEL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_BREAK_LEVEL, avatar.Promote)},
+			{Type: uint32(constant.PLAYER_PROP_SATIATION_VAL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_SATIATION_VAL, avatar.Satiation)},
+			{Type: uint32(constant.PLAYER_PROP_SATIATION_PENALTY_TIME), PropValue: g.PacketPropValue(constant.PLAYER_PROP_SATIATION_PENALTY_TIME, avatar.SatiationPenalty)},
 		},
 		FightPropList:    g.PacketFightPropMapToPbFightPropList(avatar.FightPropMap),
 		LifeState:        uint32(avatar.LifeState),
@@ -1628,11 +1590,9 @@ func (g *Game) PacketSceneEntityInfoMonster(scene *Scene, entityId uint32) *prot
 			Speed: &proto.Vector{},
 			State: proto.MotionState(entity.GetMoveState()),
 		},
-		PropList: []*proto.PropPair{{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: &proto.PropValue{
-			Type:  uint32(constant.PLAYER_PROP_LEVEL),
-			Value: &proto.PropValue_Ival{Ival: int64(entity.GetLevel())},
-			Val:   int64(entity.GetLevel()),
-		}}},
+		PropList: []*proto.PropPair{
+			{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_LEVEL, int64(entity.GetLevel()))},
+		},
 		FightPropList:    g.PacketFightPropMapToPbFightPropList(entity.GetFightProp()),
 		LifeState:        uint32(entity.GetLifeState()),
 		AnimatorParaList: make([]*proto.AnimatorParameterValueInfoPair, 0),
@@ -1676,11 +1636,9 @@ func (g *Game) PacketSceneEntityInfoNpc(scene *Scene, entityId uint32) *proto.Sc
 			Speed: &proto.Vector{},
 			State: proto.MotionState(entity.GetMoveState()),
 		},
-		PropList: []*proto.PropPair{{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: &proto.PropValue{
-			Type:  uint32(constant.PLAYER_PROP_LEVEL),
-			Value: &proto.PropValue_Ival{Ival: int64(entity.GetLevel())},
-			Val:   int64(entity.GetLevel()),
-		}}},
+		PropList: []*proto.PropPair{
+			{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_LEVEL, int64(entity.GetLevel()))},
+		},
 		FightPropList:    g.PacketFightPropMapToPbFightPropList(entity.GetFightProp()),
 		LifeState:        uint32(entity.GetLifeState()),
 		AnimatorParaList: make([]*proto.AnimatorParameterValueInfoPair, 0),
@@ -1724,11 +1682,9 @@ func (g *Game) PacketSceneEntityInfoGadget(player *model.Player, scene *Scene, e
 			Speed: &proto.Vector{},
 			State: proto.MotionState(entity.GetMoveState()),
 		},
-		PropList: []*proto.PropPair{{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: &proto.PropValue{
-			Type:  uint32(constant.PLAYER_PROP_LEVEL),
-			Value: &proto.PropValue_Ival{Ival: int64(1)},
-			Val:   int64(1),
-		}}},
+		PropList: []*proto.PropPair{
+			{Type: uint32(constant.PLAYER_PROP_LEVEL), PropValue: g.PacketPropValue(constant.PLAYER_PROP_LEVEL, 1)},
+		},
 		FightPropList:    g.PacketFightPropMapToPbFightPropList(entity.GetFightProp()),
 		LifeState:        uint32(entity.GetLifeState()),
 		AnimatorParaList: make([]*proto.AnimatorParameterValueInfoPair, 0),

@@ -11,13 +11,25 @@ import (
 type DbAvatar struct {
 	AvatarMap        map[uint32]*Avatar // 角色列表
 	MainCharAvatarId uint32             // 主角id
+	FlyCloakList     []uint32           // 风之翼列表
+	CostumeList      []uint32           // 角色衣装列表
 }
 
 func (p *Player) GetDbAvatar() *DbAvatar {
 	if p.DbAvatar == nil {
-		p.DbAvatar = &DbAvatar{
-			AvatarMap: make(map[uint32]*Avatar),
-		}
+		p.DbAvatar = new(DbAvatar)
+	}
+	if p.DbAvatar.AvatarMap == nil {
+		p.DbAvatar.AvatarMap = make(map[uint32]*Avatar)
+	}
+	if p.DbAvatar.MainCharAvatarId == 0 {
+		p.DbAvatar.MainCharAvatarId = 0
+	}
+	if p.DbAvatar.FlyCloakList == nil {
+		p.DbAvatar.FlyCloakList = make([]uint32, 0)
+	}
+	if p.DbAvatar.CostumeList == nil {
+		p.DbAvatar.CostumeList = make([]uint32, 0)
 	}
 	return p.DbAvatar
 }

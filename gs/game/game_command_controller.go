@@ -188,22 +188,23 @@ func (c *CommandManager) GotoCommand(content *CommandContent) bool {
 	var posX, posY, posZ float64
 
 	// 解析命令
+	playerPos := GAME.GetPlayerPos(content.AssignPlayer)
 	return content.Dynamic("string", func(param any) bool {
 		// 坐标x
 		value := param.(string)
-		pos, ok := parseRelativePosFunc(value, content.AssignPlayer.Pos.X)
+		pos, ok := parseRelativePosFunc(value, playerPos.X)
 		posX = pos
 		return ok
 	}).Dynamic("string", func(param any) bool {
 		// 坐标y
 		value := param.(string)
-		pos, ok := parseRelativePosFunc(value, content.AssignPlayer.Pos.Y)
+		pos, ok := parseRelativePosFunc(value, playerPos.Y)
 		posY = pos
 		return ok
 	}).Dynamic("string", func(param any) bool {
 		// 坐标z
 		value := param.(string)
-		pos, ok := parseRelativePosFunc(value, content.AssignPlayer.Pos.Z)
+		pos, ok := parseRelativePosFunc(value, playerPos.Z)
 		posZ = pos
 		return ok
 	}).Execute(func() bool {
@@ -644,9 +645,10 @@ func (c *CommandManager) MonsterCommand(content *CommandContent) bool {
 	var count uint32 = 1 // 数量
 	var level uint8 = 1  // 等级
 	// var pose uint32      // 姿势
-	var posX = content.AssignPlayer.Pos.X // 坐标x
-	var posY = content.AssignPlayer.Pos.Y // 坐标y
-	var posZ = content.AssignPlayer.Pos.Z // 坐标z
+	pos := GAME.GetPlayerPos(content.AssignPlayer)
+	var posX = pos.X // 坐标x
+	var posY = pos.Y // 坐标y
+	var posZ = pos.Z // 坐标z
 
 	return content.Dynamic("uint32", func(param any) bool {
 		monsterId = param.(uint32)

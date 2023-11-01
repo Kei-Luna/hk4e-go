@@ -38,7 +38,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		g.SendError(cmd.SetUpAvatarTeamRsp, player, &proto.SetUpAvatarTeamRsp{})
 		return
 	}
@@ -84,7 +84,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		// player.TeamConfig.UpdateTeam()
 		world.SetPlayerLocalTeam(player, avatarIdList)
 		world.UpdateMultiplayerTeam()
-		world.InitPlayerWorldAvatar(player)
+		world.UpdatePlayerWorldAvatar(player)
 
 		currAvatarGuid := req.CurAvatarGuid
 		currAvatar, ok := player.GameObjectGuidMap[currAvatarGuid].(*model.Avatar)
@@ -117,7 +117,7 @@ func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Messag
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		g.SendError(cmd.ChooseCurAvatarTeamRsp, player, &proto.ChooseCurAvatarTeamRsp{})
 		return
 	}
@@ -132,7 +132,7 @@ func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Messag
 	world.SetPlayerAvatarIndex(player, 0)
 	world.SetPlayerLocalTeam(player, team.GetAvatarIdList())
 	world.UpdateMultiplayerTeam()
-	world.InitPlayerWorldAvatar(player)
+	world.UpdatePlayerWorldAvatar(player)
 
 	sceneTeamUpdateNotify := g.PacketSceneTeamUpdateNotify(world, player)
 	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerId, player.ClientSeq, sceneTeamUpdateNotify)
@@ -151,7 +151,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if WORLD_MANAGER.IsAiWorld(world) || !world.GetMultiplayer() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
+	if WORLD_MANAGER.IsAiWorld(world) || !world.IsMultiplayerWorld() || len(avatarGuidList) == 0 || len(avatarGuidList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
 	}
@@ -167,7 +167,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 	}
 	world.SetPlayerLocalTeam(player, avatarIdList)
 	world.UpdateMultiplayerTeam()
-	world.InitPlayerWorldAvatar(player)
+	world.UpdatePlayerWorldAvatar(player)
 
 	currAvatarGuid := req.CurAvatarGuid
 	currAvatar, ok := player.GameObjectGuidMap[currAvatarGuid].(*model.Avatar)
@@ -209,7 +209,7 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 
 	entity := scene.GetEntity(uint32(req.DieGuid))
 	if entity.GetLastDieType() == int32(proto.PlayerDieType_PLAYER_DIE_DRAWN) {
-		maxStamina := player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA]
+		maxStamina := player.PropMap[constant.PLAYER_PROP_MAX_STAMINA]
 		// 设置玩家耐力为一半
 		g.SetPlayerStamina(player, maxStamina/2)
 		// 传送玩家至安全位置
@@ -217,12 +217,8 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 			player,
 			proto.EnterReason_ENTER_REASON_REVIVAL,
 			player.SceneId,
-			&model.Vector{
-				X: player.SafePos.X,
-				Y: player.SafePos.Y,
-				Z: player.SafePos.Z,
-			},
-			new(model.Vector),
+			player.GetPos(),
+			player.GetRot(),
 			0,
 			0,
 		)
@@ -266,12 +262,8 @@ func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message)
 		player,
 		proto.EnterReason_ENTER_REASON_REVIVAL,
 		player.SceneId,
-		&model.Vector{
-			X: player.SafePos.X,
-			Y: player.SafePos.Y,
-			Z: player.SafePos.Z,
-		},
-		new(model.Vector),
+		player.GetPos(),
+		player.GetRot(),
 		0,
 		0,
 	)
@@ -297,7 +289,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 		logger.Error("can not find the target avatar in team, uid: %v, targetAvatarId: %v", player.PlayerId, targetAvatarId)
 		return
 	}
-	if !world.GetMultiplayer() {
+	if !world.IsMultiplayerWorld() {
 		dbTeam := player.GetDbTeam()
 		dbTeam.CurrAvatarIndex = uint8(newAvatarIndex)
 	}
@@ -330,7 +322,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 
 func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *proto.SceneTeamUpdateNotify {
 	sceneTeamUpdateNotify := &proto.SceneTeamUpdateNotify{
-		IsInMp: world.GetMultiplayer(),
+		IsInMp: world.IsMultiplayerWorld(),
 	}
 	empty := new(proto.AbilitySyncStateInfo)
 	for _, worldAvatar := range world.GetWorldAvatarList() {
@@ -373,7 +365,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			WeaponAbilityInfo:   empty,
 			AbilityControlBlock: new(proto.AbilityControlBlock),
 		}
-		if world.GetMultiplayer() {
+		if world.IsMultiplayerWorld() {
 			sceneTeamAvatar.AvatarInfo = g.PacketAvatarInfo(worldPlayerAvatar)
 			sceneTeamAvatar.SceneAvatarInfo = g.PacketSceneAvatarInfo(worldPlayerScene, worldPlayer, worldAvatar.GetAvatarId())
 		}

@@ -6,14 +6,15 @@ import (
 )
 
 type DbReliquary struct {
-	ReliquaryMap map[uint64]*Reliquary // 圣遗物背包
+	ReliquaryMap map[uint64]*Reliquary // 圣遗物集合
 }
 
 func (p *Player) GetDbReliquary() *DbReliquary {
 	if p.DbReliquary == nil {
-		p.DbReliquary = &DbReliquary{
-			ReliquaryMap: make(map[uint64]*Reliquary),
-		}
+		p.DbReliquary = new(DbReliquary)
+	}
+	if p.DbReliquary.ReliquaryMap == nil {
+		p.DbReliquary.ReliquaryMap = make(map[uint64]*Reliquary)
 	}
 	return p.DbReliquary
 }

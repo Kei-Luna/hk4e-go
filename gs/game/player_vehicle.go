@@ -61,7 +61,7 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	if owner == player {
 		dbWorld := owner.GetDbWorld()
 		dbScene := dbWorld.GetSceneById(scene.GetId())
-		dbScene.GetVehicleMap()[req.VehicleId] = model.NewDbVehicle(req.VehicleId, player.PlayerId, pos, rot)
+		dbScene.AddVehicle(req.VehicleId, player.PlayerId, pos, rot)
 	}
 
 	// PacketCreateVehicleRsp
@@ -182,7 +182,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	if owner == player {
 		dbWorld := owner.GetDbWorld()
 		dbScene := dbWorld.GetSceneById(scene.GetId())
-		delete(dbScene.GetVehicleMap(), vehicleId)
+		delete(dbScene.VehicleMap, vehicleId)
 	}
 
 }

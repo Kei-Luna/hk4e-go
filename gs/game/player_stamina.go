@@ -354,9 +354,9 @@ func (g *Game) UpdatePlayerStamina(player *model.Player, staminaCost int32) {
 		staminaInfo.RestoreDelay = 0
 	}
 	// 最大耐力值
-	maxStamina := int32(player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA])
+	maxStamina := int32(player.PropMap[constant.PLAYER_PROP_MAX_STAMINA])
 	// 现行耐力值
-	curStamina := int32(player.PropertiesMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA])
+	curStamina := int32(player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA])
 	// 将被变更的耐力
 	stamina := g.GetChangeStamina(curStamina, maxStamina, staminaCost)
 	// 检测玩家是否没耐力后执行溺水
@@ -416,22 +416,16 @@ func (g *Game) SetVehicleStamina(player *model.Player, vehicleEntity *Entity, st
 // SetPlayerStamina 设置玩家耐力
 func (g *Game) SetPlayerStamina(player *model.Player, stamina uint32) {
 	// 设置玩家的耐力
-	player.PropertiesMap[uint16(constant.PLAYER_PROP_CUR_PERSIST_STAMINA)] = stamina
+	player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = stamina
 	// logger.Debug("player stamina set, stamina: %v", stamina)
-	g.PlayerPropNotify(player, uint16(constant.PLAYER_PROP_CUR_PERSIST_STAMINA))
+	g.PlayerPropNotify(player, constant.PLAYER_PROP_CUR_PERSIST_STAMINA)
 }
 
 /************************************************** 打包封装 **************************************************/
 
-func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint16) {
+func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint32) {
 	playerPropNotify := new(proto.PlayerPropNotify)
 	playerPropNotify.PropMap = make(map[uint32]*proto.PropValue)
-	playerPropNotify.PropMap[uint32(playerPropId)] = &proto.PropValue{
-		Type: uint32(playerPropId),
-		Val:  int64(player.PropertiesMap[playerPropId]),
-		Value: &proto.PropValue_Ival{
-			Ival: int64(player.PropertiesMap[playerPropId]),
-		},
-	}
+	playerPropNotify.PropMap[playerPropId] = g.PacketPropValue(playerPropId, int64(player.PropMap[playerPropId]))
 	g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, playerPropNotify)
 }

@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"time"
 
@@ -140,20 +141,14 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 		PlayerWorldLocList: make([]*proto.PlayerWorldLocationInfo, 0),
 	}
 	for _, worldPlayer := range world.GetAllPlayer() {
+		pos := g.GetPlayerPos(worldPlayer)
+		rot := g.GetPlayerRot(worldPlayer)
 		playerWorldLocationInfo := &proto.PlayerWorldLocationInfo{
 			SceneId: worldPlayer.SceneId,
 			PlayerLoc: &proto.PlayerLocationInfo{
 				Uid: worldPlayer.PlayerId,
-				Pos: &proto.Vector{
-					X: float32(worldPlayer.Pos.X),
-					Y: float32(worldPlayer.Pos.Y),
-					Z: float32(worldPlayer.Pos.Z),
-				},
-				Rot: &proto.Vector{
-					X: float32(worldPlayer.Rot.X),
-					Y: float32(worldPlayer.Rot.Y),
-					Z: float32(worldPlayer.Rot.Z),
-				},
+				Pos: &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
+				Rot: &proto.Vector{X: float32(rot.X), Y: float32(rot.Y), Z: float32(rot.Z)},
 			},
 		}
 
@@ -175,19 +170,13 @@ func (g *Game) ScenePlayerLocationNotify(world *World) {
 			VehicleLocList: make([]*proto.VehicleLocationInfo, 0),
 		}
 		for _, scenePlayer := range scene.GetAllPlayer() {
+			pos := g.GetPlayerPos(scenePlayer)
+			rot := g.GetPlayerRot(scenePlayer)
 			// 玩家位置
 			playerLocationInfo := &proto.PlayerLocationInfo{
 				Uid: scenePlayer.PlayerId,
-				Pos: &proto.Vector{
-					X: float32(scenePlayer.Pos.X),
-					Y: float32(scenePlayer.Pos.Y),
-					Z: float32(scenePlayer.Pos.Z),
-				},
-				Rot: &proto.Vector{
-					X: float32(scenePlayer.Rot.X),
-					Y: float32(scenePlayer.Rot.Y),
-					Z: float32(scenePlayer.Rot.Z),
-				},
+				Pos: &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
+				Rot: &proto.Vector{X: float32(rot.X), Y: float32(rot.Y), Z: float32(rot.Z)},
 			}
 
 			if WORLD_MANAGER.IsAiWorld(world) {
@@ -323,4 +312,100 @@ func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {
 		openStateUpdateNotify.OpenStateMap[uint32(data.OpenStateId)] = 1
 	}
 	return openStateUpdateNotify
+}
+
+func (g *Game) GetChatEmojiCollectionReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.GetChatEmojiCollectionReq)
+	_ = req
+	g.SendMsg(cmd.GetChatEmojiCollectionRsp, player.PlayerId, player.ClientSeq, new(proto.GetChatEmojiCollectionRsp))
+}
+
+func (g *Game) SetPlayerPropReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.SetPlayerPropReq)
+	for _, propValue := range req.PropList {
+		player.PropMap[propValue.Type] = uint32(propValue.Val)
+	}
+	g.SendMsg(cmd.SetPlayerPropRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerPropRsp))
+}
+
+func (g *Game) SetOpenStateReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.SetOpenStateReq)
+	g.SendMsg(cmd.SetOpenStateRsp, player.PlayerId, player.ClientSeq, &proto.SetOpenStateRsp{Key: req.Key, Value: req.Value})
+}
+
+func (g *Game) PacketPropValue(key uint32, value any) *proto.PropValue {
+	propValue := new(proto.PropValue)
+	propValue.Type = key
+	switch value.(type) {
+	case int:
+		v := value.(int)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case int8:
+		v := value.(int8)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case int16:
+		v := value.(int16)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case int32:
+		v := value.(int32)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case int64:
+		v := value.(int64)
+		propValue.Val = v
+		propValue.Value = &proto.PropValue_Ival{Ival: v}
+	case float32:
+		v := value.(float32)
+		propValue.Value = &proto.PropValue_Fval{Fval: v}
+	case float64:
+		v := value.(float64)
+		propValue.Value = &proto.PropValue_Fval{Fval: float32(v)}
+	case uint8:
+		v := value.(uint8)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case uint16:
+		v := value.(uint16)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case uint32:
+		v := value.(uint32)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	case uint64:
+		v := value.(uint64)
+		propValue.Val = int64(v)
+		propValue.Value = &proto.PropValue_Ival{Ival: int64(v)}
+	default:
+		logger.Error("unknown value type: %v, value: %v", reflect.TypeOf(value), value)
+		return nil
+	}
+	return propValue
+}
+
+func (g *Game) GetPlayerPos(player *model.Player) *model.Vector {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return player.GetPos()
+	}
+	entity := world.GetPlayerActiveAvatarEntity(player)
+	if entity == nil {
+		return player.GetPos()
+	}
+	return entity.GetPos()
+}
+
+func (g *Game) GetPlayerRot(player *model.Player) *model.Vector {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return player.GetRot()
+	}
+	entity := world.GetPlayerActiveAvatarEntity(player)
+	if entity == nil {
+		return player.GetRot()
+	}
+	return entity.GetRot()
 }

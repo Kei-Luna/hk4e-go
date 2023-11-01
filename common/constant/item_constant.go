@@ -16,13 +16,13 @@ const (
 )
 
 // 虚拟物品对应玩家的属性
-var VIRTUAL_ITEM_PROP map[uint32]uint16
+var VIRTUAL_ITEM_PROP map[uint32]uint32
 
 // 武器强化返还材料列表
 var WEAPON_UPGRADE_MATERIAL []uint32
 
 func init() {
-	VIRTUAL_ITEM_PROP = map[uint32]uint16{
+	VIRTUAL_ITEM_PROP = map[uint32]uint32{
 		ITEM_ID_HCOIN:         PLAYER_PROP_PLAYER_HCOIN,
 		ITEM_ID_SCOIN:         PLAYER_PROP_PLAYER_SCOIN,
 		ITEM_ID_MCOIN:         PLAYER_PROP_PLAYER_MCOIN,

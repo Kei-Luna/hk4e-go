@@ -42,7 +42,8 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	// TODO aoi漏移除玩家的bug解决了就删掉
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		gid := aiWorldAoi.GetGidByPos(float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
+		pos := GAME.GetPlayerPos(player)
+		gid := aiWorldAoi.GetGidByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
 		if gid == math.MaxUint32 {
 			return
 		}
@@ -265,16 +266,25 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		if avatarEntity.GetUid() != player.PlayerId {
 			return
 		}
+		oldPos := g.GetPlayerPos(player)
 		if !WORLD_MANAGER.IsAiWorld(world) {
-			g.SceneBlockAoiPlayerMove(player, world, scene, player.Pos, pos, entity.GetId())
+			g.SceneBlockAoiPlayerMove(player, world, scene, oldPos, pos, entity.GetId())
 		} else {
-			g.AiWorldAoiPlayerMove(player, world, scene, player.Pos, pos)
+			g.AiWorldAoiPlayerMove(player, world, scene, oldPos, pos)
 		}
 		// 场景天气区域变更检测
-		g.SceneWeatherAreaCheck(player, player.Pos, pos)
-		// 更新玩家的位置信息
-		player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
-		player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
+		g.SceneWeatherAreaCheck(player, oldPos, pos)
+		// 更新玩家角色实体的位置信息
+		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+			waAvatarEntityId := worldAvatar.GetAvatarEntityId()
+			waAvatarEntity := scene.GetEntity(waAvatarEntityId)
+			waAvatarEntity.SetPos(pos)
+			waAvatarEntity.SetRot(rot)
+			waWeaponEntityId := worldAvatar.GetWeaponEntityId()
+			waWeaponEntity := scene.GetEntity(waWeaponEntityId)
+			waWeaponEntity.SetPos(pos)
+			waWeaponEntity.SetRot(rot)
+		}
 	}
 	// 更新场景实体的位置信息
 	entity.SetPos(pos)
@@ -296,7 +306,8 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 				proto.MotionState_MOTION_WALK,
 				proto.MotionState_MOTION_DASH:
 				// 仅在陆地时更新玩家安全位置
-				player.SafePos.X, player.SafePos.Y, player.SafePos.Z = player.Pos.X, player.Pos.Y, player.Pos.Z
+				player.SetPos(pos)
+				player.SetRot(rot)
 			}
 			// 处理耐力消耗
 			g.ImmediateStamina(player, motionInfo.State)
@@ -342,23 +353,24 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	oldNeighborGroupMap := g.GetNeighborGroup(player.SceneId, oldPos)
 	newNeighborGroupMap := g.GetNeighborGroup(player.SceneId, newPos)
 	for groupId, groupConfig := range oldNeighborGroupMap {
-		_, exist := newNeighborGroupMap[groupId]
+		_, exist = newNeighborGroupMap[groupId]
 		if exist {
 			continue
 		}
 		// 旧有新没有的group即为卸载的
-		if !world.GetMultiplayer() {
+		if !world.IsMultiplayerWorld() {
 			// 单人世界直接卸载group
 			g.RemoveSceneGroup(player, scene, groupConfig)
 		} else {
 			// 多人世界group附近没有任何玩家则卸载
 			remove := true
 			for _, otherPlayer := range scene.GetAllPlayer() {
-				dx := int32(otherPlayer.Pos.X) - int32(groupConfig.Pos.X)
+				pos := g.GetPlayerPos(otherPlayer)
+				dx := int32(pos.X) - int32(groupConfig.Pos.X)
 				if dx < 0 {
 					dx *= -1
 				}
-				dy := int32(otherPlayer.Pos.Z) - int32(groupConfig.Pos.Z)
+				dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
 				if dy < 0 {
 					dy *= -1
 				}
@@ -373,7 +385,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		}
 	}
 	for groupId, groupConfig := range newNeighborGroupMap {
-		_, exist := oldNeighborGroupMap[groupId]
+		_, exist = oldNeighborGroupMap[groupId]
 		if exist {
 			continue
 		}
@@ -384,18 +396,24 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
-	for entityId := range oldVisionEntityMap {
-		_, exist := newVisionEntityMap[entityId]
+	for entityId, entity := range oldVisionEntityMap {
+		_, exist = newVisionEntityMap[entityId]
 		if exist {
+			continue
+		}
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		// 旧有新没有的实体即为消失的
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
 	addEntityIdList := make([]uint32, 0)
-	for entityId := range newVisionEntityMap {
-		_, exist := oldVisionEntityMap[entityId]
+	for entityId, entity := range newVisionEntityMap {
+		_, exist = oldVisionEntityMap[entityId]
 		if exist {
+			continue
+		}
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		// 新有旧没有的实体即为出现的
@@ -460,7 +478,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		logger.Debug("ai world aoi remove player, oldPos: %+v, uid: %v", oldPos, player.PlayerId)
 		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
 		if !ok {
-			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, g.GetPlayerPos(player))
 		}
 		// 处理消失的格子
 		for _, delGridId := range delGridIdList {
@@ -511,7 +529,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		logger.Debug("ai world aoi add player, newPos: %+v, uid: %v", newPos, player.PlayerId)
 		ok = aiWorldAoi.AddObjectToGridByPos(int64(player.PlayerId), activeWorldAvatar, float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
 		if !ok {
-			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
+			logger.Error("ai world aoi add player fail, uid: %v, pos: %+v", player.PlayerId, g.GetPlayerPos(player))
 		}
 	}
 	// 消失和出现的场景实体
@@ -519,7 +537,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
 	for entityId, entity := range oldVisionEntityMap {
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		_, exist := newVisionEntityMap[entityId]
@@ -531,7 +549,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 	}
 	addEntityIdList := make([]uint32, 0)
 	for entityId, entity := range newVisionEntityMap {
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		_, exist := oldVisionEntityMap[entityId]
@@ -721,7 +739,7 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 	}
 	logger.Debug("avatar normal attack, avatarId: %v, weaponType: %v, uid: %v", avatarDataConfig.AvatarId, avatarDataConfig.WeaponType, player.PlayerId)
 	switch avatarDataConfig.WeaponType {
-	case constant.WEAPON_TYPE_SWORD_ONE_HAND, constant.WEAPON_TYPE_CLAYMORE, constant.WEAPON_TYPE_POLE, constant.WEAPON_TYPE_CATALYST, constant.WEAPON_TYPE_BOW:
+	case constant.WEAPON_TYPE_SWORD_ONE_HAND, constant.WEAPON_TYPE_CLAYMORE, constant.WEAPON_TYPE_POLE, constant.WEAPON_TYPE_CATALYST:
 		scene := world.GetSceneById(player.SceneId)
 		avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
 		for _, entity := range scene.GetAllEntity() {

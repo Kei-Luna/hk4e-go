@@ -150,17 +150,11 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 		case gdconf.PubgWorldGadgetTypeIncAtk:
 			avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
 			avatar.FightPropMap[constant.FIGHT_PROP_CUR_ATTACK] += float32(pubgWorldGadgetDataConfig.Param[0])
-			// 提示玩家
-			info := fmt.Sprintf("你的角色攻击力增加：%v，增加后的攻击力：%v。", pubgWorldGadgetDataConfig.Param[0], avatar.FightPropMap[constant.FIGHT_PROP_BASE_ATTACK])
-			GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		case gdconf.PubgWorldGadgetTypeIncHp:
 			avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] += float32(pubgWorldGadgetDataConfig.Param[0])
 			if avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] > avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP] {
 				avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP]
 			}
-			// 提示玩家
-			info := fmt.Sprintf("你的角色生命值增加：%v，目前为：%v。", pubgWorldGadgetDataConfig.Param[0], avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP])
-			GAME.PlayerChatReq(p.world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 		}
 		GAME.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
 			AvatarGuid:   avatar.Guid,
@@ -226,7 +220,8 @@ func (p *PluginPubg) GlobalTickPubg() {
 	p.UpdateArea()
 	scene := world.GetSceneById(world.GetOwner().SceneId)
 	for _, scenePlayer := range scene.GetAllPlayer() {
-		if !p.IsInBlueArea(scenePlayer.Pos) {
+		pos := GAME.GetPlayerPos(scenePlayer)
+		if !p.IsInBlueArea(pos) {
 			GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
 				AttackResult: &proto.AttackResult{
 					AttackerId: 0,
@@ -524,8 +519,7 @@ func (p *PluginPubg) GetAlivePlayerList() []*model.Player {
 		if scenePlayer.PlayerId == p.world.GetOwner().PlayerId {
 			continue
 		}
-		avatarEntityId := p.world.GetPlayerWorldAvatarEntityId(scenePlayer, p.world.GetPlayerActiveAvatarId(scenePlayer))
-		entity := scene.GetEntity(avatarEntityId)
+		entity := p.world.GetPlayerActiveAvatarEntity(scenePlayer)
 		if entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] <= 0.0 {
 			continue
 		}
@@ -585,7 +579,8 @@ func (p *PluginPubg) PubgHit(scene *Scene, defAvatarEntityId uint32, atkAvatarEn
 	if evtBeingHitInfo.AttackResult.HitCollision == nil {
 		return
 	}
-	evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(defPlayer.Pos.X), Y: float32(defPlayer.Pos.Y), Z: float32(defPlayer.Pos.Z)}
+	pos := GAME.GetPlayerPos(defPlayer)
+	evtBeingHitInfo.AttackResult.HitCollision.HitPoint = &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)}
 	combatData, err := pb.Marshal(evtBeingHitInfo)
 	if err != nil {
 		return

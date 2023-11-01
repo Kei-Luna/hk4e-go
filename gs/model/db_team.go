@@ -36,23 +36,23 @@ type DbTeam struct {
 
 func (p *Player) GetDbTeam() *DbTeam {
 	if p.DbTeam == nil {
-		p.DbTeam = NewDbTeam()
+		p.DbTeam = new(DbTeam)
 	}
-	return p.DbTeam
-}
-
-func NewDbTeam() (r *DbTeam) {
-	r = &DbTeam{
-		TeamList: []*Team{
+	if p.DbTeam.TeamList == nil {
+		p.DbTeam.TeamList = []*Team{
 			{Name: "冒险", AvatarIdList: make([]uint32, 4)},
 			{Name: "委托", AvatarIdList: make([]uint32, 4)},
 			{Name: "秘境", AvatarIdList: make([]uint32, 4)},
 			{Name: "联机", AvatarIdList: make([]uint32, 4)},
-		},
-		CurrTeamIndex:   0,
-		CurrAvatarIndex: 0,
+		}
 	}
-	return r
+	if p.DbTeam.CurrTeamIndex == 0 {
+		p.DbTeam.CurrTeamIndex = 0
+	}
+	if p.DbTeam.CurrAvatarIndex == 0 {
+		p.DbTeam.CurrAvatarIndex = 0
+	}
+	return p.DbTeam
 }
 
 func (t *DbTeam) GetActiveTeamId() uint8 {

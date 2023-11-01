@@ -676,23 +676,25 @@ func (g *Game) TeleportPlayer(
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-
 	if WORLD_MANAGER.IsAiWorld(world) && player.CmdPerm != uint8(CommandPermGM) {
 		return
 	}
 
-	newSceneId := sceneId
 	oldSceneId := player.SceneId
-	oldPos := &model.Vector{X: player.Pos.X, Y: player.Pos.Y, Z: player.Pos.Z}
+	oldPos := g.GetPlayerPos(player)
+	newSceneId := sceneId
+	newPos := pos
+	newRot := rot
 	jumpScene := false
 	if newSceneId != oldSceneId {
 		jumpScene = true
 	}
+
 	player.SceneJump = jumpScene
+
+	activeAvatarEntity := world.GetPlayerActiveAvatarEntity(player)
 	oldScene := world.GetSceneById(oldSceneId)
-	activeAvatarId := world.GetPlayerActiveAvatarId(player)
-	avatarEntityId := world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
-	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{avatarEntityId})
+	g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{activeAvatarEntity.GetId()})
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
@@ -703,31 +705,43 @@ func (g *Game) TeleportPlayer(
 		}
 	}
 
+	var enterType proto.EnterType
 	if jumpScene {
 		delTeamEntityNotify := g.PacketDelTeamEntityNotify(oldScene, player)
 		g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerId, player.ClientSeq, delTeamEntityNotify)
 
 		oldScene.RemovePlayer(player)
+
+		player.SceneLoadState = model.SceneNone
+		player.SetPos(newPos)
+		player.SetRot(newRot)
+
 		player.SceneId = newSceneId
 		newScene := world.GetSceneById(newSceneId)
 		newScene.AddPlayer(player)
-	}
-	player.SceneLoadState = model.SceneNone
-	player.Pos.X, player.Pos.Y, player.Pos.Z = pos.X, pos.Y, pos.Z
-	player.Rot.X, player.Rot.Y, player.Rot.Z = rot.X, rot.Y, rot.Z
 
-	var enterType proto.EnterType
-	if jumpScene {
-		logger.Debug("player jump scene, scene: %v, pos: %v", player.SceneId, player.Pos)
+		logger.Debug("player jump scene, scene: %v, pos: %v", player.SceneId, newPos)
 		enterType = proto.EnterType_ENTER_JUMP
 		if enterReason == proto.EnterReason_ENTER_REASON_DUNGEON_ENTER {
-			logger.Debug("player tp to dungeon scene, sceneId: %v, pos: %v", player.SceneId, player.Pos)
+			logger.Debug("player tp to dungeon scene, sceneId: %v, pos: %v", player.SceneId, newPos)
 			enterType = proto.EnterType_ENTER_DUNGEON
 		}
 	} else {
-		logger.Debug("player goto scene, scene: %v, pos: %v", player.SceneId, player.Pos)
+		player.SceneLoadState = model.SceneNone
+		player.SetPos(newPos)
+		player.SetRot(newRot)
+
+		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+			entityId := worldAvatar.GetAvatarEntityId()
+			entity := oldScene.GetEntity(entityId)
+			entity.SetPos(newPos)
+			entity.SetRot(newRot)
+		}
+
+		logger.Debug("player goto scene, scene: %v, pos: %v", player.SceneId, newPos)
 		enterType = proto.EnterType_ENTER_GOTO
 	}
+
 	player.SceneEnterReason = uint32(enterReason)
 	playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyTp(player, enterType, oldSceneId, oldPos, dungeonId, dungeonPointId)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, playerEnterSceneNotify)

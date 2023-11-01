@@ -6,14 +6,15 @@ import (
 )
 
 type DbWeapon struct {
-	WeaponMap map[uint64]*Weapon // 武器背包
+	WeaponMap map[uint64]*Weapon // 武器集合
 }
 
 func (p *Player) GetDbWeapon() *DbWeapon {
 	if p.DbWeapon == nil {
-		p.DbWeapon = &DbWeapon{
-			WeaponMap: make(map[uint64]*Weapon),
-		}
+		p.DbWeapon = new(DbWeapon)
+	}
+	if p.DbWeapon.WeaponMap == nil {
+		p.DbWeapon.WeaponMap = make(map[uint64]*Weapon)
 	}
 	return p.DbWeapon
 }

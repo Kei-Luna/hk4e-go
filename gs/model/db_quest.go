@@ -24,9 +24,10 @@ type Quest struct {
 
 func (p *Player) GetDbQuest() *DbQuest {
 	if p.DbQuest == nil {
-		p.DbQuest = &DbQuest{
-			QuestMap: make(map[uint32]*Quest),
-		}
+		p.DbQuest = new(DbQuest)
+	}
+	if p.DbQuest.QuestMap == nil {
+		p.DbQuest.QuestMap = make(map[uint32]*Quest)
 	}
 	return p.DbQuest
 }

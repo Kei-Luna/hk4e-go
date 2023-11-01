@@ -40,7 +40,7 @@ func (g *Game) PullRecentChatReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		chatList := world.GetChatList()
 		count := len(chatList)
 		if count > 10 {

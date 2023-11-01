@@ -300,7 +300,7 @@ func (w *World) GetWorldLevel() uint8 {
 	return w.worldLevel
 }
 
-func (w *World) GetMultiplayer() bool {
+func (w *World) IsMultiplayerWorld() bool {
 	return w.multiplayer
 }
 
@@ -511,20 +511,17 @@ func (w *World) GetWorldAvatarByEntityId(avatarEntityId uint32) *WorldAvatar {
 	return nil
 }
 
-// InitPlayerWorldAvatar 初始化某玩家在世界队伍中的所有角色
-func (w *World) InitPlayerWorldAvatar(player *model.Player) {
+// UpdatePlayerWorldAvatar 更新某玩家在世界队伍中的所有角色
+func (w *World) UpdatePlayerWorldAvatar(player *model.Player) {
 	scene := w.GetSceneById(player.SceneId)
-	for _, worldAvatar := range w.GetWorldAvatarList() {
-		if worldAvatar.uid != player.PlayerId {
-			continue
-		}
-		if !player.SceneJump && (worldAvatar.avatarEntityId != 0 || worldAvatar.weaponEntityId != 0) {
+	for _, worldAvatar := range w.GetPlayerWorldAvatarList(player) {
+		if worldAvatar.avatarEntityId != 0 {
 			continue
 		}
 		scene.DestroyEntity(worldAvatar.avatarEntityId)
 		scene.DestroyEntity(worldAvatar.weaponEntityId)
 		worldAvatar.avatarEntityId = scene.CreateEntityAvatar(player, worldAvatar.avatarId)
-		worldAvatar.weaponEntityId = scene.CreateEntityWeapon(player.Pos, player.Rot)
+		worldAvatar.weaponEntityId = scene.CreateEntityWeapon(player.GetPos(), player.GetRot())
 	}
 }
 
@@ -586,6 +583,15 @@ func (w *World) GetPlayerAvatarIndexByAvatarId(player *model.Player, avatarId ui
 		}
 	}
 	return -1
+}
+
+// GetPlayerActiveAvatarEntity 获取玩家当前活跃角色场景实体
+func (w *World) GetPlayerActiveAvatarEntity(player *model.Player) *Entity {
+	activeAvatarId := w.GetPlayerActiveAvatarId(player)
+	avatarEntityId := w.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
+	scene := w.GetSceneById(player.SceneId)
+	entity := scene.GetEntity(avatarEntityId)
+	return entity
 }
 
 type MultiplayerTeam struct {

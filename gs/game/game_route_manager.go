@@ -123,6 +123,10 @@ func (r *RouteManager) initRoute() {
 		cmd.UseItemReq:                        GAME.UseItemReq,
 		cmd.EnterTransPointRegionNotify:       GAME.EnterTransPointRegionNotify,
 		cmd.ExitTransPointRegionNotify:        GAME.ExitTransPointRegionNotify,
+		cmd.GetPlayerBlacklistReq:             GAME.GetPlayerBlacklistReq,
+		cmd.GetChatEmojiCollectionReq:         GAME.GetChatEmojiCollectionReq,
+		cmd.SetPlayerPropReq:                  GAME.SetPlayerPropReq,
+		cmd.SetOpenStateReq:                   GAME.SetOpenStateReq,
 	}
 }
 

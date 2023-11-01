@@ -102,7 +102,7 @@ func (g *Game) GetPlayerItemCount(userId uint32, itemId uint32) uint32 {
 	}
 	prop, ok := constant.VIRTUAL_ITEM_PROP[itemId]
 	if ok {
-		value := player.PropertiesMap[prop]
+		value := player.PropMap[prop]
 		return value
 	} else {
 		dbItem := player.GetDbItem()
@@ -130,14 +130,8 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		prop, exist := constant.VIRTUAL_ITEM_PROP[changeItem.ItemId]
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量增加
-			player.PropertiesMap[prop] += changeItem.ChangeCount
-			playerPropNotify.PropMap[uint32(prop)] = &proto.PropValue{
-				Type: uint32(prop),
-				Val:  int64(player.PropertiesMap[prop]),
-				Value: &proto.PropValue_Ival{
-					Ival: int64(player.PropertiesMap[prop]),
-				},
-			}
+			player.PropMap[prop] += changeItem.ChangeCount
+			playerPropNotify.PropMap[prop] = g.PacketPropValue(prop, int64(player.PropMap[prop]))
 			// 特殊属性变化处理函数
 			switch changeItem.ItemId {
 			case constant.ITEM_ID_PLAYER_EXP:
@@ -215,14 +209,8 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 		prop, exist := constant.VIRTUAL_ITEM_PROP[changeItem.ItemId]
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量减少
-			player.PropertiesMap[prop] -= changeItem.ChangeCount
-			playerPropNotify.PropMap[uint32(prop)] = &proto.PropValue{
-				Type: uint32(prop),
-				Val:  int64(player.PropertiesMap[prop]),
-				Value: &proto.PropValue_Ival{
-					Ival: int64(player.PropertiesMap[prop]),
-				},
-			}
+			player.PropMap[prop] -= changeItem.ChangeCount
+			playerPropNotify.PropMap[prop] = g.PacketPropValue(prop, int64(player.PropMap[prop]))
 			// 特殊属性变化处理函数
 			switch changeItem.ItemId {
 			case constant.ITEM_ID_PLAYER_EXP:

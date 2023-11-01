@@ -1,14 +1,15 @@
 package model
 
 type DbItem struct {
-	ItemMap map[uint32]*Item // 道具仓库
+	ItemMap map[uint32]*Item // 道具集合
 }
 
 func (p *Player) GetDbItem() *DbItem {
 	if p.DbItem == nil {
-		p.DbItem = &DbItem{
-			ItemMap: make(map[uint32]*Item),
-		}
+		p.DbItem = new(DbItem)
+	}
+	if p.DbItem.ItemMap == nil {
+		p.DbItem.ItemMap = make(map[uint32]*Item)
 	}
 	return p.DbItem
 }

@@ -75,7 +75,10 @@ func (s *Scene) GetSceneTime() int64 {
 
 func (s *Scene) AddPlayer(player *model.Player) {
 	s.playerMap[player.PlayerId] = player
-	s.world.InitPlayerWorldAvatar(player)
+	for _, worldAvatar := range s.world.GetPlayerWorldAvatarList(player) {
+		worldAvatar.avatarEntityId = s.CreateEntityAvatar(player, worldAvatar.avatarId)
+		worldAvatar.weaponEntityId = s.CreateEntityWeapon(player.GetPos(), player.GetRot())
+	}
 }
 
 func (s *Scene) RemovePlayer(player *model.Player) {
@@ -96,12 +99,11 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 		return 0
 	}
 	entity := &Entity{
-		id:        entityId,
-		scene:     s,
-		lifeState: avatar.LifeState,
-		// 所有角色实体暂时公用玩家的位置指针
-		pos:                 player.Pos,
-		rot:                 player.Rot,
+		id:                  entityId,
+		scene:               s,
+		lifeState:           avatar.LifeState,
+		pos:                 player.GetPos(),
+		rot:                 player.GetRot(),
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,

@@ -95,10 +95,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	// 初始化
 	player.InitOnlineData()
 
-	// 确保玩家位置安全
-	player.Pos.X = player.SafePos.X
-	player.Pos.Y = player.SafePos.Y
-	player.Pos.Z = player.SafePos.Z
 	if player.SceneId > 100 {
 		player.SceneId = 3
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
@@ -155,42 +151,31 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.NickName = "旅行者"
 	player.Signature = ""
 	player.HeadImage = 10000007
-	player.Birthday = []uint8{0, 0}
-	player.NameCard = 210001
-	player.NameCardList = make([]uint32, 0)
-	player.FriendList = make(map[uint32]bool)
-	player.FriendApplyList = make(map[uint32]bool)
-	player.PropertiesMap = make(map[uint16]uint32)
-	player.FlyCloakList = make([]uint32, 0)
-	player.CostumeList = make([]uint32, 0)
+	player.PropMap = make(map[uint32]uint32)
 	player.ChatMsgMap = make(map[uint32][]*model.ChatMsg)
 
 	player.SceneId = 3
 
-	player.NameCardList = append(player.NameCardList, 210001, 210042)
-
-	player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL] = 1
-	player.PropertiesMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL] = 0
-	player.PropertiesMap[constant.PLAYER_PROP_IS_SPRING_AUTO_USE] = 1
-	player.PropertiesMap[constant.PLAYER_PROP_SPRING_AUTO_USE_PERCENT] = 100
-	player.PropertiesMap[constant.PLAYER_PROP_IS_FLYABLE] = 1
-	player.PropertiesMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
-	player.PropertiesMap[constant.PLAYER_PROP_MAX_STAMINA] = 24000
-	player.PropertiesMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = 24000
-	player.PropertiesMap[constant.PLAYER_PROP_PLAYER_RESIN] = 160
-	player.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE] = 2
-	player.PropertiesMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] = 1
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_SPRING_AUTO_USE] = 1
+	player.PropMap[constant.PLAYER_PROP_SPRING_AUTO_USE_PERCENT] = 100
+	player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_MAX_STAMINA] = 24000
+	player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = 24000
+	player.PropMap[constant.PLAYER_PROP_PLAYER_RESIN] = 160
+	player.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE] = 2
+	player.PropMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
 
 	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.SceneId))
 	if sceneLuaConfig != nil {
 		bornPos := sceneLuaConfig.SceneConfig.BornPos
 		bornRot := sceneLuaConfig.SceneConfig.BornRot
-		player.SafePos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
 		player.Pos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
 		player.Rot = &model.Vector{X: float64(bornRot.X), Y: float64(bornRot.Y), Z: float64(bornRot.Z)}
 	} else {
 		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
-		player.SafePos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}

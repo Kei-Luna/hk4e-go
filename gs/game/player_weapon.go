@@ -238,8 +238,8 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 		}
 	}
 	// 冒险等级是否符合要求
-	if player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL] < uint32(weaponPromoteConfig.MinPlayerLevel) {
-		logger.Error("player level not enough, level: %v", player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL])
+	if player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] < uint32(weaponPromoteConfig.MinPlayerLevel) {
+		logger.Error("player level not enough, level: %v", player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL])
 		g.SendError(cmd.WeaponPromoteRsp, player, &proto.WeaponPromoteRsp{}, proto.Retcode_RET_PLAYER_LEVEL_LESS_THAN)
 		return
 	}

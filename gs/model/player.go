@@ -27,31 +27,24 @@ type Player struct {
 	// 离线数据 请尽量不要定义接口等复杂数据结构
 	ID              primitive.ObjectID `bson:"_id,omitempty"`
 	PlayerId        uint32             `bson:"player_id"` // 玩家uid
-	IsBorn          bool               // 是否完成开场动画
 	NickName        string             // 昵称
-	Signature       string             // 签名
 	HeadImage       uint32             // 头像
-	Birthday        []uint8            // 生日
-	NameCard        uint32             // 当前名片
-	NameCardList    []uint32           // 已解锁名片列表
-	FriendList      map[uint32]bool    // 好友uid列表
-	FriendApplyList map[uint32]bool    // 好友申请uid列表
-	OfflineTime     uint32             // 离线时间点
+	Signature       string             // 签名
+	IsBorn          bool               // 是否完成开场动画
 	OnlineTime      uint32             // 上线时间点
+	OfflineTime     uint32             // 离线时间点
 	TotalOnlineTime uint32             // 累计在线时长
-	PropertiesMap   map[uint16]uint32  // 玩家自身相关的一些属性
-	FlyCloakList    []uint32           // 风之翼列表
-	CostumeList     []uint32           // 角色衣装列表
+	PropMap         map[uint32]uint32  // 玩家属性表
 	SceneId         uint32             // 场景
-	CmdPerm         uint8              // 玩家命令权限等级
-	SafePos         *Vector            // 在陆地时的坐标
 	Pos             *Vector            // 坐标
 	Rot             *Vector            // 朝向
+	CmdPerm         uint8              // 玩家命令权限等级
+	DbSocial        *DbSocial          // 社交
 	DbItem          *DbItem            // 道具
+	DbAvatar        *DbAvatar          // 角色
+	DbTeam          *DbTeam            // 队伍
 	DbWeapon        *DbWeapon          // 武器
 	DbReliquary     *DbReliquary       // 圣遗物
-	DbTeam          *DbTeam            // 队伍
-	DbAvatar        *DbAvatar          // 角色
 	DbGacha         *DbGacha           // 卡池
 	DbQuest         *DbQuest           // 任务
 	DbWorld         *DbWorld           // 大世界
@@ -87,8 +80,29 @@ type Player struct {
 	ClientVersion             int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
 	OfflineClear              bool                                     `bson:"-" msgpack:"-"` // 是否离线时清除账号数据
 	OfflineNotSave            bool                                     `bson:"-" msgpack:"-"` // 是否离线时不保存账号数据
+	RemoteWorldPlayerNum      uint32                                   `bson:"-" msgpack:"-"` // 远程展示世界内人数
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
+}
+
+func (p *Player) GetPos() *Vector {
+	return &Vector{X: p.Pos.X, Y: p.Pos.Y, Z: p.Pos.Z}
+}
+
+func (p *Player) GetRot() *Vector {
+	return &Vector{X: p.Rot.X, Y: p.Rot.Y, Z: p.Rot.Z}
+}
+
+func (p *Player) SetPos(pos *Vector) {
+	p.Pos.X = pos.X
+	p.Pos.Y = pos.Y
+	p.Pos.Z = pos.Z
+}
+
+func (p *Player) SetRot(rot *Vector) {
+	p.Rot.X = rot.X
+	p.Rot.Y = rot.Y
+	p.Rot.Z = rot.Z
 }
 
 func (p *Player) GetNextGameObjectGuid() uint64 {
@@ -115,6 +129,12 @@ func (p *Player) InitOnlineData() {
 	dbWeapon.InitDbWeapon(p)
 	dbItem := p.GetDbItem()
 	dbItem.InitDbItem(p)
+}
+
+type Vector struct {
+	X float64
+	Y float64
+	Z float64
 }
 
 // 多人世界网络同步包转发器

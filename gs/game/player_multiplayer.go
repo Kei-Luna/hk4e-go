@@ -171,8 +171,8 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 		player.SceneId = hostPlayer.SceneId
 		player.SceneLoadState = model.SceneNone
 		player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_TEAM_JOIN)
-		player.Pos.X, player.Pos.Y, player.Pos.Z = hostPlayer.Pos.X, hostPlayer.Pos.Y, hostPlayer.Pos.Z
-		player.Rot.X, player.Rot.Y, player.Rot.Z = hostPlayer.Rot.X, hostPlayer.Rot.Y, hostPlayer.Rot.Z
+		player.SetPos(hostPlayer.GetPos())
+		player.SetRot(hostPlayer.GetRot())
 		g.WorldAddPlayer(hostWorld, player)
 
 		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
@@ -203,7 +203,7 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
@@ -230,9 +230,9 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 					ApplyPlayerOnlineInfo: &mq.PlayerBaseInfo{
 						UserId:         player.PlayerId,
 						Nickname:       player.NickName,
-						PlayerLevel:    player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
-						MpSettingType:  uint8(player.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
-						NameCardId:     player.NameCard,
+						PlayerLevel:    player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+						MpSettingType:  uint8(player.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
+						NameCardId:     player.GetDbSocial().NameCard,
 						Signature:      player.Signature,
 						HeadImageId:    player.HeadImage,
 						WorldPlayerNum: uint32(world.GetWorldPlayerNum()),
@@ -254,12 +254,12 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
-	if targetWorld.GetMultiplayer() && targetWorld.GetOwner().PlayerId != targetPlayer.PlayerId {
+	if targetWorld.IsMultiplayerWorld() && targetWorld.GetOwner().PlayerId != targetPlayer.PlayerId {
 		// 向同一世界内的非房主玩家申请时直接拒绝
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 		return
 	}
-	mpSetting := targetPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]
+	mpSetting := targetPlayer.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]
 	if mpSetting == 0 {
 		// 房主玩家没开权限
 		applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
@@ -320,7 +320,7 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 	}
 
 	otherPlayerWorld := WORLD_MANAGER.GetWorldById(otherPlayer.WorldId)
-	if otherPlayerWorld == nil || otherPlayerWorld.GetMultiplayer() {
+	if otherPlayerWorld == nil || otherPlayerWorld.IsMultiplayerWorld() {
 		playerApplyEnterMpResultNotify := &proto.PlayerApplyEnterMpResultNotify{
 			TargetUid:      hostPlayer.PlayerId,
 			TargetNickname: hostPlayer.NickName,
@@ -342,7 +342,7 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 
 func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 	world := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
-	if world == nil || world.GetMultiplayer() {
+	if world == nil || world.IsMultiplayerWorld() {
 		return
 	}
 	world.ChangeToMultiplayer()
@@ -351,32 +351,23 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 		WorldPropMap: make(map[uint32]*proto.PropValue),
 	}
 	// 是否多人游戏
-	worldDataNotify.WorldPropMap[2] = &proto.PropValue{
-		Type:  2,
-		Val:   object.ConvBoolToInt64(world.GetMultiplayer()),
-		Value: &proto.PropValue_Ival{Ival: object.ConvBoolToInt64(world.GetMultiplayer())},
-	}
+	worldDataNotify.WorldPropMap[2] = g.PacketPropValue(2, object.ConvBoolToInt64(world.IsMultiplayerWorld()))
 	g.SendMsg(cmd.WorldDataNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, worldDataNotify)
 
-	hostPlayer.SceneJump = true
+	hostPlayer.SceneJump = false
 	hostPlayer.SceneLoadState = model.SceneNone
 	hostPlayer.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_HOST_FROM_SINGLE_TO_MP)
+
+	pos := g.GetPlayerPos(hostPlayer)
 
 	hostPlayerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
 		hostPlayer,
 		hostPlayer,
 		proto.EnterType_ENTER_GOTO,
 		hostPlayer.SceneId,
-		hostPlayer.Pos,
+		pos,
 	)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
-
-	scene := world.GetSceneById(hostPlayer.SceneId)
-	entityIdList := make([]uint32, 0)
-	for _, entity := range g.GetVisionEntity(scene, hostPlayer.Pos) {
-		entityIdList = append(entityIdList, entity.GetId())
-	}
-	g.RemoveSceneEntityNotifyToPlayer(hostPlayer, proto.VisionType_VISION_MISS, entityIdList)
 }
 
 func (g *Game) PlayerLeaveWorld(player *model.Player, force bool) bool {
@@ -389,7 +380,7 @@ func (g *Game) PlayerLeaveWorld(player *model.Player, force bool) bool {
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return false
 	}
-	if !oldWorld.GetMultiplayer() {
+	if !oldWorld.IsMultiplayerWorld() {
 		return false
 	}
 	for _, worldPlayer := range oldWorld.GetAllPlayer() {
@@ -411,13 +402,24 @@ func (g *Game) WorldAddPlayer(world *World, player *model.Player) {
 	}
 	world.AddPlayer(player, player.SceneId)
 	player.WorldId = world.GetId()
-	if world.GetWorldPlayerNum() > 1 {
+	if world.IsMultiplayerWorld() && world.GetWorldPlayerNum() > 1 {
 		g.UpdateWorldPlayerInfo(world, player)
 	}
+	world.GetOwner().RemoteWorldPlayerNum = uint32(world.GetWorldPlayerNum())
 }
 
 func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
-	if world.GetMultiplayer() && player.PlayerId == world.GetOwner().PlayerId {
+	if WORLD_MANAGER.IsAiWorld(world) {
+		aiWorldAoi := world.GetAiWorldAoi()
+		pos := g.GetPlayerPos(player)
+		logger.Debug("ai world aoi remove player, oldPos: %+v, uid: %v", pos, player.PlayerId)
+		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(pos.X), float32(pos.Y), float32(pos.Z))
+		if !ok {
+			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, pos)
+		}
+	}
+
+	if world.IsMultiplayerWorld() && player.PlayerId == world.GetOwner().PlayerId {
 		// 多人世界房主离开剔除所有其他玩家
 		for _, worldPlayer := range world.GetAllPlayer() {
 			if worldPlayer.PlayerId == world.GetOwner().PlayerId {
@@ -429,7 +431,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 	scene := world.GetSceneById(player.SceneId)
 
 	entityIdList := make([]uint32, 0)
-	for _, entity := range g.GetVisionEntity(scene, player.Pos) {
+	for _, entity := range g.GetVisionEntity(scene, g.GetPlayerPos(player)) {
 		entityIdList = append(entityIdList, entity.GetId())
 	}
 	g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, entityIdList)
@@ -444,7 +446,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 		}
 	}
 
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		playerQuitFromMpNotify := &proto.PlayerQuitFromMpNotify{
 			Reason: proto.PlayerQuitFromMpNotify_BACK_TO_MY_WORLD,
 		}
@@ -456,23 +458,15 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 
 	world.RemovePlayer(player)
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		aiWorldAoi := world.GetAiWorldAoi()
-		logger.Debug("ai world aoi remove player, oldPos: %+v, uid: %v", player.Pos, player.PlayerId)
-		ok := aiWorldAoi.RemoveObjectFromGridByPos(int64(player.PlayerId), float32(player.Pos.X), float32(player.Pos.Y), float32(player.Pos.Z))
-		if !ok {
-			logger.Error("ai world aoi remove player fail, uid: %v, pos: %+v", player.PlayerId, player.Pos)
-		}
-	}
-
 	player.WorldId = 0
 	if world.GetOwner().PlayerId == player.PlayerId {
 		// 房主离开销毁世界
 		WORLD_MANAGER.DestroyWorld(world.GetId())
 		return
 	}
-	if world.GetMultiplayer() && world.GetWorldPlayerNum() > 0 {
+	if world.IsMultiplayerWorld() && world.GetWorldPlayerNum() > 0 {
 		g.UpdateWorldPlayerInfo(world, player)
+		world.GetOwner().RemoteWorldPlayerNum = uint32(world.GetWorldPlayerNum())
 	}
 }
 
@@ -490,10 +484,10 @@ func (g *Game) UpdateWorldPlayerInfo(hostWorld *World, excludePlayer *model.Play
 			onlinePlayerInfo := &proto.OnlinePlayerInfo{
 				Uid:                 subWorldPlayer.PlayerId,
 				Nickname:            subWorldPlayer.NickName,
-				PlayerLevel:         subWorldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+				PlayerLevel:         subWorldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 				AvatarId:            subWorldPlayer.HeadImage,
-				MpSettingType:       proto.MpSettingType(subWorldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
-				NameCardId:          subWorldPlayer.NameCard,
+				MpSettingType:       proto.MpSettingType(subWorldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
+				NameCardId:          subWorldPlayer.GetDbSocial().NameCard,
 				Signature:           subWorldPlayer.Signature,
 				ProfilePicture:      &proto.ProfilePicture{AvatarId: subWorldPlayer.HeadImage},
 				CurPlayerNumInWorld: uint32(hostWorld.GetWorldPlayerNum()),
@@ -521,10 +515,10 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 		onlinePlayerInfo := &proto.OnlinePlayerInfo{
 			Uid:                 worldPlayer.PlayerId,
 			Nickname:            worldPlayer.NickName,
-			PlayerLevel:         worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL],
+			PlayerLevel:         worldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL],
 			AvatarId:            worldPlayer.HeadImage,
-			MpSettingType:       proto.MpSettingType(worldPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
-			NameCardId:          worldPlayer.NameCard,
+			MpSettingType:       proto.MpSettingType(worldPlayer.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]),
+			NameCardId:          worldPlayer.GetDbSocial().NameCard,
 			Signature:           worldPlayer.Signature,
 			ProfilePicture:      &proto.ProfilePicture{AvatarId: worldPlayer.HeadImage},
 			CurPlayerNumInWorld: uint32(world.GetWorldPlayerNum()),
@@ -546,7 +540,7 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 		SceneId:            player.SceneId,
 		TeamEntityInfoList: make([]*proto.TeamEntityInfo, 0),
 	}
-	if world.GetMultiplayer() {
+	if world.IsMultiplayerWorld() {
 		for _, worldPlayer := range world.GetAllPlayer() {
 			if worldPlayer.PlayerId == player.PlayerId {
 				continue
@@ -606,12 +600,12 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 			applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 			return
 		}
-		if hostWorld.GetMultiplayer() && hostWorld.GetOwner().PlayerId != hostPlayer.PlayerId {
+		if hostWorld.IsMultiplayerWorld() && hostWorld.GetOwner().PlayerId != hostPlayer.PlayerId {
 			// 向同一世界内的非房主玩家申请时直接拒绝
 			applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
 			return
 		}
-		mpSetting := hostPlayer.PropertiesMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]
+		mpSetting := hostPlayer.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE]
 		if mpSetting == 0 {
 			// 房主玩家没开权限
 			applyFailNotify(proto.PlayerApplyEnterMpResultNotify_PLAYER_CANNOT_ENTER_MP)
@@ -659,7 +653,7 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 			return
 		}
 		applyPlayerWorld := WORLD_MANAGER.GetWorldById(applyPlayer.WorldId)
-		if applyPlayerWorld == nil || applyPlayerWorld.GetMultiplayer() {
+		if applyPlayerWorld == nil || applyPlayerWorld.IsMultiplayerWorld() {
 			playerApplyEnterMpResultNotify := &proto.PlayerApplyEnterMpResultNotify{
 				TargetUid:      playerMpInfo.HostUserId,
 				TargetNickname: playerMpInfo.HostNickname,

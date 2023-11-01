@@ -162,8 +162,8 @@ func (g *Game) AvatarPromoteReq(player *model.Player, payloadMsg pb.Message) {
 		}
 	}
 	// 冒险等级是否符合要求
-	if player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL] < uint32(avatarPromoteConfig.MinPlayerLevel) {
-		logger.Error("player level not enough, level: %v", player.PropertiesMap[constant.PLAYER_PROP_PLAYER_LEVEL])
+	if player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] < uint32(avatarPromoteConfig.MinPlayerLevel) {
+		logger.Error("player level not enough, level: %v", player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL])
 		g.SendError(cmd.AvatarPromoteRsp, player, &proto.AvatarPromoteRsp{}, proto.Retcode_RET_PLAYER_LEVEL_LESS_THAN)
 		return
 	}
@@ -260,7 +260,8 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 
 	// 确保要更换的风之翼已获得
 	exist := false
-	for _, v := range player.FlyCloakList {
+	dbAvatar := player.GetDbAvatar()
+	for _, v := range dbAvatar.FlyCloakList {
 		if v == req.FlycloakId {
 			exist = true
 		}
@@ -309,7 +310,8 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 
 	// 确保要更换的时装已获得
 	exist := false
-	for _, v := range player.CostumeList {
+	dbAvatar := player.GetDbAvatar()
+	for _, v := range dbAvatar.CostumeList {
 		if v == req.CostumeId {
 			exist = true
 		}
@@ -329,7 +331,7 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 	// 角色更换时装通知
 	ntf := new(proto.AvatarChangeCostumeNotify)
 	// 要更换时装的角色实体不存在代表更换的是仓库内的角色
-	if scene.GetWorld().GetPlayerWorldAvatarEntityId(player, avatar.AvatarId) == 0 {
+	if scene.GetWorld().GetPlayerWorldAvatar(player, avatar.AvatarId) == nil {
 		ntf.EntityInfo = &proto.SceneEntityInfo{
 			Entity: &proto.SceneEntityInfo_Avatar{
 				Avatar: g.PacketSceneAvatarInfo(scene, player, avatar.AvatarId),
@@ -410,13 +412,14 @@ func (g *Game) AddPlayerFlycloak(userId uint32, flyCloakId uint32) {
 		return
 	}
 	// 验证玩家是否已拥有该风之翼
-	for _, flycloak := range player.FlyCloakList {
+	dbAvatar := player.GetDbAvatar()
+	for _, flycloak := range dbAvatar.FlyCloakList {
 		if flycloak == flyCloakId {
 			logger.Error("player has flycloak, flycloakId: %v", flyCloakId)
 			return
 		}
 	}
-	player.FlyCloakList = append(player.FlyCloakList, flyCloakId)
+	dbAvatar.FlyCloakList = append(dbAvatar.FlyCloakList, flyCloakId)
 
 	avatarGainFlycloakNotify := &proto.AvatarGainFlycloakNotify{
 		FlycloakId: flyCloakId,
@@ -432,13 +435,14 @@ func (g *Game) AddPlayerCostume(userId uint32, costumeId uint32) {
 		return
 	}
 	// 验证玩家是否已拥有该时装
-	for _, costume := range player.CostumeList {
+	dbAvatar := player.GetDbAvatar()
+	for _, costume := range dbAvatar.CostumeList {
 		if costume == costumeId {
 			logger.Error("player has costume, costumeId: %v", costumeId)
 			return
 		}
 	}
-	player.CostumeList = append(player.CostumeList, costumeId)
+	dbAvatar.CostumeList = append(dbAvatar.CostumeList, costumeId)
 
 	avatarGainCostumeNotify := &proto.AvatarGainCostumeNotify{
 		CostumeId: costumeId,
@@ -620,9 +624,9 @@ func (g *Game) PacketAvatarDataNotify(player *model.Player) *proto.AvatarDataNot
 	avatarDataNotify := &proto.AvatarDataNotify{
 		CurAvatarTeamId:   uint32(dbTeam.GetActiveTeamId()),
 		ChooseAvatarGuid:  dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId].Guid,
-		OwnedFlycloakList: player.FlyCloakList,
+		OwnedFlycloakList: dbAvatar.FlyCloakList,
 		// 角色衣装
-		OwnedCostumeList: player.CostumeList,
+		OwnedCostumeList: dbAvatar.CostumeList,
 		AvatarList:       make([]*proto.AvatarInfo, 0),
 		AvatarTeamMap:    make(map[uint32]*proto.AvatarTeam),
 	}

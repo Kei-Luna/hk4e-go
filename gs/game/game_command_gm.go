@@ -658,10 +658,10 @@ func (g *GMCmd) StopPubg(v bool) {
 	pluginPubg.StopPubg()
 }
 
-func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
+func (g *GMCmd) SetPhysicsEngineParam(pathTracing bool) {
 	world := WORLD_MANAGER.GetAiWorld()
 	engine := world.GetBulletPhysicsEngine()
-	engine.SetPhysicsEngineParam(pathTracing, acc, drag, pao, is, ayo)
+	engine.SetPhysicsEngineParam(pathTracing)
 }
 
 func (g *GMCmd) ShowAvatarCollider(v bool) {
@@ -706,13 +706,13 @@ func (g *GMCmd) GetPlayerData(userId uint32) *model.Player {
 	return player
 }
 
-func (g *GMCmd) GetPlayerPos(userId uint32) *model.Vector {
+func (g *GMCmd) GetPlayerPos(userId uint32) (*model.Vector, *model.Vector) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
-		return nil
+		return nil, nil
 	}
-	return player.Pos
+	return GAME.GetPlayerPos(player), player.GetPos()
 }
 
 func (g *GMCmd) NotSavePlayer(userId uint32) {

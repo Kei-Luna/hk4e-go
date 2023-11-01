@@ -128,6 +128,7 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 		},
 		EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
 	})
+	robot.SetPos(&model.Vector{X: 500.0, Y: 900.0, Z: -500.0})
 	return robot
 }
 
@@ -429,7 +430,8 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 	world := scene.GetWorld()
 	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
 		aiWorldAoi := world.GetAiWorldAoi()
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
+		pos := g.GetPlayerPos(SELF)
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
 		for uid := range otherWorldAvatarMap {
 			if aecUid == uint32(uid) {
 				continue
@@ -451,7 +453,8 @@ func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 	world := scene.GetWorld()
 	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
 		aiWorldAoi := world.GetAiWorldAoi()
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(SELF.Pos.X), float32(SELF.Pos.Y), float32(SELF.Pos.Z))
+		pos := g.GetPlayerPos(SELF)
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
 		for uid := range otherWorldAvatarMap {
 			player := USER_MANAGER.GetOnlineUser(uint32(uid))
 			if player == nil {

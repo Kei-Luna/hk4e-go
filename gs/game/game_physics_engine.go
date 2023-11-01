@@ -55,20 +55,14 @@ func (w *World) NewPhysicsEngine() {
 	}
 }
 
-func (p *PhysicsEngine) SetPhysicsEngineParam(pathTracing bool, acc float32, drag float32, pao float32, is float32, ayo float32) {
+func (p *PhysicsEngine) SetPhysicsEngineParam(pathTracing bool) {
 	p.pathTracing = pathTracing
-	p.acc = acc
-	p.drag = drag
-	p.pitchAngleOffset = pao
-	p.initSpeed = is
-	p.avatarYOffset = ayo
 }
 
 func (p *PhysicsEngine) ShowAvatarCollider() {
 	for _, scene := range p.world.GetAllScene() {
 		for _, player := range scene.GetAllPlayer() {
-			entityId := p.world.GetPlayerWorldAvatarEntityId(player, p.world.GetPlayerActiveAvatarId(player))
-			entity := scene.GetEntity(entityId)
+			entity := p.world.GetPlayerActiveAvatarEntity(player)
 			avatarPos := entity.GetPos()
 			avatarPos.Y += float64(p.avatarYOffset)
 			GAME.CreateGadget(p.world.GetOwner(), &model.Vector{X: avatarPos.X, Y: avatarPos.Y, Z: avatarPos.Z}, GADGET_GREEN, nil)
@@ -141,8 +135,7 @@ func (p *PhysicsEngine) Collision(sceneId uint32, avatarEntityId uint32, oldPos 
 	scene := p.world.GetSceneById(sceneId)
 	world := scene.GetWorld()
 	for _, player := range scene.GetAllPlayer() {
-		entityId := world.GetPlayerWorldAvatarEntityId(player, world.GetPlayerActiveAvatarId(player))
-		entity := scene.GetEntity(entityId)
+		entity := world.GetPlayerActiveAvatarEntity(player)
 		if entity.GetId() == avatarEntityId {
 			continue
 		}

@@ -72,6 +72,10 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GmTalkReq, func() any { return new(proto.GmTalkReq) })                                   // GM命令执行请求
 	c.regMsg(GmTalkRsp, func() any { return new(proto.GmTalkRsp) })                                   // GM命令执行响应
 	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })                             // GM命令执行通知
+	c.regMsg(SetPlayerPropReq, func() any { return new(proto.SetPlayerPropReq) })                     // 设置玩家属性表请求
+	c.regMsg(SetPlayerPropRsp, func() any { return new(proto.SetPlayerPropRsp) })                     // 设置玩家属性表响应
+	c.regMsg(SetOpenStateReq, func() any { return new(proto.SetOpenStateReq) })                       // 设置游戏功能模块开放状态请求
+	c.regMsg(SetOpenStateRsp, func() any { return new(proto.SetOpenStateRsp) })                       // 设置游戏功能模块开放状态响应
 
 	// 场景
 	c.regMsg(PlayerSetPauseReq, func() any { return new(proto.PlayerSetPauseReq) })                           // 玩家暂停请求
@@ -271,6 +275,10 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(PlayerChatNotify, func() any { return new(proto.PlayerChatNotify) })                   // 多人聊天消息通知
 	c.regMsg(GetOnlinePlayerInfoReq, func() any { return new(proto.GetOnlinePlayerInfoReq) })       // 在线玩家信息请求
 	c.regMsg(GetOnlinePlayerInfoRsp, func() any { return new(proto.GetOnlinePlayerInfoRsp) })       // 在线玩家信息响应
+	c.regMsg(GetPlayerBlacklistReq, func() any { return new(proto.GetPlayerBlacklistReq) })         // 黑名单请求
+	c.regMsg(GetPlayerBlacklistRsp, func() any { return new(proto.GetPlayerBlacklistRsp) })         // 黑名单响应
+	c.regMsg(GetChatEmojiCollectionReq, func() any { return new(proto.GetChatEmojiCollectionReq) }) // 聊天表情收藏夹请求
+	c.regMsg(GetChatEmojiCollectionRsp, func() any { return new(proto.GetChatEmojiCollectionRsp) }) // 聊天表情收藏夹响应
 
 	// 卡池
 	c.regMsg(GetGachaInfoReq, func() any { return new(proto.GetGachaInfoReq) }) // 卡池获取请求

@@ -5,17 +5,9 @@ import (
 	"hk4e/gdconf"
 )
 
-type DbSceneGroup struct {
-	VariableMap    map[string]int32
-	KillConfigMap  map[uint32]bool
-	GadgetStateMap map[uint32]uint8
-}
-
-type MapMark struct {
-	SceneId   uint32
-	Pos       *Vector
-	PointType uint32
-	Name      string
+type DbWorld struct {
+	SceneMap    map[uint32]*DbScene
+	MapMarkList []*MapMark
 }
 
 type DbScene struct {
@@ -26,35 +18,37 @@ type DbScene struct {
 	VehicleMap     map[uint32]*DbVehicle
 }
 
-type DbWorld struct {
-	SceneMap    map[uint32]*DbScene
-	MapMarkList []*MapMark
+type DbSceneGroup struct {
+	VariableMap    map[string]int32
+	KillConfigMap  map[uint32]bool
+	GadgetStateMap map[uint32]uint8
+}
+
+type DbVehicle struct {
+	VehicleId uint32  // 载具Id
+	OwnerUid  uint32  // 所有者Id
+	Pos       *Vector // 位置
+	Rot       *Vector // 旋转
+}
+
+type MapMark struct {
+	SceneId   uint32
+	Pos       *Vector
+	PointType uint32
+	Name      string
 }
 
 func (p *Player) GetDbWorld() *DbWorld {
 	if p.DbWorld == nil {
-		p.DbWorld = NewDbWorld()
+		p.DbWorld = new(DbWorld)
+	}
+	if p.DbWorld.SceneMap == nil {
+		p.DbWorld.SceneMap = make(map[uint32]*DbScene)
+	}
+	if p.DbWorld.MapMarkList == nil {
+		p.DbWorld.MapMarkList = make([]*MapMark, 0)
 	}
 	return p.DbWorld
-}
-
-func NewDbWorld() *DbWorld {
-	r := &DbWorld{
-		SceneMap:    make(map[uint32]*DbScene),
-		MapMarkList: make([]*MapMark, 0),
-	}
-	return r
-}
-
-func NewScene(sceneId uint32) *DbScene {
-	r := &DbScene{
-		SceneId:        sceneId,
-		UnlockPointMap: make(map[uint32]bool),
-		UnHidePointMap: make(map[uint32]bool),
-		SceneGroupMap:  make(map[uint32]*DbSceneGroup),
-		VehicleMap:     make(map[uint32]*DbVehicle),
-	}
-	return r
 }
 
 func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
@@ -66,22 +60,31 @@ func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
 		if sceneDataConfig == nil {
 			return nil
 		}
-		scene = NewScene(sceneId)
+		scene = new(DbScene)
 		w.SceneMap[sceneId] = scene
+	}
+	if scene.SceneId == 0 {
+		scene.SceneId = sceneId
+	}
+
+	if scene.UnlockPointMap == nil {
+		scene.UnlockPointMap = make(map[uint32]bool)
+	}
+	if scene.UnHidePointMap == nil {
+		scene.UnHidePointMap = make(map[uint32]bool)
+	}
+	if scene.SceneGroupMap == nil {
+		scene.SceneGroupMap = make(map[uint32]*DbSceneGroup)
+	}
+	if scene.VehicleMap == nil {
+		scene.VehicleMap = make(map[uint32]*DbVehicle)
 	}
 	return scene
 }
 
-func (s *DbScene) GetUnHidePointMap() map[uint32]bool {
-	if s.UnHidePointMap == nil {
-		s.UnHidePointMap = make(map[uint32]bool)
-	}
-	return s.UnHidePointMap
-}
-
 func (s *DbScene) GetUnHidePointList() []uint32 {
-	unHidePointList := make([]uint32, 0, len(s.GetUnHidePointMap()))
-	for pointId := range s.GetUnHidePointMap() {
+	unHidePointList := make([]uint32, 0, len(s.UnHidePointMap))
+	for pointId := range s.UnHidePointMap {
 		unHidePointList = append(unHidePointList, pointId)
 	}
 	return unHidePointList
@@ -103,7 +106,7 @@ func (s *DbScene) UnlockPoint(pointId uint32) {
 	s.UnlockPointMap[pointId] = true
 	// 隐藏锚点取消隐藏
 	if pointDataConfig.IsModelHidden {
-		s.GetUnHidePointMap()[pointId] = true
+		s.UnHidePointMap[pointId] = true
 	}
 }
 
@@ -123,13 +126,6 @@ func (s *DbScene) GetSceneGroupById(groupId uint32) *DbSceneGroup {
 		s.SceneGroupMap[groupId] = dbSceneGroup
 	}
 	return dbSceneGroup
-}
-
-func (s *DbScene) GetVehicleMap() map[uint32]*DbVehicle {
-	if s.VehicleMap == nil {
-		s.VehicleMap = make(map[uint32]*DbVehicle)
-	}
-	return s.VehicleMap
 }
 
 func (g *DbSceneGroup) GetVariableByName(name string) int32 {
@@ -173,4 +169,13 @@ func (g *DbSceneGroup) ChangeGadgetState(configId uint32, state uint8) {
 func (g *DbSceneGroup) CheckGadgetExist(configId uint32) bool {
 	_, exist := g.GadgetStateMap[configId]
 	return exist
+}
+
+func (s *DbScene) AddVehicle(vehicleId uint32, ownerId uint32, pos *Vector, rot *Vector) {
+	s.VehicleMap[vehicleId] = &DbVehicle{
+		VehicleId: vehicleId,
+		OwnerUid:  ownerId,
+		Pos:       pos,
+		Rot:       rot,
+	}
 }
