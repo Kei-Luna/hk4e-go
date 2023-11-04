@@ -840,9 +840,6 @@ func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*g
 
 // AddSceneGroup 加载场景组
 func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
-	if groupConfig == nil {
-		return
-	}
 	group := scene.GetGroupById(uint32(groupConfig.Id))
 	if group != nil {
 		return
@@ -853,6 +850,7 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 		logger.Error("invalid suiteId: %v, uid: %v", initSuiteId, player.PlayerId)
 		return
 	}
+	// logger.Debug("add scene group, groupId: %v, initSuiteId: %v, uid: %v", groupConfig.Id, initSuiteId, player.PlayerId)
 	g.AddSceneGroupSuiteCore(player, scene, uint32(groupConfig.Id), uint8(initSuiteId))
 	// ntf := &proto.GroupSuiteNotify{
 	// 	GroupMap: make(map[uint32]uint32),
@@ -884,6 +882,12 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 
 // RemoveSceneGroup 卸载场景组
 func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig *gdconf.Group) {
+	// logger.Debug("remove scene group, groupId: %v, uid: %v", groupConfig.Id, player.PlayerId)
+	for _, triggerData := range gdconf.GetTriggerDataMap() {
+		if groupConfig.Id == triggerData.GroupId {
+			return
+		}
+	}
 	group := scene.GetGroupById(uint32(groupConfig.Id))
 	if group == nil {
 		// logger.Error("group not exist, groupId: %v, uid: %v", groupConfig.Id, player.PlayerId)
@@ -901,6 +905,7 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 
 // AddSceneGroupSuite 向场景组中添加场景小组
 func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
+	// logger.Debug("add scene group suite, groupId: %v, suiteId: %v, uid: %v", groupId, suiteId, player.PlayerId)
 	groupConfig := gdconf.GetSceneGroup(int32(groupId))
 	if groupConfig == nil {
 		logger.Error("get group config is nil, groupId: %v, uid: %v", groupId, player.PlayerId)
@@ -1177,6 +1182,10 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 
 // CreateGadget 创建物件实体
 func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId uint32, normalEntity *GadgetNormalEntity) uint32 {
+	if gadgetId == 0 {
+		logger.Error("create gadget id is zero, pos: %+v, normalEntity: %+v, uid: %v", pos, normalEntity, player.PlayerId)
+		return 0
+	}
 	if normalEntity == nil {
 		normalEntity = &GadgetNormalEntity{
 			isDrop: false,

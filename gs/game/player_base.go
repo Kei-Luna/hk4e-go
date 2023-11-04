@@ -10,9 +10,46 @@ import (
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
 	"hk4e/protocol/proto"
+
+	pb "google.golang.org/protobuf/proto"
 )
 
 /************************************************** 接口请求 **************************************************/
+
+func (g *Game) PlayerSetPauseReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.PlayerSetPauseReq)
+	player.Pause = req.IsPaused
+	g.SendMsg(cmd.PlayerSetPauseRsp, player.PlayerId, player.ClientSeq, new(proto.PlayerSetPauseRsp))
+}
+
+func (g *Game) SetPlayerPropReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.SetPlayerPropReq)
+	for _, propValue := range req.PropList {
+		logger.Debug("player set prop, key: %v, value: %v, uid: %v", propValue.Type, propValue.Val, player.PlayerId)
+		player.PropMap[propValue.Type] = uint32(propValue.Val)
+	}
+	g.SendMsg(cmd.SetPlayerPropRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerPropRsp))
+}
+
+func (g *Game) SetOpenStateReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.SetOpenStateReq)
+	logger.Debug("player set open state, key: %v, value: %v, uid: %v", req.Key, req.Value, player.PlayerId)
+	openStateDataConfig := gdconf.GetOpenStateDataById(int32(req.Key))
+	if openStateDataConfig == nil {
+		logger.Error("get open state data config is nil, key: %v", req.Key)
+		return
+	}
+	if openStateDataConfig.AllowClientReq == 0 {
+		g.SendError(cmd.SetOpenStateRsp, player, &proto.SetOpenStateRsp{})
+		return
+	}
+	g.ChangePlayerOpenState(player, req.Key, req.Value)
+
+	g.SendMsg(cmd.SetOpenStateRsp, player.PlayerId, player.ClientSeq, &proto.SetOpenStateRsp{
+		Key:   req.Key,
+		Value: req.Value,
+	})
+}
 
 /************************************************** 游戏功能 **************************************************/
 
@@ -46,24 +83,24 @@ func (g *Game) HandlePlayerExpAdd(userId uint32) {
 		player.PropMap[constant.PLAYER_PROP_PLAYER_EXP] -= uint32(playerLevelConfig.Exp)
 	}
 	// 更新玩家属性
-	playerPropNotify := &proto.PlayerPropNotify{
-		PropMap: make(map[uint32]*proto.PropValue),
-	}
-	playerPropNotify.PropMap[uint32(constant.PLAYER_PROP_PLAYER_LEVEL)] = g.PacketPropValue(
+	g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(
+		player,
 		constant.PLAYER_PROP_PLAYER_LEVEL,
-		player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL],
-	)
-	playerPropNotify.PropMap[uint32(constant.PLAYER_PROP_PLAYER_EXP)] = g.PacketPropValue(
 		constant.PLAYER_PROP_PLAYER_EXP,
-		player.PropMap[constant.PLAYER_PROP_PLAYER_EXP],
-	)
-	g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, playerPropNotify)
+	))
+}
+
+func (g *Game) ChangePlayerOpenState(player *model.Player, key uint32, value uint32) {
+	player.OpenStateMap[key] = value
+	g.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
+		OpenStateMap: map[uint32]uint32{key: value},
+	})
 }
 
 /************************************************** 打包封装 **************************************************/
 
 func (g *Game) PacketPlayerDataNotify(player *model.Player) *proto.PlayerDataNotify {
-	playerDataNotify := &proto.PlayerDataNotify{
+	ntf := &proto.PlayerDataNotify{
 		NickName:          player.NickName,
 		ServerTime:        uint64(time.Now().UnixMilli()),
 		IsFirstLoginToday: true,
@@ -71,7 +108,34 @@ func (g *Game) PacketPlayerDataNotify(player *model.Player) *proto.PlayerDataNot
 		PropMap:           make(map[uint32]*proto.PropValue),
 	}
 	for k, v := range player.PropMap {
-		playerDataNotify.PropMap[k] = g.PacketPropValue(k, v)
+		ntf.PropMap[k] = g.PacketPropValue(k, v)
 	}
-	return playerDataNotify
+	return ntf
+}
+
+func (g *Game) PacketPlayerPropNotify(player *model.Player, propList ...uint32) *proto.PlayerPropNotify {
+	ntf := &proto.PlayerPropNotify{
+		PropMap: make(map[uint32]*proto.PropValue),
+	}
+	if len(propList) == 0 {
+		for k, v := range player.PropMap {
+			ntf.PropMap[k] = g.PacketPropValue(k, v)
+		}
+	} else {
+		for _, k := range propList {
+			v := player.PropMap[k]
+			ntf.PropMap[k] = g.PacketPropValue(k, v)
+		}
+	}
+	return ntf
+}
+
+func (g *Game) PacketOpenStateUpdateNotify(player *model.Player) *proto.OpenStateUpdateNotify {
+	ntf := &proto.OpenStateUpdateNotify{
+		OpenStateMap: make(map[uint32]uint32),
+	}
+	for k, v := range player.OpenStateMap {
+		ntf.OpenStateMap[k] = v
+	}
+	return ntf
 }

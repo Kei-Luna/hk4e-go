@@ -111,7 +111,7 @@ func (g *Game) GetPlayerItemCount(userId uint32, itemId uint32) uint32 {
 	}
 }
 
-// AddPlayerItem 玩家添加物品
+// AddPlayerItem 添加玩家物品
 func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool, hintReason uint16) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -119,10 +119,8 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		return false
 	}
 	dbItem := player.GetDbItem()
-	playerPropNotify := &proto.PlayerPropNotify{
-		PropMap: make(map[uint32]*proto.PropValue),
-	}
-	storeItemChangeNotify := &proto.StoreItemChangeNotify{
+	propList := make([]uint32, 0)
+	changeNtf := &proto.StoreItemChangeNotify{
 		StoreType: proto.StoreType_STORE_PACK,
 		ItemList:  make([]*proto.Item, 0),
 	}
@@ -131,7 +129,7 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量增加
 			player.PropMap[prop] += changeItem.ChangeCount
-			playerPropNotify.PropMap[prop] = g.PacketPropValue(prop, int64(player.PropMap[prop]))
+			propList = append(propList, prop)
 			// 特殊属性变化处理函数
 			switch changeItem.ItemId {
 			case constant.ITEM_ID_PLAYER_EXP:
@@ -155,12 +153,12 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 				},
 			},
 		}
-		storeItemChangeNotify.ItemList = append(storeItemChangeNotify.ItemList, pbItem)
+		changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
 	}
-	if len(playerPropNotify.PropMap) > 0 {
-		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, playerPropNotify)
+	if len(propList) > 0 {
+		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, g.PacketPlayerPropNotify(player, propList...))
 	}
-	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, storeItemChangeNotify)
+	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
 	if isHint {
 		if hintReason == 0 {
 			hintReason = uint16(proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
@@ -181,7 +179,7 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 	return true
 }
 
-// CostPlayerItem 玩家消耗物品
+// CostPlayerItem 消耗玩家物品
 func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -189,14 +187,12 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 		return false
 	}
 	dbItem := player.GetDbItem()
-	playerPropNotify := &proto.PlayerPropNotify{
-		PropMap: make(map[uint32]*proto.PropValue),
-	}
-	storeItemChangeNotify := &proto.StoreItemChangeNotify{
+	propList := make([]uint32, 0)
+	changeNtf := &proto.StoreItemChangeNotify{
 		StoreType: proto.StoreType_STORE_PACK,
 		ItemList:  make([]*proto.Item, 0),
 	}
-	storeItemDelNotify := &proto.StoreItemDelNotify{
+	delNtf := &proto.StoreItemDelNotify{
 		StoreType: proto.StoreType_STORE_PACK,
 		GuidList:  make([]uint64, 0),
 	}
@@ -210,7 +206,7 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量减少
 			player.PropMap[prop] -= changeItem.ChangeCount
-			playerPropNotify.PropMap[prop] = g.PacketPropValue(prop, int64(player.PropMap[prop]))
+			propList = append(propList, prop)
 			// 特殊属性变化处理函数
 			switch changeItem.ItemId {
 			case constant.ITEM_ID_PLAYER_EXP:
@@ -232,20 +228,20 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 					},
 				},
 			}
-			storeItemChangeNotify.ItemList = append(storeItemChangeNotify.ItemList, pbItem)
+			changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
 		} else if count == 0 {
-			storeItemDelNotify.GuidList = append(storeItemDelNotify.GuidList, dbItem.GetItemGuid(changeItem.ItemId))
+			delNtf.GuidList = append(delNtf.GuidList, dbItem.GetItemGuid(changeItem.ItemId))
 		}
 	}
 
-	if len(playerPropNotify.PropMap) > 0 {
-		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, playerPropNotify)
+	if len(propList) > 0 {
+		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, g.PacketPlayerPropNotify(player, propList...))
 	}
-	if len(storeItemChangeNotify.ItemList) > 0 {
-		g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, storeItemChangeNotify)
+	if len(changeNtf.ItemList) > 0 {
+		g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
 	}
-	if len(storeItemDelNotify.GuidList) > 0 {
-		g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, storeItemDelNotify)
+	if len(delNtf.GuidList) > 0 {
+		g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, delNtf)
 	}
 
 	return true

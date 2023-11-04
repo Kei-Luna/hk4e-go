@@ -363,17 +363,37 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 				SgvDynamicValueMap: nil,
 			},
 			WeaponAbilityInfo:   empty,
-			AbilityControlBlock: new(proto.AbilityControlBlock),
+			AbilityControlBlock: g.PacketAbilityControlBlock(worldAvatar.GetAvatarId(), worldPlayerAvatar.SkillDepotId),
 		}
 		if world.IsMultiplayerWorld() {
 			sceneTeamAvatar.AvatarInfo = g.PacketAvatarInfo(worldPlayerAvatar)
 			sceneTeamAvatar.SceneAvatarInfo = g.PacketSceneAvatarInfo(worldPlayerScene, worldPlayer, worldAvatar.GetAvatarId())
 		}
-		// 角色的ability控制块
-		acb := sceneTeamAvatar.AbilityControlBlock
-		abilityId := 0
-		// 默认ability
-		for _, abilityHashCode := range constant.DEFAULT_ABILITY_HASH_CODE {
+		sceneTeamUpdateNotify.SceneTeamAvatarList = append(sceneTeamUpdateNotify.SceneTeamAvatarList, sceneTeamAvatar)
+	}
+	return sceneTeamUpdateNotify
+}
+
+// PacketAbilityControlBlock 角色的ability控制块
+func (g *Game) PacketAbilityControlBlock(avatarId uint32, skillDepotId uint32) *proto.AbilityControlBlock {
+	acb := &proto.AbilityControlBlock{
+		AbilityEmbryoList: make([]*proto.AbilityEmbryo, 0),
+	}
+	abilityId := 0
+	// 默认ability
+	for _, abilityHashCode := range constant.DEFAULT_ABILITY_HASH_CODE {
+		abilityId++
+		ae := &proto.AbilityEmbryo{
+			AbilityId:               uint32(abilityId),
+			AbilityNameHash:         uint32(abilityHashCode),
+			AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
+		}
+		acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
+	}
+	// 角色ability
+	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatarId))
+	if avatarDataConfig != nil {
+		for _, abilityHashCode := range avatarDataConfig.AbilityHashCodeList {
 			abilityId++
 			ae := &proto.AbilityEmbryo{
 				AbilityId:               uint32(abilityId),
@@ -382,35 +402,21 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			}
 			acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
 		}
-		// 角色ability
-		avatarDataConfig := gdconf.GetAvatarDataById(int32(worldAvatar.GetAvatarId()))
-		if avatarDataConfig != nil {
-			for _, abilityHashCode := range avatarDataConfig.AbilityHashCodeList {
-				abilityId++
-				ae := &proto.AbilityEmbryo{
-					AbilityId:               uint32(abilityId),
-					AbilityNameHash:         uint32(abilityHashCode),
-					AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
-				}
-				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
-			}
-		}
-		// 技能库ability
-		skillDepot := gdconf.GetAvatarSkillDepotDataById(int32(worldPlayerAvatar.SkillDepotId))
-		if skillDepot != nil && len(skillDepot.AbilityHashCodeList) != 0 {
-			for _, abilityHashCode := range skillDepot.AbilityHashCodeList {
-				abilityId++
-				ae := &proto.AbilityEmbryo{
-					AbilityId:               uint32(abilityId),
-					AbilityNameHash:         uint32(abilityHashCode),
-					AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
-				}
-				acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
-			}
-		}
-		// TODO 队伍ability
-		// TODO 装备ability
-		sceneTeamUpdateNotify.SceneTeamAvatarList = append(sceneTeamUpdateNotify.SceneTeamAvatarList, sceneTeamAvatar)
 	}
-	return sceneTeamUpdateNotify
+	// 技能库ability
+	skillDepot := gdconf.GetAvatarSkillDepotDataById(int32(skillDepotId))
+	if skillDepot != nil && len(skillDepot.AbilityHashCodeList) != 0 {
+		for _, abilityHashCode := range skillDepot.AbilityHashCodeList {
+			abilityId++
+			ae := &proto.AbilityEmbryo{
+				AbilityId:               uint32(abilityId),
+				AbilityNameHash:         uint32(abilityHashCode),
+				AbilityOverrideNameHash: uint32(endec.Hk4eAbilityHashCode("Default")),
+			}
+			acb.AbilityEmbryoList = append(acb.AbilityEmbryoList, ae)
+		}
+	}
+	// TODO 队伍ability
+	// TODO 装备ability
+	return acb
 }

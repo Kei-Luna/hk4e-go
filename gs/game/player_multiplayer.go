@@ -16,38 +16,110 @@ import (
 
 /************************************************** 接口请求 **************************************************/
 
+// PlayerApplyEnterMpReq 世界敲门请求
 func (g *Game) PlayerApplyEnterMpReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerApplyEnterMpReq)
-	targetUid := req.TargetUid
-
-	playerApplyEnterMpRsp := &proto.PlayerApplyEnterMpRsp{
-		TargetUid: targetUid,
-	}
-	g.SendMsg(cmd.PlayerApplyEnterMpRsp, player.PlayerId, player.ClientSeq, playerApplyEnterMpRsp)
-
-	g.PlayerApplyEnterWorld(player, targetUid)
+	rsp := &proto.PlayerApplyEnterMpRsp{TargetUid: req.TargetUid}
+	g.SendMsg(cmd.PlayerApplyEnterMpRsp, player.PlayerId, player.ClientSeq, rsp)
+	g.PlayerApplyEnterWorld(player, req.TargetUid)
 }
 
+// PlayerApplyEnterMpResultReq 世界敲门处理请求
 func (g *Game) PlayerApplyEnterMpResultReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.PlayerApplyEnterMpResultReq)
-	applyUid := req.ApplyUid
-	isAgreed := req.IsAgreed
-
-	playerApplyEnterMpResultRsp := &proto.PlayerApplyEnterMpResultRsp{
-		ApplyUid: applyUid,
-		IsAgreed: isAgreed,
+	rsp := &proto.PlayerApplyEnterMpResultRsp{
+		ApplyUid: req.ApplyUid,
+		IsAgreed: req.IsAgreed,
 	}
-	g.SendMsg(cmd.PlayerApplyEnterMpResultRsp, player.PlayerId, player.ClientSeq, playerApplyEnterMpResultRsp)
-
-	g.PlayerDealEnterWorld(player, applyUid, isAgreed)
+	g.SendMsg(cmd.PlayerApplyEnterMpResultRsp, player.PlayerId, player.ClientSeq, rsp)
+	g.PlayerDealEnterWorld(player, req.ApplyUid, req.IsAgreed)
 }
 
+// PlayerGetForceQuitBanInfoReq 获取强退禁令信息请求
+func (g *Game) PlayerGetForceQuitBanInfoReq(player *model.Player, payloadMsg pb.Message) {
+	ok := true
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	for _, worldPlayer := range world.GetAllPlayer() {
+		if worldPlayer.SceneLoadState != model.SceneEnterDone {
+			ok = false
+		}
+	}
+	if !ok {
+		g.SendError(cmd.PlayerGetForceQuitBanInfoRsp, player, &proto.PlayerGetForceQuitBanInfoRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
+		return
+	}
+	g.SendSucc(cmd.PlayerGetForceQuitBanInfoRsp, player, &proto.PlayerGetForceQuitBanInfoRsp{})
+}
+
+// BackMyWorldReq 返回单人世界请求
+func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
+	// 其他玩家
+	ok := g.PlayerLeaveWorld(player, false, proto.PlayerQuitFromMpNotify_BACK_TO_MY_WORLD)
+	if !ok {
+		g.SendError(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
+		return
+	}
+	g.SendSucc(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{})
+}
+
+// ChangeWorldToSingleModeReq 转换单人模式请求
+func (g *Game) ChangeWorldToSingleModeReq(player *model.Player, payloadMsg pb.Message) {
+	// 房主
+	ok := g.PlayerLeaveWorld(player, false, proto.PlayerQuitFromMpNotify_HOST_NO_OTHER_PLAYER)
+	if !ok {
+		g.SendError(cmd.ChangeWorldToSingleModeRsp, player, &proto.ChangeWorldToSingleModeRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
+		return
+	}
+	g.SendSucc(cmd.ChangeWorldToSingleModeRsp, player, &proto.ChangeWorldToSingleModeRsp{})
+}
+
+// SceneKickPlayerReq 剔除玩家请求
+func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.SceneKickPlayerReq)
+	targetUid := req.TargetUid
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	if player.PlayerId != world.GetOwner().PlayerId {
+		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{})
+		return
+	}
+	targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
+	if targetPlayer == nil {
+		logger.Error("player is nil, uid: %v", targetUid)
+		return
+	}
+	ok := g.PlayerLeaveWorld(targetPlayer, false, proto.PlayerQuitFromMpNotify_KICK_BY_HOST)
+	if !ok {
+		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
+		return
+	}
+	ntf := &proto.SceneKickPlayerNotify{
+		TargetUid: targetUid,
+		KickerUid: player.PlayerId,
+	}
+	for _, worldPlayer := range world.GetAllPlayer() {
+		g.SendMsg(cmd.SceneKickPlayerNotify, worldPlayer.PlayerId, worldPlayer.ClientSeq, ntf)
+	}
+	rsp := &proto.SceneKickPlayerRsp{
+		TargetUid: targetUid,
+	}
+	g.SendMsg(cmd.SceneKickPlayerRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+// JoinPlayerSceneReq 进入他人世界请求
 func (g *Game) JoinPlayerSceneReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.JoinPlayerSceneReq)
-
-	joinPlayerSceneRsp := new(proto.JoinPlayerSceneRsp)
-	joinPlayerSceneRsp.Retcode = int32(proto.Retcode_RET_JOIN_OTHER_WAIT)
-	g.SendMsg(cmd.JoinPlayerSceneRsp, player.PlayerId, player.ClientSeq, joinPlayerSceneRsp)
+	rsp := &proto.JoinPlayerSceneRsp{
+		Retcode: int32(proto.Retcode_RET_JOIN_OTHER_WAIT),
+	}
+	g.SendMsg(cmd.JoinPlayerSceneRsp, player.PlayerId, player.ClientSeq, rsp)
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
@@ -79,83 +151,16 @@ func (g *Game) JoinPlayerSceneReq(player *model.Player, payloadMsg pb.Message) {
 	g.JoinOtherWorld(player, hostPlayer)
 }
 
-func (g *Game) PlayerGetForceQuitBanInfoReq(player *model.Player, payloadMsg pb.Message) {
-	ok := true
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
-		return
-	}
-	for _, worldPlayer := range world.GetAllPlayer() {
-		if worldPlayer.SceneLoadState != model.SceneEnterDone {
-			ok = false
-		}
-	}
-
-	if !ok {
-		g.SendError(cmd.PlayerGetForceQuitBanInfoRsp, player, &proto.PlayerGetForceQuitBanInfoRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
-		return
-	}
-	g.SendSucc(cmd.PlayerGetForceQuitBanInfoRsp, player, &proto.PlayerGetForceQuitBanInfoRsp{})
+// PlayerStartMatchReq 开始匹配请求
+func (g *Game) PlayerStartMatchReq(player *model.Player, payloadMsg pb.Message) {
 }
 
-func (g *Game) BackMyWorldReq(player *model.Player, payloadMsg pb.Message) {
-	// 其他玩家
-	ok := g.PlayerLeaveWorld(player, false)
-
-	if !ok {
-		g.SendError(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
-		return
-	}
-	g.SendSucc(cmd.BackMyWorldRsp, player, &proto.BackMyWorldRsp{})
+// PlayerCancelMatchReq 取消匹配请求
+func (g *Game) PlayerCancelMatchReq(player *model.Player, payloadMsg pb.Message) {
 }
 
-func (g *Game) ChangeWorldToSingleModeReq(player *model.Player, payloadMsg pb.Message) {
-	// 房主
-	ok := g.PlayerLeaveWorld(player, false)
-
-	if !ok {
-		g.SendError(cmd.ChangeWorldToSingleModeRsp, player, &proto.ChangeWorldToSingleModeRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
-		return
-	}
-	g.SendSucc(cmd.ChangeWorldToSingleModeRsp, player, &proto.ChangeWorldToSingleModeRsp{})
-}
-
-func (g *Game) SceneKickPlayerReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.SceneKickPlayerReq)
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
-		return
-	}
-	if player.PlayerId != world.GetOwner().PlayerId {
-		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{})
-		return
-	}
-	targetUid := req.TargetUid
-	targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
-	if targetPlayer == nil {
-		logger.Error("player is nil, uid: %v", targetUid)
-		return
-	}
-	ok := g.PlayerLeaveWorld(targetPlayer, false)
-	if !ok {
-		g.SendError(cmd.SceneKickPlayerRsp, player, &proto.SceneKickPlayerRsp{}, proto.Retcode_RET_MP_TARGET_PLAYER_IN_TRANSFER)
-		return
-	}
-
-	sceneKickPlayerNotify := &proto.SceneKickPlayerNotify{
-		TargetUid: targetUid,
-		KickerUid: player.PlayerId,
-	}
-	for _, worldPlayer := range world.GetAllPlayer() {
-		g.SendMsg(cmd.SceneKickPlayerNotify, worldPlayer.PlayerId, worldPlayer.ClientSeq, sceneKickPlayerNotify)
-	}
-
-	sceneKickPlayerRsp := &proto.SceneKickPlayerRsp{
-		TargetUid: targetUid,
-	}
-	g.SendMsg(cmd.SceneKickPlayerRsp, player.PlayerId, player.ClientSeq, sceneKickPlayerRsp)
+// PlayerConfirmMatchReq 确认匹配请求
+func (g *Game) PlayerConfirmMatchReq(player *model.Player, payloadMsg pb.Message) {
 }
 
 /************************************************** 游戏功能 **************************************************/
@@ -370,8 +375,9 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
 }
 
-func (g *Game) PlayerLeaveWorld(player *model.Player, force bool) bool {
+func (g *Game) PlayerLeaveWorld(player *model.Player, force bool, reason proto.PlayerQuitFromMpNotify_QuitReason) bool {
 	if force {
+		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerId, player.ClientSeq, &proto.PlayerQuitFromMpNotify{Reason: reason})
 		g.ReLoginPlayer(player.PlayerId, true)
 		return true
 	}
@@ -388,6 +394,7 @@ func (g *Game) PlayerLeaveWorld(player *model.Player, force bool) bool {
 			return false
 		}
 	}
+	g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerId, player.ClientSeq, &proto.PlayerQuitFromMpNotify{Reason: reason})
 	g.ReLoginPlayer(player.PlayerId, true)
 	return true
 }
@@ -425,7 +432,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 			if worldPlayer.PlayerId == world.GetOwner().PlayerId {
 				continue
 			}
-			g.PlayerLeaveWorld(worldPlayer, true)
+			g.PlayerLeaveWorld(worldPlayer, true, proto.PlayerQuitFromMpNotify_KICK_BY_HOST_LOGOUT)
 		}
 	}
 	scene := world.GetSceneById(player.SceneId)
@@ -447,11 +454,6 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 	}
 
 	if world.IsMultiplayerWorld() {
-		playerQuitFromMpNotify := &proto.PlayerQuitFromMpNotify{
-			Reason: proto.PlayerQuitFromMpNotify_BACK_TO_MY_WORLD,
-		}
-		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerId, player.ClientSeq, playerQuitFromMpNotify)
-
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)})
 	}

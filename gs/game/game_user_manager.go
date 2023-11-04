@@ -194,7 +194,7 @@ func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *Change
 	player.Online = false
 	player.OfflineTime = uint32(time.Now().Unix())
 	player.TotalOnlineTime += uint32(time.Now().UnixMilli()) - player.OnlineTime
-	if player.OfflineNotSave {
+	if player.NotSave {
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserOfflineSaveToDbFinish,
 			Msg: &PlayerOfflineInfo{
@@ -594,6 +594,9 @@ func (u *UserManager) UserCopyAndSave(exitSave bool) {
 	playerList := make(PlayerLastSaveTimeSortList, 0)
 	for _, player := range USER_MANAGER.GetAllOnlineUserList() {
 		if player.PlayerId < PlayerBaseUid {
+			continue
+		}
+		if player.NotSave {
 			continue
 		}
 		playerList = append(playerList, player)

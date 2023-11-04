@@ -71,32 +71,12 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.UnlockTransPointReq)
 
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{})
+	ret := g.UnlockPlayerTransPoint(player, req.SceneId, req.PointId)
+	if ret != proto.Retcode_RET_SUCC {
+		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{}, ret)
 		return
 	}
-	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(req.SceneId)
-	if dbScene == nil {
-		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{}, proto.Retcode_RET_POINT_NOT_UNLOCKED)
-		return
-	}
-	unlock := dbScene.CheckPointUnlock(req.PointId)
-	if unlock {
-		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{}, proto.Retcode_RET_POINT_ALREAY_UNLOCKED)
-		return
-	}
-	dbScene.UnlockPoint(req.PointId)
 
-	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_TRANS_POINT, "", int32(req.SceneId), int32(req.PointId))
-
-	g.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
-		SceneId:         req.SceneId,
-		PointList:       []uint32{req.PointId},
-		UnhidePointList: nil,
-	})
 	g.SendSucc(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{})
 }
 
@@ -106,25 +86,25 @@ func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
-		logger.Error("world is nil, worldId: %v, uid: %v", world.GetId(), player.PlayerId)
+		logger.Error("get world is nil, worldId: %v, uid: %v", world.GetId(), player.PlayerId)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
 	owner := world.GetOwner()
 	if owner == nil {
-		logger.Error("owner is nil, worldId: %v", world.GetId())
+		logger.Error("get owner is nil, worldId: %v", world.GetId())
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
 	dbWorld := owner.GetDbWorld()
 	if dbWorld == nil {
-		logger.Error("db world is nil, uid: %v", player.PlayerId)
+		logger.Error("get dbWorld is nil, uid: %v", player.PlayerId)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
 	dbScene := dbWorld.GetSceneById(req.SceneId)
 	if dbScene == nil {
-		logger.Error("db scene is nil, sceneId: %v, uid: %v", req.SceneId, player.PlayerId)
+		logger.Error("get dbScene is nil, sceneId: %v, uid: %v", req.SceneId, player.PlayerId)
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
@@ -298,7 +278,15 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
 		return
 	}
-	g.ChangeGameTime(player, scene, gameTime)
+	logger.Debug("change game time, gameTime: %v, uid: %v", gameTime, player.PlayerId)
+	g.ChangeGameTime(scene, gameTime)
+
+	// 设置玩家天气
+	climateType := GAME.GetWeatherAreaClimate(player.WeatherInfo.WeatherAreaId)
+	// 跳过相同的天气
+	if climateType != player.WeatherInfo.ClimateType {
+		g.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, climateType)
+	}
 
 	changeGameTimeRsp := &proto.ChangeGameTimeRsp{
 		CurGameTime: scene.GetGameTime(),
@@ -454,6 +442,10 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 	case constant.GADGET_TYPE_ENERGY_BALL:
 		// TODO 元素能量球吸收
 		interactType = proto.InteractType_INTERACT_PICK_ITEM
+		activeAvatarId := world.GetPlayerActiveAvatarId(player)
+		dbAvatar := player.GetDbAvatar()
+		dbAvatar.SetCurrEnergy(activeAvatarId, 0, true)
+		g.UpdatePlayerAvatarFightProp(player.PlayerId, activeAvatarId)
 	case constant.GADGET_TYPE_GATHER_OBJECT:
 		// 采集物摘取
 		interactType = proto.InteractType_INTERACT_GATHER
@@ -520,11 +512,31 @@ func (g *Game) ExitTransPointRegionNotify(player *model.Player, payloadMsg pb.Me
 
 /************************************************** 游戏功能 **************************************************/
 
-// ChangeGameTime 修改游戏场景时间
-func (g *Game) ChangeGameTime(player *model.Player, scene *Scene, gameTime uint32) {
-	logger.Debug("change game time, gameTime: %v, uid: %v", gameTime, player.PlayerId)
-	scene.ChangeGameTime(gameTime)
+// UnlockPlayerTransPoint 解锁锚点
+func (g *Game) UnlockPlayerTransPoint(player *model.Player, sceneId uint32, pointId uint32) proto.Retcode {
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(sceneId)
+	if dbScene == nil {
+		logger.Error("get dbScene is nil, sceneId: %v, uid: %v", sceneId, player.PlayerId)
+		return proto.Retcode_RET_POINT_NOT_UNLOCKED
+	}
+	unlock := dbScene.CheckPointUnlock(pointId)
+	if unlock {
+		logger.Error("point already unlock, sceneId: %v, pointId: %v, uid: %v", sceneId, pointId, player.PlayerId)
+		return proto.Retcode_RET_POINT_ALREAY_UNLOCKED
+	}
+	dbScene.UnlockPoint(pointId)
+	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
+		SceneId:   sceneId,
+		PointList: []uint32{pointId},
+	})
+	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_TRANS_POINT, "", int32(sceneId), int32(pointId))
+	return proto.Retcode_RET_SUCC
+}
 
+// ChangeGameTime 修改游戏场景时间
+func (g *Game) ChangeGameTime(scene *Scene, gameTime uint32) {
+	scene.ChangeGameTime(gameTime)
 	for _, scenePlayer := range scene.GetAllPlayer() {
 		playerGameTimeNotify := &proto.PlayerGameTimeNotify{
 			GameTime: scene.GetGameTime(),
@@ -532,14 +544,6 @@ func (g *Game) ChangeGameTime(player *model.Player, scene *Scene, gameTime uint3
 		}
 		g.SendMsg(cmd.PlayerGameTimeNotify, scenePlayer.PlayerId, scenePlayer.ClientSeq, playerGameTimeNotify)
 	}
-
-	// 设置玩家天气
-	climateType := GAME.GetWeatherAreaClimate(player.WeatherInfo.WeatherAreaId)
-	// 跳过相同的天气
-	if climateType == player.WeatherInfo.ClimateType {
-		return
-	}
-	GAME.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, climateType)
 }
 
 func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
@@ -549,9 +553,20 @@ func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 		return
 	}
 	monsterConfig := sceneGroupConfig.MonsterMap[int32(entity.GetConfigId())]
-	monsterDropDataConfig := gdconf.GetMonsterDropDataByDropTagAndLevel(monsterConfig.DropTag, monsterConfig.Level)
+	dropTag := ""
+	if monsterConfig.DropTag != "" {
+		dropTag = monsterConfig.DropTag
+	} else {
+		monsterDataConfig := gdconf.GetMonsterDataById(monsterConfig.MonsterId)
+		if monsterDataConfig == nil {
+			logger.Error("get monster data config is nil, monsterId: %v, uid: %v", monsterConfig.MonsterId, player.PlayerId)
+			return
+		}
+		dropTag = gdconf.GetDropModelByMonsterModel(monsterDataConfig.Name)
+	}
+	monsterDropDataConfig := gdconf.GetMonsterDropDataByDropTagAndLevel(dropTag, monsterConfig.Level)
 	if monsterDropDataConfig == nil {
-		logger.Error("get monster drop data config is nil, monsterConfig: %v, uid: %v", monsterConfig, player.PlayerId)
+		logger.Error("get monster drop data config is nil, monsterConfig: %+v, uid: %v", monsterConfig, player.PlayerId)
 		return
 	}
 	dropDataConfig := gdconf.GetDropDataById(monsterDropDataConfig.DropId)
@@ -566,7 +581,11 @@ func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
 			logger.Error("get item data config is nil, itemId: %v, uid: %v", itemId, player.PlayerId)
 			continue
 		}
-		g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
+		if itemDataConfig.GadgetId != 0 {
+			g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
+		} else {
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, true, 0)
+		}
 	}
 }
 
@@ -579,7 +598,7 @@ func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 	gadgetConfig := sceneGroupConfig.GadgetMap[int32(entity.GetConfigId())]
 	chestDropDataConfig := gdconf.GetChestDropDataByDropTagAndLevel(gadgetConfig.DropTag, gadgetConfig.Level)
 	if chestDropDataConfig == nil {
-		logger.Error("get chest drop data config is nil, gadgetConfig: %v, uid: %v", gadgetConfig, player.PlayerId)
+		logger.Error("get chest drop data config is nil, gadgetConfig: %+v, uid: %v", gadgetConfig, player.PlayerId)
 		return
 	}
 	dropDataConfig := gdconf.GetDropDataById(chestDropDataConfig.DropId)
@@ -594,7 +613,11 @@ func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 			logger.Error("get item data config is nil, itemId: %v, uid: %v", itemId, player.PlayerId)
 			continue
 		}
-		g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
+		if itemDataConfig.GadgetId != 0 {
+			g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
+		} else {
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, true, 0)
+		}
 	}
 }
 

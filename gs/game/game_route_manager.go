@@ -127,6 +127,9 @@ func (r *RouteManager) initRoute() {
 		cmd.GetChatEmojiCollectionReq:         GAME.GetChatEmojiCollectionReq,
 		cmd.SetPlayerPropReq:                  GAME.SetPlayerPropReq,
 		cmd.SetOpenStateReq:                   GAME.SetOpenStateReq,
+		cmd.PlayerStartMatchReq:               GAME.PlayerStartMatchReq,
+		cmd.PlayerCancelMatchReq:              GAME.PlayerCancelMatchReq,
+		cmd.PlayerConfirmMatchReq:             GAME.PlayerConfirmMatchReq,
 	}
 }
 

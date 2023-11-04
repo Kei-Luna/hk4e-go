@@ -35,6 +35,7 @@ type Player struct {
 	OfflineTime     uint32             // 离线时间点
 	TotalOnlineTime uint32             // 累计在线时长
 	PropMap         map[uint32]uint32  // 玩家属性表
+	OpenStateMap    map[uint32]uint32  // 功能开放状态
 	SceneId         uint32             // 场景
 	Pos             *Vector            // 坐标
 	Rot             *Vector            // 朝向
@@ -79,7 +80,7 @@ type Player struct {
 	WeatherInfo               *WeatherInfo                             `bson:"-" msgpack:"-"` // 天气信息
 	ClientVersion             int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
 	OfflineClear              bool                                     `bson:"-" msgpack:"-"` // 是否离线时清除账号数据
-	OfflineNotSave            bool                                     `bson:"-" msgpack:"-"` // 是否离线时不保存账号数据
+	NotSave                   bool                                     `bson:"-" msgpack:"-"` // 是否离线回档
 	RemoteWorldPlayerNum      uint32                                   `bson:"-" msgpack:"-"` // 远程展示世界内人数
 	// 特殊数据
 	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis

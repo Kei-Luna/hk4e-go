@@ -1,6 +1,14 @@
 package constant
 
 const (
+	OPEN_STATE_COND_PLAYER_LEVEL          = 1
+	OPEN_STATE_COND_QUEST                 = 2
+	OPEN_STATE_COND_OFFERING_LEVEL        = 3
+	OPEN_STATE_COND_CITY_REPUTATION_LEVEL = 4
+	OPEN_STATE_COND_PARENT_QUEST          = 5
+)
+
+const (
 	OPEN_STATE_NONE                                    = 0
 	OPEN_STATE_PAIMON                                  = 1
 	OPEN_STATE_PAIMON_NAVIGATION                       = 2

@@ -23,6 +23,7 @@ type AvatarData struct {
 	InitialWeapon      int32    `csv:"初始武器,omitempty"`
 	WeaponType         int32    `csv:"武器种类,omitempty"`
 	SkillDepotId       int32    `csv:"技能库ID,omitempty"`
+	SkillDepotIdList   IntArray `csv:"候选技能库ID,omitempty"`
 	PromoteId          int32    `csv:"角色突破ID,omitempty"`
 	PromoteRewardLevel IntArray `csv:"角色突破奖励获取等阶,omitempty"`
 	PromoteReward      IntArray `csv:"角色突破奖励,omitempty"`

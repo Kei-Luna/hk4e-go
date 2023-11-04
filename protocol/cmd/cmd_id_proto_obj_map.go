@@ -60,7 +60,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(WorldPlayerRTTNotify, func() any { return new(proto.WorldPlayerRTTNotify) })             // 世界玩家RTT时延
 	c.regMsg(PlayerDataNotify, func() any { return new(proto.PlayerDataNotify) })                     // 玩家信息通知 昵称、属性表等
 	c.regMsg(PlayerPropNotify, func() any { return new(proto.PlayerPropNotify) })                     // 玩家属性表通知
-	c.regMsg(OpenStateUpdateNotify, func() any { return new(proto.OpenStateUpdateNotify) })           // 游戏功能模块开放状态更新通知
+	c.regMsg(OpenStateUpdateNotify, func() any { return new(proto.OpenStateUpdateNotify) })           // 功能开放状态更新通知
+	c.regMsg(OpenStateChangeNotify, func() any { return new(proto.OpenStateChangeNotify) })           // 功能开放状态改变通知
 	c.regMsg(PlayerTimeNotify, func() any { return new(proto.PlayerTimeNotify) })                     // 玩家累计在线时长通知
 	c.regMsg(ServerTimeNotify, func() any { return new(proto.ServerTimeNotify) })                     // 服务器时间通知
 	c.regMsg(WindSeedClientNotify, func() any { return new(proto.WindSeedClientNotify) })             // 客户端XLUA调试通知
@@ -74,8 +75,8 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GmTalkNotify, func() any { return new(proto.GmTalkNotify) })                             // GM命令执行通知
 	c.regMsg(SetPlayerPropReq, func() any { return new(proto.SetPlayerPropReq) })                     // 设置玩家属性表请求
 	c.regMsg(SetPlayerPropRsp, func() any { return new(proto.SetPlayerPropRsp) })                     // 设置玩家属性表响应
-	c.regMsg(SetOpenStateReq, func() any { return new(proto.SetOpenStateReq) })                       // 设置游戏功能模块开放状态请求
-	c.regMsg(SetOpenStateRsp, func() any { return new(proto.SetOpenStateRsp) })                       // 设置游戏功能模块开放状态响应
+	c.regMsg(SetOpenStateReq, func() any { return new(proto.SetOpenStateReq) })                       // 设置功能开放状态请求
+	c.regMsg(SetOpenStateRsp, func() any { return new(proto.SetOpenStateRsp) })                       // 设置功能开放状态响应
 
 	// 场景
 	c.regMsg(PlayerSetPauseReq, func() any { return new(proto.PlayerSetPauseReq) })                           // 玩家暂停请求
@@ -190,6 +191,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(EvtAiSyncCombatThreatInfoNotify, func() any { return new(proto.EvtAiSyncCombatThreatInfoNotify) })     // 通知
 	c.regMsg(EntityConfigHashNotify, func() any { return new(proto.EntityConfigHashNotify) })                       // 通知
 	c.regMsg(MonsterAIConfigHashNotify, func() any { return new(proto.MonsterAIConfigHashNotify) })                 // 通知
+	c.regMsg(AbilityChangeNotify, func() any { return new(proto.AbilityChangeNotify) })                             // ability切换通知
 
 	// 队伍
 	c.regMsg(ChangeAvatarReq, func() any { return new(proto.ChangeAvatarReq) })                             // 更换角色请求 切人
@@ -233,6 +235,16 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(GuestBeginEnterSceneNotify, func() any { return new(proto.GuestBeginEnterSceneNotify) })         // 他人开始进入世界通知
 	c.regMsg(GuestPostEnterSceneNotify, func() any { return new(proto.GuestPostEnterSceneNotify) })           // 他人进入世界完成通知
 	c.regMsg(PlayerPreEnterMpNotify, func() any { return new(proto.PlayerPreEnterMpNotify) })                 // 他人正在进入世界通知
+	c.regMsg(PlayerStartMatchReq, func() any { return new(proto.PlayerStartMatchReq) })                       // 开始匹配请求
+	c.regMsg(PlayerStartMatchRsp, func() any { return new(proto.PlayerStartMatchRsp) })                       // 开始匹配响应
+	c.regMsg(PlayerCancelMatchReq, func() any { return new(proto.PlayerCancelMatchReq) })                     // 取消匹配请求
+	c.regMsg(PlayerCancelMatchRsp, func() any { return new(proto.PlayerCancelMatchRsp) })                     // 取消匹配响应
+	c.regMsg(PlayerConfirmMatchReq, func() any { return new(proto.PlayerConfirmMatchReq) })                   // 确认匹配请求
+	c.regMsg(PlayerConfirmMatchRsp, func() any { return new(proto.PlayerConfirmMatchRsp) })                   // 确认匹配响应
+	c.regMsg(PlayerMatchInfoNotify, func() any { return new(proto.PlayerMatchInfoNotify) })                   // 匹配信息通知
+	c.regMsg(PlayerMatchStopNotify, func() any { return new(proto.PlayerMatchStopNotify) })                   // 匹配停止通知
+	c.regMsg(PlayerMatchSuccNotify, func() any { return new(proto.PlayerMatchSuccNotify) })                   // 匹配成功通知
+	c.regMsg(PlayerMatchAgreedResultNotify, func() any { return new(proto.PlayerMatchAgreedResultNotify) })   // 匹配允许进入世界通知
 
 	// 社交
 	c.regMsg(SetPlayerBirthdayReq, func() any { return new(proto.SetPlayerBirthdayReq) })           // 设置生日请求
@@ -350,25 +362,24 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(VehicleInteractRsp, func() any { return new(proto.VehicleInteractRsp) })     // 载具交互响应
 	c.regMsg(VehicleStaminaNotify, func() any { return new(proto.VehicleStaminaNotify) }) // 载具耐力消耗通知
 
-	// 七圣召唤
-	c.regMsg(GCGBasicDataNotify, func() any { return new(proto.GCGBasicDataNotify) })                         // GCG基本数据通知
-	c.regMsg(GCGLevelChallengeNotify, func() any { return new(proto.GCGLevelChallengeNotify) })               // GCG等级挑战通知
-	c.regMsg(GCGDSBanCardNotify, func() any { return new(proto.GCGDSBanCardNotify) })                         // GCG禁止的卡牌通知
-	c.regMsg(GCGDSDataNotify, func() any { return new(proto.GCGDSDataNotify) })                               // GCG数据通知 (解锁的内容)
-	c.regMsg(GCGTCTavernChallengeDataNotify, func() any { return new(proto.GCGTCTavernChallengeDataNotify) }) // GCG酒馆挑战数据通知
-	c.regMsg(GCGTCTavernInfoNotify, func() any { return new(proto.GCGTCTavernInfoNotify) })                   // GCG酒馆信息通知
-	c.regMsg(GCGTavernNpcInfoNotify, func() any { return new(proto.GCGTavernNpcInfoNotify) })                 // GCG酒馆NPC信息通知
-	c.regMsg(GCGGameBriefDataNotify, func() any { return new(proto.GCGGameBriefDataNotify) })                 // GCG游戏简要数据通知
-	c.regMsg(GCGAskDuelReq, func() any { return new(proto.GCGAskDuelReq) })                                   // GCG游戏对局信息请求
-	c.regMsg(GCGAskDuelRsp, func() any { return new(proto.GCGAskDuelRsp) })                                   // GCG游戏对局信息响应
-	c.regMsg(GCGInitFinishReq, func() any { return new(proto.GCGInitFinishReq) })                             // GCG游戏初始化完成请求
-	c.regMsg(GCGInitFinishRsp, func() any { return new(proto.GCGInitFinishRsp) })                             // GCG游戏初始化完成响应
-	c.regMsg(GCGMessagePackNotify, func() any { return new(proto.GCGMessagePackNotify) })                     // GCG游戏消息包通知
-	c.regMsg(GCGHeartBeatNotify, func() any { return new(proto.GCGHeartBeatNotify) })                         // GCG游戏心跳包通知
-	c.regMsg(GCGOperationReq, func() any { return new(proto.GCGOperationReq) })                               // GCG游戏客户端操作请求
-	c.regMsg(GCGOperationRsp, func() any { return new(proto.GCGOperationRsp) })                               // GCG游戏客户端操作响应
-	c.regMsg(GCGSkillPreviewNotify, func() any { return new(proto.GCGSkillPreviewNotify) })                   // GCG游戏技能预览通知
-	// TODO 客户端开始GCG游戏
+	// TODO 七圣召唤
+	c.regMsg(GCGBasicDataNotify, func() any { return new(proto.GCGBasicDataNotify) })                               // GCG基本数据通知
+	c.regMsg(GCGLevelChallengeNotify, func() any { return new(proto.GCGLevelChallengeNotify) })                     // GCG等级挑战通知
+	c.regMsg(GCGDSBanCardNotify, func() any { return new(proto.GCGDSBanCardNotify) })                               // GCG禁止的卡牌通知
+	c.regMsg(GCGDSDataNotify, func() any { return new(proto.GCGDSDataNotify) })                                     // GCG数据通知 (解锁的内容)
+	c.regMsg(GCGTCTavernChallengeDataNotify, func() any { return new(proto.GCGTCTavernChallengeDataNotify) })       // GCG酒馆挑战数据通知
+	c.regMsg(GCGTCTavernInfoNotify, func() any { return new(proto.GCGTCTavernInfoNotify) })                         // GCG酒馆信息通知
+	c.regMsg(GCGTavernNpcInfoNotify, func() any { return new(proto.GCGTavernNpcInfoNotify) })                       // GCG酒馆NPC信息通知
+	c.regMsg(GCGGameBriefDataNotify, func() any { return new(proto.GCGGameBriefDataNotify) })                       // GCG游戏简要数据通知
+	c.regMsg(GCGAskDuelReq, func() any { return new(proto.GCGAskDuelReq) })                                         // GCG游戏对局信息请求
+	c.regMsg(GCGAskDuelRsp, func() any { return new(proto.GCGAskDuelRsp) })                                         // GCG游戏对局信息响应
+	c.regMsg(GCGInitFinishReq, func() any { return new(proto.GCGInitFinishReq) })                                   // GCG游戏初始化完成请求
+	c.regMsg(GCGInitFinishRsp, func() any { return new(proto.GCGInitFinishRsp) })                                   // GCG游戏初始化完成响应
+	c.regMsg(GCGMessagePackNotify, func() any { return new(proto.GCGMessagePackNotify) })                           // GCG游戏消息包通知
+	c.regMsg(GCGHeartBeatNotify, func() any { return new(proto.GCGHeartBeatNotify) })                               // GCG游戏心跳包通知
+	c.regMsg(GCGOperationReq, func() any { return new(proto.GCGOperationReq) })                                     // GCG游戏客户端操作请求
+	c.regMsg(GCGOperationRsp, func() any { return new(proto.GCGOperationRsp) })                                     // GCG游戏客户端操作响应
+	c.regMsg(GCGSkillPreviewNotify, func() any { return new(proto.GCGSkillPreviewNotify) })                         // GCG游戏技能预览通知
 	c.regMsg(GCGStartChallengeByCheckRewardReq, func() any { return new(proto.GCGStartChallengeByCheckRewardReq) }) // GCG开始挑战来自检测奖励请求
 	c.regMsg(GCGStartChallengeByCheckRewardRsp, func() any { return new(proto.GCGStartChallengeByCheckRewardRsp) }) // GCG开始挑战来自检测奖励响应
 	c.regMsg(GCGStartChallengeReq, func() any { return new(proto.GCGStartChallengeReq) })                           // GCG开始挑战请求
@@ -385,7 +396,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(QuestProgressUpdateNotify, func() any { return new(proto.QuestProgressUpdateNotify) })                     // 任务进度更新通知
 	c.regMsg(QuestGlobalVarNotify, func() any { return new(proto.QuestGlobalVarNotify) })                               // 任务全局变量通知
 
-	// 家园
+	// TODO 家园
 	c.regMsg(GetPlayerHomeCompInfoReq, func() any { return new(proto.GetPlayerHomeCompInfoReq) })
 	c.regMsg(HomeGetBasicInfoReq, func() any { return new(proto.HomeGetBasicInfoReq) })
 	c.regMsg(GetHomeExchangeWoodInfoReq, func() any { return new(proto.GetHomeExchangeWoodInfoReq) })

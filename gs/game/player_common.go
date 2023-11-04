@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"hk4e/gdconf"
-
 	"hk4e/common/constant"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -32,13 +30,6 @@ func (g *Game) PingReq(player *model.Player, payloadMsg pb.Message) {
 		ClientTime: req.ClientTime,
 		Seq:        req.Seq,
 	})
-}
-
-func (g *Game) PlayerSetPauseReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.PlayerSetPauseReq)
-	isPaused := req.IsPaused
-	player.Pause = isPaused
-	g.SendMsg(cmd.PlayerSetPauseRsp, player.PlayerId, player.ClientSeq, new(proto.PlayerSetPauseRsp))
 }
 
 func (g *Game) TowerAllDataReq(player *model.Player, payloadMsg pb.Message) {
@@ -303,34 +294,10 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
 }
 
-func (g *Game) PacketOpenStateUpdateNotify() *proto.OpenStateUpdateNotify {
-	openStateUpdateNotify := &proto.OpenStateUpdateNotify{
-		OpenStateMap: make(map[uint32]uint32),
-	}
-	// 先暂时开放全部功能模块
-	for _, data := range gdconf.GetOpenStateDataMap() {
-		openStateUpdateNotify.OpenStateMap[uint32(data.OpenStateId)] = 1
-	}
-	return openStateUpdateNotify
-}
-
 func (g *Game) GetChatEmojiCollectionReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetChatEmojiCollectionReq)
 	_ = req
 	g.SendMsg(cmd.GetChatEmojiCollectionRsp, player.PlayerId, player.ClientSeq, new(proto.GetChatEmojiCollectionRsp))
-}
-
-func (g *Game) SetPlayerPropReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.SetPlayerPropReq)
-	for _, propValue := range req.PropList {
-		player.PropMap[propValue.Type] = uint32(propValue.Val)
-	}
-	g.SendMsg(cmd.SetPlayerPropRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerPropRsp))
-}
-
-func (g *Game) SetOpenStateReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.SetOpenStateReq)
-	g.SendMsg(cmd.SetOpenStateRsp, player.PlayerId, player.ClientSeq, &proto.SetOpenStateRsp{Key: req.Key, Value: req.Value})
 }
 
 func (g *Game) PacketPropValue(key uint32, value any) *proto.PropValue {

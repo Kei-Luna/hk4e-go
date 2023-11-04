@@ -1,6 +1,7 @@
 package constant
 
 const (
+	PLAYER_PROP_NONE                            = 0     // 空
 	PLAYER_PROP_EXP                             = 1001  // 角色经验
 	PLAYER_PROP_BREAK_LEVEL                     = 1002  // 角色突破等阶
 	PLAYER_PROP_SATIATION_VAL                   = 1003  // 角色饱食度
@@ -15,9 +16,9 @@ const (
 	PLAYER_PROP_IS_WEATHER_LOCKED               = 10007 // 游戏内天气锁定
 	PLAYER_PROP_IS_GAME_TIME_LOCKED             = 10008 // 游戏内时间锁定
 	PLAYER_PROP_IS_TRANSFERABLE                 = 10009 // 是否禁止传送 0 1
-	PLAYER_PROP_MAX_STAMINA                     = 10010 // 最大体力 0-24000
-	PLAYER_PROP_CUR_PERSIST_STAMINA             = 10011 // 当前体力 0-PROP_MAX_STAMINA
-	PLAYER_PROP_CUR_TEMPORARY_STAMINA           = 10012 // 当前临时体力 暂不确定
+	PLAYER_PROP_MAX_STAMINA                     = 10010 // 最大耐力 0-24000
+	PLAYER_PROP_CUR_PERSIST_STAMINA             = 10011 // 当前耐力 0-PROP_MAX_STAMINA
+	PLAYER_PROP_CUR_TEMPORARY_STAMINA           = 10012 // 当前临时耐力 暂不确定
 	PLAYER_PROP_PLAYER_LEVEL                    = 10013 // 冒险等级
 	PLAYER_PROP_PLAYER_EXP                      = 10014 // 冒险经验
 	PLAYER_PROP_PLAYER_HCOIN                    = 10015 // 原石 可以为负数
@@ -43,4 +44,11 @@ const (
 	PLAYER_PROP_PLAYER_LEGENDARY_DAILY_TASK_NUM = 10041 // 传说每日任务数量 暂不确定
 	PLAYER_PROP_PLAYER_HOME_COIN                = 10042 // 洞天宝钱
 	PLAYER_PROP_PLAYER_WAIT_SUB_HOME_COIN       = 10043 // 暂存的洞天宝钱 暂不确定
+	PLAYER_PROP_IS_AUTO_UNLOCK_SPECIFIC_EQUIP   = 10044 // 是否自动解锁特殊装备 暂不确定
+	PLAYER_PROP_PLAYER_GCG_COIN                 = 10045 // 七圣召唤相关
+	PLAYER_PROP_PLAYER_WAIT_SUB_GCG_COIN        = 10046 // 七圣召唤相关
+	PLAYER_PROP_PLAYER_ONLINE_TIME              = 10047 // 在线时间
+	PLAYER_PROP_PLAYER_CAN_DIVE                 = 10048 // 是否能潜水 0 1
+	PLAYER_PROP_DIVE_MAX_STAMINA                = 10049 // 潜水最大耐力 0-10000
+	PLAYER_PROP_DIVE_CUR_STAMINA                = 10050 // 潜水当前耐力 0-PLAYER_PROP_DIVE_MAX_STAMINA
 )

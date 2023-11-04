@@ -101,6 +101,14 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
 
+	dbQuest := player.GetDbQuest()
+	for _, quest := range dbQuest.GetQuestMap() {
+		if quest.State == constant.QUEST_STATE_UNFINISHED {
+			quest.State = constant.QUEST_STATE_UNSTARTED
+			g.StartQuest(player, quest.QuestId, false)
+		}
+	}
+
 	if player.IsBorn {
 		g.LoginNotify(userId, clientSeq, player)
 		if req.TargetUid != 0 {
@@ -152,21 +160,62 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.Signature = ""
 	player.HeadImage = 10000007
 	player.PropMap = make(map[uint32]uint32)
+	player.OpenStateMap = make(map[uint32]uint32)
 	player.ChatMsgMap = make(map[uint32][]*model.ChatMsg)
 
 	player.SceneId = 3
 
-	player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] = 1
 	player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL] = 0
-	player.PropMap[constant.PLAYER_PROP_IS_SPRING_AUTO_USE] = 1
-	player.PropMap[constant.PLAYER_PROP_SPRING_AUTO_USE_PERCENT] = 100
-	player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = 1
-	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
-	player.PropMap[constant.PLAYER_PROP_MAX_STAMINA] = 24000
-	player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = 24000
-	player.PropMap[constant.PLAYER_PROP_PLAYER_RESIN] = 160
+	player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = 10000
+	player.PropMap[constant.PLAYER_PROP_CUR_TEMPORARY_STAMINA] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] = 1
+	player.PropMap[constant.PLAYER_PROP_PLAYER_EXP] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_HCOIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_SCOIN] = 0
 	player.PropMap[constant.PLAYER_PROP_PLAYER_MP_SETTING_TYPE] = 2
-	player.PropMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_PLAYER_RESIN] = 160
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WAIT_SUB_HCOIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WAIT_SUB_SCOIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_MCOIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WAIT_SUB_MCOIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_LEGENDARY_KEY] = 0
+	player.PropMap[constant.PLAYER_PROP_CUR_CLIMATE_METER] = 0
+	player.PropMap[constant.PLAYER_PROP_CUR_CLIMATE_TYPE] = 0
+	player.PropMap[constant.PLAYER_PROP_CUR_CLIMATE_AREA_ID] = 0
+	player.PropMap[constant.PLAYER_PROP_CUR_CLIMATE_AREA_CLIMATE_TYPE] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL_LIMIT] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL_ADJUST_CD] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_LEGENDARY_DAILY_TASK_NUM] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_HOME_COIN] = 0
+	player.PropMap[constant.PLAYER_PROP_PLAYER_WAIT_SUB_HOME_COIN] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_AUTO_UNLOCK_SPECIFIC_EQUIP] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_SPRING_AUTO_USE] = 1
+	player.PropMap[constant.PLAYER_PROP_SPRING_AUTO_USE_PERCENT] = 50
+	player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_WEATHER_LOCKED] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_GAME_TIME_LOCKED] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_MAX_STAMINA] = 10000
+
+	player.OpenStateMap[constant.OPEN_STATE_DERIVATIVE_MALL] = 1
+	player.OpenStateMap[constant.OPEN_STATE_PHOTOGRAPH] = 1
+	player.OpenStateMap[constant.OPEN_STATE_GUIDE_RELIC_PROM] = 1
+	player.OpenStateMap[constant.OPEN_STATE_GUIDE_TALENT] = 1
+	player.OpenStateMap[constant.OPEN_STATE_RELIQUARY_PROMOTE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_RECOMMANDED] = 1
+	player.OpenStateMap[constant.OPEN_STATE_RELIQUARY_UPGRADE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_WEAPON_AWAKEN] = 1
+	player.OpenStateMap[constant.OPEN_STATE_WEAPON_PROMOTE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_WEAPON_UPGRADE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_AVATAR_TALENT] = 1
+	player.OpenStateMap[constant.OPEN_STATE_AVATAR_PROMOTE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_RESIN] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_GENESISCRYSTAL] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_GIFTPACKAGE] = 1
+	player.OpenStateMap[constant.OPEN_STATE_BATTLE_PASS] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_BLACKSMITH] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_PAIMON] = 1
+	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_VIRTUAL_SHOP] = 1
 
 	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.SceneId))
 	if sceneLuaConfig != nil {
@@ -215,7 +264,7 @@ func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player
 	g.SendMsg(cmd.StoreWeightLimitNotify, userId, clientSeq, g.PacketStoreWeightLimitNotify())
 	g.SendMsg(cmd.PlayerStoreNotify, userId, clientSeq, g.PacketPlayerStoreNotify(player))
 	g.SendMsg(cmd.AvatarDataNotify, userId, clientSeq, g.PacketAvatarDataNotify(player))
-	g.SendMsg(cmd.OpenStateUpdateNotify, userId, clientSeq, g.PacketOpenStateUpdateNotify())
+	g.SendMsg(cmd.OpenStateUpdateNotify, userId, clientSeq, g.PacketOpenStateUpdateNotify(player))
 	g.SendMsg(cmd.QuestListNotify, userId, clientSeq, g.PacketQuestListNotify(player))
 	g.SendMsg(cmd.FinishedParentQuestNotify, userId, clientSeq, g.PacketFinishedParentQuestNotify(player))
 	g.SendMsg(cmd.AllMarkPointNotify, player.PlayerId, player.ClientSeq, &proto.AllMarkPointNotify{MarkList: g.PacketMapMarkPointList(player)})

@@ -118,6 +118,24 @@ func (d *Dao) SetRedisPlayerList(playerList []*model.Player) {
 	}
 }
 
+// DeleteRedisPlayer 删除玩家数据
+func (d *Dao) DeleteRedisPlayer(userId uint32) {
+	startTime := time.Now().UnixNano()
+	var err error = nil
+	if d.redisCluster != nil {
+		err = d.redisCluster.Del(context.TODO(), d.GetRedisPlayerKey(userId)).Err()
+	} else {
+		err = d.redis.Del(context.TODO(), d.GetRedisPlayerKey(userId)).Err()
+	}
+	if err != nil {
+		logger.Error("delete player from redis error: %v", err)
+		return
+	}
+	endTime := time.Now().UnixNano()
+	costTime := endTime - startTime
+	logger.Debug("delete player from redis cost time: %v ns", costTime)
+}
+
 // 基于redis的玩家离线数据分布式锁实现
 
 const (

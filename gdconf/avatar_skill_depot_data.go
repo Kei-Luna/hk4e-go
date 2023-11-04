@@ -126,17 +126,9 @@ func GetAvatarSkillDepotDataMap() map[int32]*AvatarSkillDepotData {
 	return CONF.AvatarSkillDepotDataMap
 }
 
-func GetAvatarEnergySkillConfig(avatarId uint32) *AvatarSkillData {
-	if avatarId == 10000005 || avatarId == 10000007 {
-		return nil
-	}
-	// 角色配置
-	avatarDataConfig, exist := CONF.AvatarDataMap[int32(avatarId)]
-	if !exist {
-		return nil
-	}
+func GetAvatarEnergySkillConfig(skillDepotId uint32) *AvatarSkillData {
 	// 角色技能库配置
-	avatarSkillDepotDataConfig, exist := CONF.AvatarSkillDepotDataMap[avatarDataConfig.SkillDepotId]
+	avatarSkillDepotDataConfig, exist := CONF.AvatarSkillDepotDataMap[int32(skillDepotId)]
 	if !exist {
 		return nil
 	}

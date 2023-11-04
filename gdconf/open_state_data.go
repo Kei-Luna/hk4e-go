@@ -8,7 +8,7 @@ import (
 type OpenStateData struct {
 	OpenStateId    int32 `csv:"ID"`
 	DefaultOpen    int32 `csv:"默认是否开启,omitempty"`
-	AllowClientReq int32 `csv:"客户端能否发起功能,omitempty"`
+	AllowClientReq int32 `csv:"客户端能否发起功能开启,omitempty"`
 }
 
 func (g *GameDataConfig) loadOpenStateData() {

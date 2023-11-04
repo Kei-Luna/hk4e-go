@@ -713,10 +713,26 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 	// 处理技能开始的耐力消耗
 	g.SkillStartStamina(player, ntf.CasterId, ntf.SkillId)
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_SKILL, "", int32(ntf.SkillId))
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
+	activeAvatarId := world.GetPlayerActiveAvatarId(player)
+	dbAvatar := player.GetDbAvatar()
+	avatar := dbAvatar.AvatarMap[activeAvatarId]
+	if avatar == nil {
+		return
+	}
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		return
+	}
+	if int32(ntf.SkillId) == avatarSkillDataConfig.AvatarSkillId {
+		dbAvatar.SetCurrEnergy(activeAvatarId, 0, false)
+		g.UpdatePlayerAvatarFightProp(player.PlayerId, activeAvatarId)
+	}
+
 	if !WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}

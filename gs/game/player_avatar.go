@@ -508,9 +508,9 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 	}
 
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[avatarId]
-	if !ok {
-		logger.Error("avatar is nil, avatarId: %v", avatar)
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("avatar not exist, avatarId: %v", avatar.AvatarId)
 		return
 	}
 	// 角色初始化面板
@@ -521,6 +521,53 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 		FightPropMap: avatar.FightPropMap,
 	}
 	g.SendMsg(cmd.AvatarFightPropNotify, userId, player.ClientSeq, avatarFightPropNotify)
+}
+
+func (g *Game) ChangePlayerAvatarElementType(player *model.Player, elementType int) {
+	dbAvatar := player.GetDbAvatar()
+	avatar := dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId]
+	switchSkillDepotId := uint32(0)
+	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatar.AvatarId))
+	if avatarDataConfig == nil {
+		return
+	}
+	for _, skillDepotId := range avatarDataConfig.SkillDepotIdList {
+		skillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(skillDepotId)
+		if skillDepotDataConfig == nil {
+			continue
+		}
+		avatarSkillDataConfig := gdconf.GetAvatarSkillDataById(skillDepotDataConfig.EnergySkill)
+		if avatarSkillDataConfig == nil {
+			continue
+		}
+		if avatarSkillDataConfig.CostElemType != int32(elementType) {
+			continue
+		}
+		switchSkillDepotId = uint32(skillDepotId)
+		break
+	}
+	dbAvatar.SwitchSkillDepot(avatar.AvatarId, switchSkillDepotId)
+
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatar.AvatarId)
+
+	g.SendMsg(cmd.AvatarSkillDepotChangeNotify, player.PlayerId, player.ClientSeq, &proto.AvatarSkillDepotChangeNotify{
+		EntityId:      entityId,
+		AvatarGuid:    avatar.Guid,
+		SkillDepotId:  switchSkillDepotId,
+		SkillLevelMap: avatar.SkillLevelMap,
+	})
+
+	g.SendMsg(cmd.AbilityChangeNotify, player.PlayerId, player.ClientSeq, &proto.AbilityChangeNotify{
+		EntityId:            entityId,
+		AbilityControlBlock: g.PacketAbilityControlBlock(avatar.AvatarId, switchSkillDepotId),
+	})
+
+	dbAvatar.SetCurrEnergy(avatar.AvatarId, 0, true)
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 }
 
 /************************************************** 打包封装 **************************************************/

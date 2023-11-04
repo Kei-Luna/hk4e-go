@@ -330,23 +330,7 @@ func (g *GMCmd) GMUnlockPoint(userId uint32, sceneId uint32, pointId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(sceneId)
-	if dbScene == nil {
-		logger.Error("db scene is nil, uid: %v", sceneId)
-		return
-	}
-	scenePointMapConfig := gdconf.GetScenePointMapBySceneId(int32(sceneId))
-	if scenePointMapConfig == nil {
-		logger.Error("scene point config is nil, sceneId: %v", sceneId)
-		return
-	}
-	// 解锁锚点
-	dbScene.UnlockPoint(pointId)
-	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
-		SceneId:   sceneId,
-		PointList: []uint32{pointId},
-	})
+	GAME.UnlockPlayerTransPoint(player, sceneId, pointId)
 }
 
 // GMUnlockAllPoint 解锁场景全部锚点
@@ -462,6 +446,7 @@ func (g *GMCmd) GMClearQuest(userId uint32) {
 		return
 	}
 	player.DbQuest = nil
+	GAME.AcceptQuest(player, false)
 	GAME.LogoutPlayer(userId)
 }
 
@@ -474,6 +459,47 @@ func (g *GMCmd) GMClearWorld(userId uint32) {
 	}
 	player.DbWorld = nil
 	GAME.LogoutPlayer(userId)
+}
+
+// GMNotSave 离线回档
+func (g *GMCmd) GMNotSave(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.NotSave = true
+}
+
+// GMUnlockAllOpenState 解锁全部功能开放状态
+func (g *GMCmd) GMUnlockAllOpenState(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	for _, openStateData := range gdconf.GetOpenStateDataMap() {
+		player.OpenStateMap[uint32(openStateData.OpenStateId)] = 1
+	}
+	GAME.LogoutPlayer(userId)
+}
+
+// GMFreeMode 自由探索模式
+func (g *GMCmd) GMFreeMode(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_WEATHER_LOCKED] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_GAME_TIME_LOCKED] = 0
+	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_PLAYER_CAN_DIVE] = 1
+	player.PropMap[constant.PLAYER_PROP_DIVE_MAX_STAMINA] = 10000
+	player.PropMap[constant.PLAYER_PROP_DIVE_CUR_STAMINA] = 10000
+	GAME.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, GAME.PacketPlayerPropNotify(player))
 }
 
 // 系统级GM指令
@@ -713,13 +739,4 @@ func (g *GMCmd) GetPlayerPos(userId uint32) (*model.Vector, *model.Vector) {
 		return nil, nil
 	}
 	return GAME.GetPlayerPos(player), player.GetPos()
-}
-
-func (g *GMCmd) NotSavePlayer(userId uint32) {
-	player := USER_MANAGER.GetOnlineUser(userId)
-	if player == nil {
-		logger.Error("player is nil, uid: %v", userId)
-		return
-	}
-	player.OfflineNotSave = true
 }

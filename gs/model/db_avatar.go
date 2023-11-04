@@ -102,27 +102,20 @@ func (a *DbAvatar) InitAvatarFightProp(avatar *Avatar) {
 	avatar.FightPropMap[constant.FIGHT_PROP_CRITICAL_HURT] = avatarDataConfig.CriticalHurt
 	// 元素充能
 	avatar.FightPropMap[constant.FIGHT_PROP_CHARGE_EFFICIENCY] = 1.0
-	a.SetCurrEnergy(avatar, avatar.CurrEnergy, true)
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		logger.Error("get avatar energy skill is nil, skillDepotId: %v", avatar.SkillDepotId)
+		return
+	}
+	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+	avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+	avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatar.CurrEnergy)
 }
 
 func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
 	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatarId))
 	if avatarDataConfig == nil {
 		logger.Error("avatar data config is nil, avatarId: %v", avatarId)
-		return
-	}
-	skillDepotId := int32(0)
-	// 主角可以切换属性 技能库要单独设置 这里默认给风元素的技能库
-	if avatarId == 10000005 {
-		skillDepotId = 504
-	} else if avatarId == 10000007 {
-		skillDepotId = 704
-	} else {
-		skillDepotId = avatarDataConfig.SkillDepotId
-	}
-	avatarSkillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(skillDepotId)
-	if avatarSkillDepotDataConfig == nil {
-		logger.Error("avatar skill depot data config is nil, skillDepotId: %v", skillDepotId)
 		return
 	}
 	avatar := &Avatar{
@@ -137,7 +130,7 @@ func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
 		CurrEnergy:        0,
 		FetterList:        make([]uint32, 0),
 		SkillLevelMap:     make(map[uint32]uint32),
-		SkillDepotId:      uint32(skillDepotId),
+		SkillDepotId:      0,
 		FlyCloak:          140001,
 		Costume:           0,
 		BornTime:          time.Now().Unix(),
@@ -151,47 +144,52 @@ func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
 		PromoteRewardMap:  make(map[uint32]bool, len(avatarDataConfig.PromoteRewardMap)),
 	}
 
+	avatar.CurrHP = float64(avatarDataConfig.GetBaseHpByLevel(avatar.Level))
+	// 角色突破奖励领取状态
+	for promoteLevel := range avatarDataConfig.PromoteRewardMap {
+		avatar.PromoteRewardMap[promoteLevel] = false
+	}
+
+	a.AvatarMap[avatarId] = avatar
+	a.SwitchSkillDepot(avatarId, uint32(avatarDataConfig.SkillDepotId))
+	a.InitAvatar(player, avatar)
+}
+
+func (a *DbAvatar) SwitchSkillDepot(avatarId uint32, skillDepotId uint32) {
+	avatar, exist := a.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("avatar not exist, avatarId: %v", avatarId)
+		return
+	}
+	avatarSkillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(int32(skillDepotId))
+	if avatarSkillDepotDataConfig == nil {
+		logger.Error("avatar skill depot data config is nil, skillDepotId: %v", skillDepotId)
+		return
+	}
+	avatar.SkillDepotId = skillDepotId
 	// 元素爆发1级
 	avatar.SkillLevelMap[uint32(avatarSkillDepotDataConfig.EnergySkill)] = 1
 	for _, skillId := range avatarSkillDepotDataConfig.Skills {
 		// 小技能1级
 		avatar.SkillLevelMap[uint32(skillId)] = 1
 	}
-	avatar.CurrHP = float64(avatarDataConfig.GetBaseHpByLevel(avatar.Level))
-
-	// 角色突破奖励领取状态
-	for promoteLevel := range avatarDataConfig.PromoteRewardMap {
-		avatar.PromoteRewardMap[promoteLevel] = false
-	}
-
-	a.InitAvatar(player, avatar)
-	a.AvatarMap[avatarId] = avatar
 }
 
-func (a *DbAvatar) SetCurrEnergy(avatar *Avatar, value float64, max bool) {
-	var avatarSkillDataConfig *gdconf.AvatarSkillData = nil
-	if avatar.AvatarId == 10000005 || avatar.AvatarId == 10000007 {
-		avatarSkillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(int32(avatar.SkillDepotId))
-		if avatarSkillDepotDataConfig == nil {
-			return
-		}
-		avatarSkillDataConfig = gdconf.GetAvatarSkillDataById(avatarSkillDepotDataConfig.EnergySkill)
-		if avatarSkillDataConfig == nil {
-			return
-		}
-	} else {
-		avatarSkillDataConfig = gdconf.GetAvatarEnergySkillConfig(avatar.AvatarId)
-	}
-	if avatarSkillDataConfig == nil {
-		logger.Error("get avatar energy skill is nil, avatarId: %v", avatar.AvatarId)
+func (a *DbAvatar) SetCurrEnergy(avatarId uint32, value float64, max bool) {
+	avatar, exist := a.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("avatar not exist, avatarId: %v", avatarId)
 		return
 	}
-	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
-	avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		logger.Error("get avatar energy skill is nil, skillDepotId: %v", avatar.SkillDepotId)
+		return
+	}
 	if max {
-		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+		avatar.CurrEnergy = float64(avatarSkillDataConfig.CostElemVal)
 	} else {
-		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(value)
+		avatar.CurrEnergy = value
 	}
 }
 

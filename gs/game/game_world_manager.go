@@ -793,7 +793,7 @@ func (w *World) CreateScene(sceneId uint32) *Scene {
 		playerMap:  make(map[uint32]*model.Player),
 		entityMap:  make(map[uint32]*Entity),
 		groupMap:   make(map[uint32]*Group),
-		gameTime:   18 * 60,
+		gameTime:   0,
 		createTime: time.Now().UnixMilli(),
 		meeoIndex:  0,
 	}

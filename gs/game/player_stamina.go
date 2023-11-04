@@ -418,14 +418,7 @@ func (g *Game) SetPlayerStamina(player *model.Player, stamina uint32) {
 	// 设置玩家的耐力
 	player.PropMap[constant.PLAYER_PROP_CUR_PERSIST_STAMINA] = stamina
 	// logger.Debug("player stamina set, stamina: %v", stamina)
-	g.PlayerPropNotify(player, constant.PLAYER_PROP_CUR_PERSIST_STAMINA)
+	g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_CUR_PERSIST_STAMINA))
 }
 
 /************************************************** 打包封装 **************************************************/
-
-func (g *Game) PlayerPropNotify(player *model.Player, playerPropId uint32) {
-	playerPropNotify := new(proto.PlayerPropNotify)
-	playerPropNotify.PropMap = make(map[uint32]*proto.PropValue)
-	playerPropNotify.PropMap[playerPropId] = g.PacketPropValue(playerPropId, int64(player.PropMap[playerPropId]))
-	g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, playerPropNotify)
-}

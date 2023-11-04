@@ -295,7 +295,7 @@ func (t *TickManager) onTickSecond(now int64) {
 			if world.GetOwner().Pause {
 				continue
 			}
-			scene.ChangeGameTime(scene.GetGameTime() + 1)
+			GAME.ChangeGameTime(scene, scene.GetGameTime()+1)
 		}
 	}
 	// GCG游戏Tick

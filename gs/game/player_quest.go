@@ -32,41 +32,6 @@ func (g *Game) AddQuestContentProgressReq(player *model.Player, payloadMsg pb.Me
 
 /************************************************** 游戏功能 **************************************************/
 
-// AddQuestProgress 添加任务进度
-func (g *Game) AddQuestProgress(player *model.Player, req *proto.AddQuestContentProgressReq) {
-	dbQuest := player.GetDbQuest()
-	updateQuestIdList := make([]uint32, 0)
-	for _, quest := range dbQuest.GetQuestMap() {
-		questDataConfig := gdconf.GetQuestDataById(int32(quest.QuestId))
-		if questDataConfig == nil {
-			logger.Error("get quest data config is nil, questId: %v", quest.QuestId)
-			continue
-		}
-		for index, finishCond := range questDataConfig.FinishCondList {
-			if len(finishCond.Param) != 1 {
-				continue
-			}
-			if req.ContentType != uint32(finishCond.Type) || req.Param != uint32(finishCond.Param[0]) {
-				continue
-			}
-			dbQuest.AddQuestProgress(quest.QuestId, index, req.AddProgress)
-			updateQuestIdList = append(updateQuestIdList, quest.QuestId)
-		}
-	}
-	for _, questId := range updateQuestIdList {
-		quest := dbQuest.GetQuestById(questId)
-		if quest == nil {
-			logger.Error("get quest is nil, questId: %v", quest.QuestId)
-			continue
-		}
-		ntf := &proto.QuestProgressUpdateNotify{
-			QuestId:            quest.QuestId,
-			FinishProgressList: quest.FinishProgressList,
-		}
-		g.SendMsg(cmd.QuestProgressUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
-	}
-}
-
 // AcceptQuest 接取当前条件下能接取到的全部任务
 func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 	dbQuest := player.GetDbQuest()
@@ -149,7 +114,6 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 		}
 		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 	}
-	// TODO 判断任务是否能开始
 	for _, questId := range addQuestIdList {
 		g.StartQuest(player, questId, notifyClient)
 	}
@@ -160,7 +124,7 @@ func (g *Game) StartQuest(player *model.Player, questId uint32, notifyClient boo
 	dbQuest := player.GetDbQuest()
 	dbQuest.StartQuest(questId)
 
-	g.QuestExec(player, questId)
+	g.QuestExec(player, questId, QuestExecTypeStart)
 	g.QuestStartTriggerCheck(player, questId)
 
 	if notifyClient {
@@ -176,13 +140,30 @@ func (g *Game) StartQuest(player *model.Player, questId uint32, notifyClient boo
 	}
 }
 
-// QuestExec 任务开始执行触发操作
-func (g *Game) QuestExec(player *model.Player, questId uint32) {
+const (
+	QuestExecTypeFinish = iota
+	QuestExecTypeFail
+	QuestExecTypeStart
+)
+
+// QuestExec 任务执行触发操作
+func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int) {
 	questDataConfig := gdconf.GetQuestDataById(int32(questId))
 	if questDataConfig == nil {
 		return
 	}
-	for _, questExec := range questDataConfig.StartExecList {
+	var questExecList []*gdconf.QuestExec = nil
+	switch questExecType {
+	case QuestExecTypeFinish:
+		questExecList = questDataConfig.ExecList
+	case QuestExecTypeFail:
+		questExecList = questDataConfig.FailExecList
+	case QuestExecTypeStart:
+		questExecList = questDataConfig.StartExecList
+	default:
+		return
+	}
+	for _, questExec := range questExecList {
 		switch questExec.Type {
 		case constant.QUEST_EXEC_TYPE_NOTIFY_GROUP_LUA:
 		case constant.QUEST_EXEC_TYPE_REFRESH_GROUP_SUITE:
@@ -202,6 +183,42 @@ func (g *Game) QuestExec(player *model.Player, questId uint32) {
 				continue
 			}
 			g.AddSceneGroupSuite(player, uint32(groupId), uint8(suiteId))
+		case constant.QUEST_EXEC_TYPE_SET_OPEN_STATE:
+			if len(questExec.Param) != 2 {
+				continue
+			}
+			key, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			value, err := strconv.Atoi(questExec.Param[1])
+			if err != nil {
+				continue
+			}
+			g.ChangePlayerOpenState(player, uint32(key), uint32(value))
+		case constant.QUEST_EXEC_TYPE_UNLOCK_POINT:
+			if len(questExec.Param) != 2 {
+				continue
+			}
+			sceneId, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			pointId, err := strconv.Atoi(questExec.Param[1])
+			if err != nil {
+				continue
+			}
+			g.UnlockPlayerTransPoint(player, uint32(sceneId), uint32(pointId))
+		case constant.QUEST_EXEC_TYPE_UNLOCK_AREA:
+		case constant.QUEST_EXEC_TYPE_CHANGE_AVATAR_ELEMET:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			elementType, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			g.ChangePlayerAvatarElementType(player, elementType)
 		}
 	}
 }
@@ -285,6 +302,9 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				dbQuest.ForceFinishQuest(quest.QuestId)
 				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
 			}
+			if quest.State == constant.QUEST_STATE_FINISHED {
+				g.QuestExec(player, quest.QuestId, QuestExecTypeFinish)
+			}
 		}
 	}
 	if len(updateQuestIdList) > 0 {
@@ -337,6 +357,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 					ParentQuestState: 1,
 					IsFinished:       true,
 					ChildQuestList:   childQuestList,
+					QuestVar:         make([]int32, 5),
 				})
 			}
 		}

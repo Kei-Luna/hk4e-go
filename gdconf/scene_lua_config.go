@@ -91,6 +91,7 @@ type Monster struct {
 	Level     int32   `json:"level"`
 	AreaId    int32   `json:"area_id"`
 	DropTag   string  `json:"drop_tag"` // 关联MonsterDropData表
+	DropId    int32   `json:"drop_id"`
 	IsOneOff  bool    `json:"isOneoff"`
 }
 

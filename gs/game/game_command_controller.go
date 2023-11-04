@@ -38,8 +38,8 @@ func (c *CommandManager) InitController() {
 		c.NewQuestCommandController(),
 		c.NewPointCommandController(),
 		c.NewWeatherCommandController(),
-		c.NewXLuaDebugCommandController(),
-		c.NewGcgCommandController(),
+		c.NewClearCommandController(),
+		c.NewDebugCommandController(),
 	}
 	c.RegAllController(controllerList...)
 }
@@ -330,6 +330,7 @@ func (c *CommandManager) NewItemCommandController() *CommandController {
 		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的物品</color>",
 		UsageList: []string{
 			"{alias} add <物品ID/all> [数量] 添加物品",
+			"{alias} clear 清除全部物品",
 		},
 		Perm: CommandPermNormal,
 		Func: c.ItemCommand,
@@ -370,6 +371,9 @@ func (c *CommandManager) ItemCommand(content *CommandContent) bool {
 			}
 			c.gmCmd.GMAddItem(content.AssignPlayer.PlayerId, uint32(itemId), count)
 			content.SendSuccMessage(content.Executor, "已给予物品，指定UID：%v，物品ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
+		case "clear":
+			c.gmCmd.GMClearItem(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已清除全部物品，指定UID：%v。", content.AssignPlayer.PlayerId)
 		default:
 			return false
 		}
@@ -718,6 +722,7 @@ func (c *CommandManager) NewQuestCommandController() *CommandController {
 		UsageList: []string{
 			"{alias} <add/accept> <任务ID> 接受任务",
 			"{alias} finish <任务ID/all> 完成任务",
+			"{alias} clear all 清除全部任务",
 		},
 		Perm: CommandPermNormal,
 		Func: c.QuestCommand,
@@ -763,6 +768,9 @@ func (c *CommandManager) QuestCommand(content *CommandContent) bool {
 			}
 			c.gmCmd.GMFinishQuest(content.AssignPlayer.PlayerId, uint32(questId))
 			content.SendSuccMessage(content.Executor, "已完成玩家任务，指定UID：%v，任务ID：%v。", content.AssignPlayer.PlayerId, questId)
+		case "clear":
+			c.gmCmd.GMClearQuest(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已清除全部任务，指定UID：%v。", content.AssignPlayer.PlayerId)
 		default:
 			return false
 		}
@@ -850,55 +858,100 @@ func (c *CommandManager) WeatherCommand(content *CommandContent) bool {
 	})
 }
 
-// xLua调试命令
+// 清除命令
 
-func (c *CommandManager) NewXLuaDebugCommandController() *CommandController {
+func (c *CommandManager) NewClearCommandController() *CommandController {
 	return &CommandController{
-		Name:        "xLua调试",
-		AliasList:   []string{"xluadebug"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>开关xLua调试</color>",
+		Name:        "清除",
+		AliasList:   []string{"clear"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>清除</color>",
 		UsageList: []string{
-			"{alias} 开关xLua调试",
+			"{alias} all 清除玩家数据",
 		},
-		Perm: CommandPermGM,
-		Func: c.XLuaDebugCommand,
+		Perm: CommandPermNormal,
+		Func: c.ClearCommand,
 	}
 }
 
-func (c *CommandManager) XLuaDebugCommand(content *CommandContent) bool {
-	return content.Execute(func() bool {
-		// 主动开关客户端XLUA调试
-		if !content.AssignPlayer.XLuaDebug {
-			content.AssignPlayer.XLuaDebug = true
-			content.SendSuccMessage(content.Executor, "已开启客户端XLUA调试，指定UID：%v。", content.AssignPlayer.PlayerId)
-		} else {
-			content.AssignPlayer.XLuaDebug = false
-			content.SendSuccMessage(content.Executor, "已关闭客户端XLUA调试，指定UID：%v。", content.AssignPlayer.PlayerId)
-		}
+func (c *CommandManager) ClearCommand(content *CommandContent) bool {
+	var mode string // 模式
+
+	return content.Dynamic("string", func(param any) bool {
+		// 模式
+		mode = param.(string)
 		return true
+	}).Execute(func() bool {
+		switch mode {
+		case "all":
+			c.gmCmd.GMClearPlayer(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已清除玩家数据，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		default:
+			return false
+		}
 	})
 }
 
-// 七圣召唤测试命令
+// 调试命令
 
-func (c *CommandManager) NewGcgCommandController() *CommandController {
+func (c *CommandManager) NewDebugCommandController() *CommandController {
 	return &CommandController{
-		Name:        "七圣召唤测试",
-		AliasList:   []string{"gcgtest"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>测试七圣召唤</color>",
+		Name:        "调试",
+		AliasList:   []string{"debug"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>调试</color>",
 		UsageList: []string{
-			"{alias} 测试七圣召唤",
+			"{alias} freemode 自由探索模式",
+			"{alias} openstate 解锁全部功能",
+			"{alias} clearworld 清除大世界数据",
+			"{alias} notsave 本次离线回档",
+			"{alias} xluaswitch 开关xLua",
+			"{alias} gcgtest 七圣召唤测试",
 		},
-		Perm: CommandPermGM,
-		Func: c.GcgCommand,
+		Perm: CommandPermNormal,
+		Func: c.DebugCommand,
 	}
 }
 
-func (c *CommandManager) GcgCommand(content *CommandContent) bool {
-	return content.Execute(func() bool {
-		// 开始七圣召唤对局
-		GAME.GCGStartChallenge(content.AssignPlayer)
-		content.SendSuccMessage(content.Executor, "已开始七圣召唤对局，指定UID：%v。", content.AssignPlayer.PlayerId)
+func (c *CommandManager) DebugCommand(content *CommandContent) bool {
+	var mode string // 模式
+
+	return content.Dynamic("string", func(param any) bool {
+		// 模式
+		mode = param.(string)
 		return true
+	}).Execute(func() bool {
+		switch mode {
+		case "freemode":
+			c.gmCmd.GMFreeMode(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已开启自由探索模式，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		case "openstate":
+			c.gmCmd.GMUnlockAllOpenState(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已解锁全部功能，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		case "clearworld":
+			c.gmCmd.GMClearWorld(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已清除大世界数据，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		case "notsave":
+			c.gmCmd.GMNotSave(content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已设置本次离线回档，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		case "xluaswitch":
+			if !content.AssignPlayer.XLuaDebug {
+				content.AssignPlayer.XLuaDebug = true
+				content.SendSuccMessage(content.Executor, "已开启客户端XLUA调试，指定UID：%v。", content.AssignPlayer.PlayerId)
+			} else {
+				content.AssignPlayer.XLuaDebug = false
+				content.SendSuccMessage(content.Executor, "已关闭客户端XLUA调试，指定UID：%v。", content.AssignPlayer.PlayerId)
+			}
+			return true
+		case "gcgtest":
+			GAME.GCGStartChallenge(content.AssignPlayer)
+			content.SendSuccMessage(content.Executor, "已开始七圣召唤对局，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		default:
+			return false
+		}
 	})
 }
