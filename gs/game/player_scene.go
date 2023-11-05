@@ -244,8 +244,10 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 
 		// 设置玩家天气
 		weatherAreaId := g.GetPlayerInWeatherAreaId(player, player.GetPos())
-		climateType := GAME.GetWeatherAreaClimate(weatherAreaId)
-		GAME.SetPlayerWeather(player, weatherAreaId, climateType)
+		if weatherAreaId != 0 {
+			climateType := GAME.GetWeatherAreaClimate(weatherAreaId)
+			GAME.SetPlayerWeather(player, weatherAreaId, climateType)
+		}
 	}
 
 	g.UpdateWorldScenePlayerInfo(player, world)
@@ -711,7 +713,7 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	switch entity.GetEntityType() {
 	case constant.ENTITY_TYPE_MONSTER:
 		// 随机掉落
-		g.monsterDrop(player, entity)
+		g.monsterDrop(player, MonsterDropTypeKill, 0, entity)
 		// 怪物死亡触发器检测
 		g.MonsterDieTriggerCheck(player, group)
 	case constant.ENTITY_TYPE_GADGET:
@@ -1011,7 +1013,7 @@ func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any
 		return scene.CreateEntityMonster(
 			&model.Vector{X: float64(monster.Pos.X), Y: float64(monster.Pos.Y), Z: float64(monster.Pos.Z)},
 			&model.Vector{X: float64(monster.Rot.X), Y: float64(monster.Rot.Y), Z: float64(monster.Rot.Z)},
-			uint32(monster.MonsterId), uint8(monster.Level), getTempFightPropMap(), uint32(monster.ConfigId), groupId,
+			uint32(monster.MonsterId), uint8(monster.Level), uint32(monster.ConfigId), groupId,
 		)
 	case *gdconf.Npc:
 		npc := entityConfig.(*gdconf.Npc)
@@ -1059,28 +1061,6 @@ func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any
 		}
 	}
 	return 0
-}
-
-// TODO 临时写死
-func getTempFightPropMap() map[uint32]float32 {
-	fpm := map[uint32]float32{
-		constant.FIGHT_PROP_BASE_ATTACK:       float32(50.0),
-		constant.FIGHT_PROP_CUR_ATTACK:        float32(50.0),
-		constant.FIGHT_PROP_BASE_DEFENSE:      float32(500.0),
-		constant.FIGHT_PROP_CUR_DEFENSE:       float32(500.0),
-		constant.FIGHT_PROP_BASE_HP:           float32(50.0),
-		constant.FIGHT_PROP_CUR_HP:            float32(50.0),
-		constant.FIGHT_PROP_MAX_HP:            float32(50.0),
-		constant.FIGHT_PROP_PHYSICAL_SUB_HURT: float32(0.1),
-		constant.FIGHT_PROP_ICE_SUB_HURT:      float32(0.1),
-		constant.FIGHT_PROP_FIRE_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_ELEC_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_WIND_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_ROCK_SUB_HURT:     float32(0.1),
-		constant.FIGHT_PROP_GRASS_SUB_HURT:    float32(0.1),
-		constant.FIGHT_PROP_WATER_SUB_HURT:    float32(0.1),
-	}
-	return fpm
 }
 
 // SceneGroupCreateEntity 创建场景组配置物件实体
@@ -1168,7 +1148,7 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
 	entityId := scene.CreateEntityMonster(
 		pos, rot,
-		monsterId, uint8(random.GetRandomInt32(1, 90)), getTempFightPropMap(),
+		monsterId, uint8(random.GetRandomInt32(1, 90)),
 		0, 0,
 	)
 	entity := scene.GetEntity(entityId)
@@ -1216,12 +1196,13 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 }
 
 // CreateDropGadget 创建掉落物的物件实体
-func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetId, itemId, count uint32) {
-	g.CreateGadget(player, pos, gadgetId, &GadgetNormalEntity{
+func (g *Game) CreateDropGadget(player *model.Player, pos *model.Vector, gadgetId, itemId, count uint32) uint32 {
+	entityId := g.CreateGadget(player, pos, gadgetId, &GadgetNormalEntity{
 		isDrop: true,
 		itemId: itemId,
 		count:  count,
 	})
+	return entityId
 }
 
 // GetPosIsInWeatherArea 获取坐标是否在指定的天气区域
@@ -1229,7 +1210,6 @@ func (g *Game) GetPosIsInWeatherArea(posX, posZ float64, sceneId, weatherAreaId 
 	// 获取场景天气区域配置表
 	weatherAreaConfig := gdconf.GetSceneWeatherAreaMapBySceneIdAndWeatherAreaId(int32(sceneId), int32(weatherAreaId))
 	if weatherAreaConfig == nil {
-		logger.Error("scene weather area config not exist, sceneId: %v, weatherAreaId: %v", sceneId, weatherAreaId)
 		return false
 	}
 	// 寻找玩家所在范围内的天气区域
@@ -1253,7 +1233,6 @@ func (g *Game) GetPlayerInWeatherAreaId(player *model.Player, newPos *model.Vect
 	// 获取场景天气区域配置表
 	sceneWeatherAreaMap := gdconf.GetSceneWeatherAreaMap()[int32(player.SceneId)]
 	if sceneWeatherAreaMap == nil {
-		logger.Error("scene weather area map not exist, sceneId: %v", player.SceneId)
 		return 0
 	}
 	// 寻找玩家所在范围内的天气区域
@@ -1293,6 +1272,9 @@ func (g *Game) SceneWeatherAreaCheck(player *model.Player, oldPos *model.Vector,
 	}
 	// 获取当前所在的天气区域
 	weatherAreaId := g.GetPlayerInWeatherAreaId(player, newPos)
+	if weatherAreaId == 0 {
+		return
+	}
 	// 判断天气区域是否变更
 	if player.WeatherInfo.WeatherAreaId == weatherAreaId {
 		return

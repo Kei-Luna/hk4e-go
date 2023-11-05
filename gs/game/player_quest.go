@@ -30,6 +30,62 @@ func (g *Game) AddQuestContentProgressReq(player *model.Player, payloadMsg pb.Me
 	g.AcceptQuest(player, true)
 }
 
+func (g *Game) QuestCreateEntityReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.QuestCreateEntityReq)
+	itemDataConfig := gdconf.GetItemDataById(int32(req.Entity.GetItemId()))
+	if itemDataConfig == nil {
+		g.SendError(cmd.QuestCreateEntityRsp, player, &proto.QuestCreateEntityRsp{})
+		return
+	}
+	pos := &model.Vector{X: float64(req.Entity.Pos.X), Y: float64(req.Entity.Pos.Y), Z: float64(req.Entity.Pos.Z)}
+	entityId := g.CreateDropGadget(player, pos, uint32(itemDataConfig.GadgetId), req.Entity.GetItemId(), 1)
+	if entityId == 0 {
+		g.SendError(cmd.QuestCreateEntityRsp, player, &proto.QuestCreateEntityRsp{})
+		return
+	}
+	rsp := &proto.QuestCreateEntityRsp{
+		QuestId:       req.QuestId,
+		EntityId:      entityId,
+		Entity:        req.Entity,
+		ParentQuestId: req.ParentQuestId,
+		IsRewind:      req.IsRewind,
+	}
+	g.SendMsg(cmd.QuestCreateEntityRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+func (g *Game) QuestDestroyEntityReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.QuestDestroyEntityReq)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		g.SendError(cmd.QuestDestroyEntityRsp, player, &proto.QuestDestroyEntityRsp{})
+		return
+	}
+	scene := world.GetSceneById(req.SceneId)
+	entity := scene.GetEntity(req.EntityId)
+	if entity == nil {
+		g.SendError(cmd.QuestDestroyEntityRsp, player, &proto.QuestDestroyEntityRsp{})
+		return
+	}
+	scene.DestroyEntity(req.EntityId)
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId})
+	rsp := &proto.QuestDestroyEntityRsp{
+		QuestId:  req.QuestId,
+		SceneId:  req.SceneId,
+		EntityId: req.EntityId,
+	}
+	g.SendMsg(cmd.QuestDestroyEntityRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+func (g *Game) QuestDestroyNpcReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.QuestDestroyNpcReq)
+	logger.Debug("quest destroy npc, npcId: %v, parentQuestId: %v, uid: %v", req.NpcId, req.ParentQuestId, player.PlayerId)
+	rsp := &proto.QuestDestroyNpcRsp{
+		NpcId:         req.NpcId,
+		ParentQuestId: req.ParentQuestId,
+	}
+	g.SendMsg(cmd.QuestDestroyNpcRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
 /************************************************** 游戏功能 **************************************************/
 
 // AcceptQuest 接取当前条件下能接取到的全部任务
@@ -195,7 +251,7 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 			if err != nil {
 				continue
 			}
-			g.ChangePlayerOpenState(player, uint32(key), uint32(value))
+			g.ChangePlayerOpenState(player.PlayerId, uint32(key), uint32(value))
 		case constant.QUEST_EXEC_TYPE_UNLOCK_POINT:
 			if len(questExec.Param) != 2 {
 				continue
@@ -219,6 +275,65 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 				continue
 			}
 			g.ChangePlayerAvatarElementType(player, elementType)
+		case constant.QUEST_EXEC_TYPE_SET_IS_FLYABLE:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			value, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = uint32(value)
+			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_FLYABLE))
+		case constant.QUEST_EXEC_TYPE_SET_IS_WEATHER_LOCKED:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			value, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			player.PropMap[constant.PLAYER_PROP_IS_WEATHER_LOCKED] = uint32(value)
+			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_WEATHER_LOCKED))
+		case constant.QUEST_EXEC_TYPE_SET_IS_GAME_TIME_LOCKED:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			value, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			player.PropMap[constant.PLAYER_PROP_IS_GAME_TIME_LOCKED] = uint32(value)
+			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_GAME_TIME_LOCKED))
+		case constant.QUEST_EXEC_TYPE_SET_IS_TRANSFERABLE:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			value, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = uint32(value)
+			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_TRANSFERABLE))
+		case constant.QUEST_EXEC_TYPE_SET_GAME_TIME:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			hour, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			world := WORLD_MANAGER.GetWorldById(player.WorldId)
+			if world == nil {
+				logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+				continue
+			}
+			scene := world.GetSceneById(player.SceneId)
+			if scene == nil {
+				logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+				continue
+			}
+			g.ChangeGameTime(scene, uint32(hour*60))
 		}
 	}
 }
@@ -241,14 +356,12 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 	dbQuest := player.GetDbQuest()
 	updateQuestIdList := make([]uint32, 0)
 	for _, quest := range dbQuest.GetQuestMap() {
+		if quest.State == constant.QUEST_STATE_FINISHED {
+			continue
+		}
 		questDataConfig := gdconf.GetQuestDataById(int32(quest.QuestId))
 		if questDataConfig == nil {
 			continue
-		}
-		// TODO 实在不知道客户端要在怎样的情况下 才会发长按10006这个技能 这里先临时改表解决了
-		// 是走ability体系计算出来的 操了
-		if questDataConfig.QuestId == 35303 {
-			questDataConfig.FinishCondList[0].Param[0] = 10067
 		}
 		for _, questCond := range questDataConfig.FinishCondList {
 			if questCond.Type != cond {
@@ -294,7 +407,20 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				dbQuest.ForceFinishQuest(quest.QuestId)
 				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
 			case constant.QUEST_FINISH_COND_TYPE_SKILL:
+				// TODO 实在不知道客户端要在怎样的情况下 才会发长按10006这个技能 这里先临时改表解决了
+				// 是走ability体系计算出来的 操了
+				if quest.QuestId == 35303 {
+					questCond.Param[0] = 10067
+				}
 				// 使用技能 参数1:技能id
+				ok := matchParamEqual(questCond.Param, param, 1)
+				if !ok {
+					continue
+				}
+				dbQuest.ForceFinishQuest(quest.QuestId)
+				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
+			case constant.QUEST_FINISH_COND_TYPE_OBTAIN_ITEM:
+				// 获得道具 参数1:道具id
 				ok := matchParamEqual(questCond.Param, param, 1)
 				if !ok {
 					continue
@@ -304,6 +430,12 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 			}
 			if quest.State == constant.QUEST_STATE_FINISHED {
 				g.QuestExec(player, quest.QuestId, QuestExecTypeFinish)
+				if len(questDataConfig.ItemIdList) != 0 {
+					for index, itemId := range questDataConfig.ItemIdList {
+						questItem := []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(questDataConfig.ItemCountList[index])}}
+						g.AddPlayerItem(player.PlayerId, questItem, true, 0)
+					}
+				}
 			}
 		}
 	}

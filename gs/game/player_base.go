@@ -43,7 +43,7 @@ func (g *Game) SetOpenStateReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.SetOpenStateRsp, player, &proto.SetOpenStateRsp{})
 		return
 	}
-	g.ChangePlayerOpenState(player, req.Key, req.Value)
+	g.ChangePlayerOpenState(player.PlayerId, req.Key, req.Value)
 
 	g.SendMsg(cmd.SetOpenStateRsp, player.PlayerId, player.ClientSeq, &proto.SetOpenStateRsp{
 		Key:   req.Key,
@@ -90,11 +90,26 @@ func (g *Game) HandlePlayerExpAdd(userId uint32) {
 	))
 }
 
-func (g *Game) ChangePlayerOpenState(player *model.Player, key uint32, value uint32) {
+func (g *Game) ChangePlayerOpenState(userId uint32, key uint32, value uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
 	player.OpenStateMap[key] = value
 	g.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
 		OpenStateMap: map[uint32]uint32{key: value},
 	})
+}
+
+func (g *Game) AddPlayerNameCard(userId uint32, nameCardId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbSocial := player.GetDbSocial()
+	dbSocial.UnlockNameCard(nameCardId)
 }
 
 /************************************************** 打包封装 **************************************************/

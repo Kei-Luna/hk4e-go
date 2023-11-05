@@ -130,6 +130,9 @@ func (r *RouteManager) initRoute() {
 		cmd.PlayerStartMatchReq:               GAME.PlayerStartMatchReq,
 		cmd.PlayerCancelMatchReq:              GAME.PlayerCancelMatchReq,
 		cmd.PlayerConfirmMatchReq:             GAME.PlayerConfirmMatchReq,
+		cmd.QuestCreateEntityReq:              GAME.QuestCreateEntityReq,
+		cmd.QuestDestroyEntityReq:             GAME.QuestDestroyEntityReq,
+		cmd.QuestDestroyNpcReq:                GAME.QuestDestroyNpcReq,
 	}
 }
 

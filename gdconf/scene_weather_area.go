@@ -53,12 +53,12 @@ func (g *GameDataConfig) loadSceneWeatherArea() {
 	logger.Info("SceneWeatherArea count: %v", count)
 }
 
-func GetSceneWeatherAreaMapBySceneIdAndWeatherAreaId(sceneId int32, WeatherAreaId int32) *SceneWeatherArea {
+func GetSceneWeatherAreaMapBySceneIdAndWeatherAreaId(sceneId int32, weatherAreaId int32) *SceneWeatherArea {
 	value, exist := CONF.SceneWeatherAreaMap[sceneId]
 	if !exist {
 		return nil
 	}
-	return value[WeatherAreaId]
+	return value[weatherAreaId]
 }
 
 func GetSceneWeatherAreaMap() map[int32]map[int32]*SceneWeatherArea {

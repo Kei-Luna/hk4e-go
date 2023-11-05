@@ -395,6 +395,12 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(ServerCondMeetQuestListUpdateNotify, func() any { return new(proto.ServerCondMeetQuestListUpdateNotify) }) // 服务器动态任务列表更新通知
 	c.regMsg(QuestProgressUpdateNotify, func() any { return new(proto.QuestProgressUpdateNotify) })                     // 任务进度更新通知
 	c.regMsg(QuestGlobalVarNotify, func() any { return new(proto.QuestGlobalVarNotify) })                               // 任务全局变量通知
+	c.regMsg(QuestCreateEntityReq, func() any { return new(proto.QuestCreateEntityReq) })                               // 任务创建实体请求
+	c.regMsg(QuestCreateEntityRsp, func() any { return new(proto.QuestCreateEntityRsp) })                               // 任务创建实体响应
+	c.regMsg(QuestDestroyEntityReq, func() any { return new(proto.QuestDestroyEntityReq) })                             // 任务销毁实体请求
+	c.regMsg(QuestDestroyEntityRsp, func() any { return new(proto.QuestDestroyEntityRsp) })                             // 任务销毁实体响应
+	c.regMsg(QuestDestroyNpcReq, func() any { return new(proto.QuestDestroyNpcReq) })                                   // 任务销毁npc请求
+	c.regMsg(QuestDestroyNpcRsp, func() any { return new(proto.QuestDestroyNpcRsp) })                                   // 任务销毁npc响应
 
 	// TODO 家园
 	c.regMsg(GetPlayerHomeCompInfoReq, func() any { return new(proto.GetPlayerHomeCompInfoReq) })

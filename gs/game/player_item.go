@@ -1,6 +1,8 @@
 package game
 
 import (
+	"strconv"
+
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
@@ -17,59 +19,101 @@ import (
 func (g *Game) UseItemReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.UseItemReq)
 	// 是否拥有物品
-	item, ok := player.GameObjectGuidMap[req.Guid].(*model.Item)
-	if !ok {
+	item, exist := player.GameObjectGuidMap[req.Guid].(*model.Item)
+	if !exist {
 		logger.Error("item not exist, weaponGuid: %v", req.Guid)
 		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{}, proto.Retcode_RET_ITEM_NOT_EXIST)
 		return
 	}
-	// 获取物品配置表
-	itemDataConfig := gdconf.GetItemDataById(int32(item.ItemId))
-	if itemDataConfig == nil {
-		logger.Error("item data config is nil, itemId: %v", item.ItemId)
-		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
-		return
-	}
-	// 获取角色
-	avatar, ok := player.GameObjectGuidMap[req.TargetGuid].(*model.Avatar)
-	if !ok {
-		logger.Error("avatar not exist, avatarGuid: %v", req.TargetGuid)
-		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
-		return
-	}
-	// 根据物品的材料类型做不同操作
-	switch itemDataConfig.MaterialType {
-	case constant.MATERIAL_TYPE_FOOD:
-		// 复活
-		g.RevivePlayerAvatar(player, avatar.AvatarId)
-	case constant.MATERIAL_TYPE_NOTICE_ADD_HP:
-		// 回血
-	default:
-		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{})
-		return
-	}
 	// 消耗物品
-	changeItemList := []*ChangeItem{
-		{
-			ItemId:      item.ItemId,
-			ChangeCount: 1,
-		},
-	}
-	if !g.CostPlayerItem(player.PlayerId, changeItemList) {
+	ok := g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: item.ItemId, ChangeCount: req.Count}})
+	if !ok {
 		logger.Error("item count not enough, uid: %v", player.PlayerId)
 		g.SendError(cmd.UseItemRsp, player, &proto.UseItemRsp{}, proto.Retcode_RET_ITEM_COUNT_NOT_ENOUGH)
 		return
 	}
-	useItemRsp := &proto.UseItemRsp{
+
+	for count := uint32(0); count < req.Count; count++ {
+		g.UseItem(player.PlayerId, item.ItemId, req.TargetGuid)
+	}
+
+	rsp := &proto.UseItemRsp{
 		Guid:       req.Guid,
 		TargetGuid: req.TargetGuid,
 		ItemId:     item.ItemId,
-		OptionIdx:  0,
+		OptionIdx:  req.OptionIdx,
 	}
-	g.SendMsg(cmd.UseItemRsp, player.PlayerId, player.ClientSeq, useItemRsp)
+	g.SendMsg(cmd.UseItemRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 /************************************************** 游戏功能 **************************************************/
+
+func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	itemDataConfig := gdconf.GetItemDataById(int32(itemId))
+	if itemDataConfig == nil {
+		logger.Error("item data config is nil, itemId: %v", itemId)
+		return
+	}
+	for _, itemUse := range itemDataConfig.ItemUseList {
+		switch itemUse.UseOption {
+		case constant.ITEM_USE_GAIN_AVATAR:
+			if len(itemUse.UseParam) != 1 {
+				continue
+			}
+			avatarId, err := strconv.Atoi(itemUse.UseParam[0])
+			if err != nil {
+				continue
+			}
+			dbAvatar := player.GetDbAvatar()
+			_, exist := dbAvatar.AvatarMap[uint32(avatarId)]
+			if !exist {
+				g.AddPlayerAvatar(userId, uint32(avatarId))
+			} else {
+				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, true, 0)
+			}
+		case constant.ITEM_USE_RELIVE_AVATAR:
+			if len(targetParam) != 1 {
+				continue
+			}
+			avatar, exist := player.GameObjectGuidMap[targetParam[0]].(*model.Avatar)
+			if !exist {
+				logger.Error("avatar not exist, avatarGuid: %v", targetParam[0])
+				continue
+			}
+			g.RevivePlayerAvatar(player, avatar.AvatarId)
+		case constant.ITEM_USE_ADD_SERVER_BUFF:
+			// 草泥马回血要走ability
+		case constant.ITEM_USE_GAIN_FLYCLOAK:
+			if len(itemUse.UseParam) != 1 {
+				continue
+			}
+			flyCloakId, err := strconv.Atoi(itemUse.UseParam[0])
+			if err != nil {
+				continue
+			}
+			g.AddPlayerFlycloak(userId, uint32(flyCloakId))
+		case constant.ITEM_USE_GAIN_NAME_CARD:
+			if len(itemUse.UseParam) != 0 {
+				continue
+			}
+			g.AddPlayerNameCard(userId, itemId)
+		case constant.ITEM_USE_GAIN_COSTUME:
+			if len(itemUse.UseParam) != 1 {
+				continue
+			}
+			costumeId, err := strconv.Atoi(itemUse.UseParam[0])
+			if err != nil {
+				continue
+			}
+			g.AddPlayerCostume(userId, uint32(costumeId))
+		}
+	}
+}
 
 type ChangeItem struct {
 	ItemId      uint32
@@ -118,20 +162,31 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		logger.Error("player is nil, uid: %v", userId)
 		return false
 	}
+	itemMap := make(map[uint32]uint32)
+	for _, changeItem := range itemList {
+		itemMap[changeItem.ItemId] += changeItem.ChangeCount
+	}
 	dbItem := player.GetDbItem()
 	propList := make([]uint32, 0)
 	changeNtf := &proto.StoreItemChangeNotify{
 		StoreType: proto.StoreType_STORE_PACK,
 		ItemList:  make([]*proto.Item, 0),
 	}
-	for _, changeItem := range itemList {
-		prop, exist := constant.VIRTUAL_ITEM_PROP[changeItem.ItemId]
+	for itemId, addCount := range itemMap {
+		itemDataConfig := gdconf.GetItemDataById(int32(itemId))
+		if itemDataConfig == nil {
+			continue
+		}
+		if itemDataConfig.AutoUse == 1 {
+			continue
+		}
+		prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量增加
-			player.PropMap[prop] += changeItem.ChangeCount
+			player.PropMap[prop] += addCount
 			propList = append(propList, prop)
 			// 特殊属性变化处理函数
-			switch changeItem.ItemId {
+			switch itemId {
 			case constant.ITEM_ID_PLAYER_EXP:
 				// 冒险阅历
 				g.HandlePlayerExpAdd(userId)
@@ -142,14 +197,14 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 			if dbItem.GetItemMapLen() > constant.STORE_PACK_LIMIT_MATERIAL+constant.STORE_PACK_LIMIT_FURNITURE {
 				return false
 			}
-			dbItem.AddItem(player, changeItem.ItemId, changeItem.ChangeCount)
+			dbItem.AddItem(player, itemId, addCount)
 		}
 		pbItem := &proto.Item{
-			ItemId: changeItem.ItemId,
-			Guid:   dbItem.GetItemGuid(changeItem.ItemId),
+			ItemId: itemId,
+			Guid:   dbItem.GetItemGuid(itemId),
 			Detail: &proto.Item_Material{
 				Material: &proto.Material{
-					Count: dbItem.GetItemCount(changeItem.ItemId),
+					Count: dbItem.GetItemCount(itemId),
 				},
 			},
 		}
@@ -176,6 +231,18 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		}
 		g.SendMsg(cmd.ItemAddHintNotify, userId, player.ClientSeq, itemAddHintNotify)
 	}
+	for itemId, addCount := range itemMap {
+		g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_OBTAIN_ITEM, "", int32(itemId))
+		itemDataConfig := gdconf.GetItemDataById(int32(itemId))
+		if itemDataConfig == nil {
+			continue
+		}
+		if itemDataConfig.AutoUse == 1 {
+			for count := uint32(0); count < addCount; count++ {
+				g.UseItem(userId, itemId)
+			}
+		}
+	}
 	return true
 }
 
@@ -185,6 +252,10 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return false
+	}
+	itemMap := make(map[uint32]uint32)
+	for _, changeItem := range itemList {
+		itemMap[changeItem.ItemId] += changeItem.ChangeCount
 	}
 	dbItem := player.GetDbItem()
 	propList := make([]uint32, 0)
@@ -196,32 +267,32 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 		StoreType: proto.StoreType_STORE_PACK,
 		GuidList:  make([]uint64, 0),
 	}
-	for _, changeItem := range itemList {
+	for itemId, costCount := range itemMap {
 		// 检查剩余道具数量
-		count := g.GetPlayerItemCount(player.PlayerId, changeItem.ItemId)
-		if count < changeItem.ChangeCount {
+		count := g.GetPlayerItemCount(player.PlayerId, itemId)
+		if count < costCount {
 			return false
 		}
-		prop, exist := constant.VIRTUAL_ITEM_PROP[changeItem.ItemId]
+		prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
 		if exist {
 			// 物品为虚拟物品 角色属性物品数量减少
-			player.PropMap[prop] -= changeItem.ChangeCount
+			player.PropMap[prop] -= costCount
 			propList = append(propList, prop)
 			// 特殊属性变化处理函数
-			switch changeItem.ItemId {
+			switch itemId {
 			case constant.ITEM_ID_PLAYER_EXP:
 				// 冒险阅历应该也没人会去扣吧?
 				g.HandlePlayerExpAdd(userId)
 			}
 		} else {
 			// 物品为普通物品 直接扣除
-			dbItem.CostItem(player, changeItem.ItemId, changeItem.ChangeCount)
+			dbItem.CostItem(player, itemId, costCount)
 		}
-		count = g.GetPlayerItemCount(player.PlayerId, changeItem.ItemId)
+		count = g.GetPlayerItemCount(player.PlayerId, itemId)
 		if count > 0 {
 			pbItem := &proto.Item{
-				ItemId: changeItem.ItemId,
-				Guid:   dbItem.GetItemGuid(changeItem.ItemId),
+				ItemId: itemId,
+				Guid:   dbItem.GetItemGuid(itemId),
 				Detail: &proto.Item_Material{
 					Material: &proto.Material{
 						Count: count,
@@ -230,7 +301,7 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 			}
 			changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
 		} else if count == 0 {
-			delNtf.GuidList = append(delNtf.GuidList, dbItem.GetItemGuid(changeItem.ItemId))
+			delNtf.GuidList = append(delNtf.GuidList, dbItem.GetItemGuid(itemId))
 		}
 	}
 

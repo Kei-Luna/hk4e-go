@@ -18,9 +18,11 @@ type QuestExec struct {
 
 // QuestData 任务配置表
 type QuestData struct {
-	QuestId       int32 `csv:"子任务ID"`
-	ParentQuestId int32 `csv:"父任务ID,omitempty"`
-	Sequence      int32 `csv:"序列,omitempty"`
+	QuestId       int32    `csv:"子任务ID"`
+	ParentQuestId int32    `csv:"父任务ID,omitempty"`
+	Sequence      int32    `csv:"序列,omitempty"`
+	ItemIdList    IntArray `csv:"[任务道具]ID,omitempty"`
+	ItemCountList IntArray `csv:"[任务道具]数量,omitempty"`
 	// 领取条件
 	AcceptCondCompose     int32 `csv:"[领取条件]组合,omitempty"`
 	AcceptCondType1       int32 `csv:"[领取条件]1类型,omitempty"`

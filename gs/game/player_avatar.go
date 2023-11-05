@@ -377,9 +377,8 @@ func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
 	}
 	// 判断玩家是否已有该角色
 	dbAvatar := player.GetDbAvatar()
-	_, ok := dbAvatar.AvatarMap[avatarId]
-	if ok {
-		// TODO 如果已有转换命座材料
+	_, exist := dbAvatar.AvatarMap[avatarId]
+	if exist {
 		return
 	}
 	dbAvatar.AddAvatar(player, avatarId)
@@ -402,6 +401,13 @@ func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
 		IsInTeam: false,
 	}
 	g.SendMsg(cmd.AvatarAddNotify, userId, player.ClientSeq, avatarAddNotify)
+
+	dbTeam := player.GetDbTeam()
+	if len(dbTeam.GetActiveTeam().GetAvatarIdList()) >= 4 {
+		return
+	}
+	activeTeam := dbTeam.GetActiveTeam()
+	g.ChangeTeam(player, uint32(dbTeam.GetActiveTeamId()), append(activeTeam.GetAvatarIdList(), avatarId), dbTeam.GetActiveAvatarId())
 }
 
 // AddPlayerFlycloak 给予玩家风之翼

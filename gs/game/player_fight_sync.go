@@ -198,6 +198,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 	}
 
 	fightProp := defEntity.GetFightProp()
+	maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
 	if currHp == 0.0 {
 		return
@@ -240,6 +241,18 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			}
 		}
 	case constant.ENTITY_TYPE_MONSTER:
+		monsterDataConfig := gdconf.GetMonsterDataById(int32(defEntity.GetMonsterEntity().GetMonsterId()))
+		if monsterDataConfig == nil {
+			logger.Error("get monster data config is nil, monsterId: %v", defEntity.GetMonsterEntity().GetMonsterId())
+			break
+		}
+		lastHpPercent := (currHp - deltaHp) / maxHp * 100.0
+		currHpPercent := currHp / maxHp * 100.0
+		for _, hpDrop := range monsterDataConfig.HpDropList {
+			if hpDrop.HpPercent >= int32(currHpPercent) && hpDrop.HpPercent <= int32(lastHpPercent) {
+				g.monsterDrop(player, MonsterDropTypeHp, hpDrop.Id, defEntity)
+			}
+		}
 		if currHp == 0.0 {
 			g.KillEntity(player, scene, defEntity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		}
@@ -1068,6 +1081,9 @@ func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, 
 	} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_WoodenObject_Broken") {
 		// 木箱破碎
 		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+	} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "Gear_MovingTarget") {
+		g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_ACTION01)
+		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
 	}
 }
 

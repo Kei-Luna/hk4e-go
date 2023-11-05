@@ -546,35 +546,55 @@ func (g *Game) ChangeGameTime(scene *Scene, gameTime uint32) {
 	}
 }
 
-func (g *Game) monsterDrop(player *model.Player, entity *Entity) {
-	sceneGroupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))
-	if sceneGroupConfig == nil {
-		logger.Error("get scene group config is nil, groupId: %v, uid: %v", entity.GetGroupId(), player.PlayerId)
-		return
-	}
-	monsterConfig := sceneGroupConfig.MonsterMap[int32(entity.GetConfigId())]
-	dropTag := ""
-	if monsterConfig.DropTag != "" {
-		dropTag = monsterConfig.DropTag
-	} else {
-		monsterDataConfig := gdconf.GetMonsterDataById(monsterConfig.MonsterId)
-		if monsterDataConfig == nil {
-			logger.Error("get monster data config is nil, monsterId: %v, uid: %v", monsterConfig.MonsterId, player.PlayerId)
+const (
+	MonsterDropTypeHp = iota
+	MonsterDropTypeKill
+)
+
+func (g *Game) monsterDrop(player *model.Player, monsterDropType int, hpDropId int32, entity *Entity) {
+	dropId := int32(0)
+	dropCount := int32(0)
+	switch monsterDropType {
+	case MonsterDropTypeHp:
+		dropId = hpDropId
+		dropCount = 1
+	case MonsterDropTypeKill:
+		sceneGroupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))
+		if sceneGroupConfig == nil {
+			logger.Error("get scene group config is nil, groupId: %v, uid: %v", entity.GetGroupId(), player.PlayerId)
 			return
 		}
-		dropTag = gdconf.GetDropModelByMonsterModel(monsterDataConfig.Name)
+		monsterConfig := sceneGroupConfig.MonsterMap[int32(entity.GetConfigId())]
+		if monsterConfig.DropId != 0 {
+			dropId = monsterConfig.DropId
+			dropCount = 1
+		} else {
+			dropTag := ""
+			if monsterConfig.DropTag != "" {
+				dropTag = monsterConfig.DropTag
+			} else {
+				monsterDataConfig := gdconf.GetMonsterDataById(monsterConfig.MonsterId)
+				if monsterDataConfig == nil {
+					logger.Error("get monster data config is nil, monsterId: %v, uid: %v", monsterConfig.MonsterId, player.PlayerId)
+					return
+				}
+				dropTag = gdconf.GetDropModelByMonsterModel(monsterDataConfig.Name)
+			}
+			monsterDropDataConfig := gdconf.GetMonsterDropDataByDropTagAndLevel(dropTag, monsterConfig.Level)
+			if monsterDropDataConfig == nil {
+				logger.Error("get monster drop data config is nil, monsterConfig: %+v, uid: %v", monsterConfig, player.PlayerId)
+				return
+			}
+			dropId = monsterDropDataConfig.DropId
+			dropCount = monsterDropDataConfig.DropCount
+		}
 	}
-	monsterDropDataConfig := gdconf.GetMonsterDropDataByDropTagAndLevel(dropTag, monsterConfig.Level)
-	if monsterDropDataConfig == nil {
-		logger.Error("get monster drop data config is nil, monsterConfig: %+v, uid: %v", monsterConfig, player.PlayerId)
-		return
-	}
-	dropDataConfig := gdconf.GetDropDataById(monsterDropDataConfig.DropId)
+	dropDataConfig := gdconf.GetDropDataById(dropId)
 	if dropDataConfig == nil {
-		logger.Error("get drop data config is nil, dropId: %v, uid: %v", monsterDropDataConfig.DropId, player.PlayerId)
+		logger.Error("get drop data config is nil, dropId: %v, uid: %v", dropId, player.PlayerId)
 		return
 	}
-	totalItemMap := g.doRandDropFullTimes(dropDataConfig, int(monsterDropDataConfig.DropCount))
+	totalItemMap := g.doRandDropFullTimes(dropDataConfig, int(dropCount))
 	for itemId, count := range totalItemMap {
 		itemDataConfig := gdconf.GetItemDataById(int32(itemId))
 		if itemDataConfig == nil {
@@ -596,17 +616,26 @@ func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 		return
 	}
 	gadgetConfig := sceneGroupConfig.GadgetMap[int32(entity.GetConfigId())]
-	chestDropDataConfig := gdconf.GetChestDropDataByDropTagAndLevel(gadgetConfig.DropTag, gadgetConfig.Level)
-	if chestDropDataConfig == nil {
-		logger.Error("get chest drop data config is nil, gadgetConfig: %+v, uid: %v", gadgetConfig, player.PlayerId)
-		return
+	dropId := int32(0)
+	dropCount := int32(0)
+	if gadgetConfig.ChestDropId != 0 {
+		dropId = gadgetConfig.ChestDropId
+		dropCount = 1
+	} else {
+		chestDropDataConfig := gdconf.GetChestDropDataByDropTagAndLevel(gadgetConfig.DropTag, gadgetConfig.Level)
+		if chestDropDataConfig == nil {
+			logger.Error("get chest drop data config is nil, gadgetConfig: %+v, uid: %v", gadgetConfig, player.PlayerId)
+			return
+		}
+		dropId = chestDropDataConfig.DropId
+		dropCount = chestDropDataConfig.DropCount
 	}
-	dropDataConfig := gdconf.GetDropDataById(chestDropDataConfig.DropId)
+	dropDataConfig := gdconf.GetDropDataById(dropId)
 	if dropDataConfig == nil {
-		logger.Error("get drop data config is nil, dropId: %v, uid: %v", chestDropDataConfig.DropId, player.PlayerId)
+		logger.Error("get drop data config is nil, dropId: %v, uid: %v", dropId, player.PlayerId)
 		return
 	}
-	totalItemMap := g.doRandDropFullTimes(dropDataConfig, int(chestDropDataConfig.DropCount))
+	totalItemMap := g.doRandDropFullTimes(dropDataConfig, int(dropCount))
 	for itemId, count := range totalItemMap {
 		itemDataConfig := gdconf.GetItemDataById(int32(itemId))
 		if itemDataConfig == nil {

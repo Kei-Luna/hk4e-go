@@ -138,7 +138,36 @@ func (s *Scene) CreateEntityWeapon(pos, rot *model.Vector) uint32 {
 	return s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, level uint8, fightProp map[uint32]float32, configId, groupId uint32) uint32 {
+func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, level uint8, configId, groupId uint32) uint32 {
+	fpm := map[uint32]float32{
+		constant.FIGHT_PROP_BASE_ATTACK:       float32(50.0),
+		constant.FIGHT_PROP_CUR_ATTACK:        float32(50.0),
+		constant.FIGHT_PROP_BASE_DEFENSE:      float32(500.0),
+		constant.FIGHT_PROP_CUR_DEFENSE:       float32(500.0),
+		constant.FIGHT_PROP_BASE_HP:           float32(50.0),
+		constant.FIGHT_PROP_CUR_HP:            float32(50.0),
+		constant.FIGHT_PROP_MAX_HP:            float32(50.0),
+		constant.FIGHT_PROP_PHYSICAL_SUB_HURT: float32(0.1),
+		constant.FIGHT_PROP_ICE_SUB_HURT:      float32(0.1),
+		constant.FIGHT_PROP_FIRE_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_ELEC_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_WIND_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_ROCK_SUB_HURT:     float32(0.1),
+		constant.FIGHT_PROP_GRASS_SUB_HURT:    float32(0.1),
+		constant.FIGHT_PROP_WATER_SUB_HURT:    float32(0.1),
+	}
+	monsterDataConfig := gdconf.GetMonsterDataById(int32(monsterId))
+	if monsterDataConfig == nil {
+		logger.Error("get monster data config is nil, monsterId: %v", monsterId)
+		return 0
+	}
+	fpm[constant.FIGHT_PROP_BASE_ATTACK] = monsterDataConfig.GetBaseAttackByLevel(level)
+	fpm[constant.FIGHT_PROP_CUR_ATTACK] = monsterDataConfig.GetBaseAttackByLevel(level)
+	fpm[constant.FIGHT_PROP_BASE_DEFENSE] = monsterDataConfig.GetBaseDefenseByLevel(level)
+	fpm[constant.FIGHT_PROP_CUR_DEFENSE] = monsterDataConfig.GetBaseDefenseByLevel(level)
+	fpm[constant.FIGHT_PROP_BASE_HP] = monsterDataConfig.GetBaseHpByLevel(level)
+	fpm[constant.FIGHT_PROP_CUR_HP] = monsterDataConfig.GetBaseHpByLevel(level)
+	fpm[constant.FIGHT_PROP_MAX_HP] = monsterDataConfig.GetBaseHpByLevel(level)
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_MONSTER)
 	entity := &Entity{
 		id:                  entityId,
@@ -149,7 +178,7 @@ func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, le
 		moveState:           uint16(proto.MotionState_MOTION_NONE),
 		lastMoveSceneTimeMs: 0,
 		lastMoveReliableSeq: 0,
-		fightProp:           fightProp,
+		fightProp:           fpm,
 		entityType:          constant.ENTITY_TYPE_MONSTER,
 		level:               level,
 		monsterEntity: &MonsterEntity{
