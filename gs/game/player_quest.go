@@ -67,7 +67,7 @@ func (g *Game) QuestDestroyEntityReq(player *model.Player, payloadMsg pb.Message
 		return
 	}
 	scene.DestroyEntity(req.EntityId)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{req.EntityId}, 0)
 	rsp := &proto.QuestDestroyEntityRsp{
 		QuestId:  req.QuestId,
 		SceneId:  req.SceneId,

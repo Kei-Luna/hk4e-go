@@ -15,20 +15,12 @@ type DbScene struct {
 	UnlockPointMap map[uint32]bool
 	UnHidePointMap map[uint32]bool
 	SceneGroupMap  map[uint32]*DbSceneGroup
-	VehicleMap     map[uint32]*DbVehicle
 }
 
 type DbSceneGroup struct {
 	VariableMap    map[string]int32
 	KillConfigMap  map[uint32]bool
 	GadgetStateMap map[uint32]uint8
-}
-
-type DbVehicle struct {
-	VehicleId uint32  // 载具Id
-	OwnerUid  uint32  // 所有者Id
-	Pos       *Vector // 位置
-	Rot       *Vector // 旋转
 }
 
 type MapMark struct {
@@ -75,9 +67,6 @@ func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
 	}
 	if scene.SceneGroupMap == nil {
 		scene.SceneGroupMap = make(map[uint32]*DbSceneGroup)
-	}
-	if scene.VehicleMap == nil {
-		scene.VehicleMap = make(map[uint32]*DbVehicle)
 	}
 	return scene
 }
@@ -169,13 +158,4 @@ func (g *DbSceneGroup) ChangeGadgetState(configId uint32, state uint8) {
 func (g *DbSceneGroup) CheckGadgetExist(configId uint32) bool {
 	_, exist := g.GadgetStateMap[configId]
 	return exist
-}
-
-func (s *DbScene) AddVehicle(vehicleId uint32, ownerId uint32, pos *Vector, rot *Vector) {
-	s.VehicleMap[vehicleId] = &DbVehicle{
-		VehicleId: vehicleId,
-		OwnerUid:  ownerId,
-		Pos:       pos,
-		Rot:       rot,
-	}
 }

@@ -222,13 +222,8 @@ func (g *Game) VehicleRestoreStaminaHandler(player *model.Player) {
 		if entity == nil {
 			continue
 		}
-		// 确保实体类型是否为载具
-		gadgetEntity := entity.GetGadgetEntity()
-		if gadgetEntity == nil || gadgetEntity.GetGadgetVehicleEntity() == nil {
-			continue
-		}
 		// 判断玩家处于载具中
-		if g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
+		if g.IsPlayerInVehicle(player, entity) {
 			// 角色回复耐力
 			g.UpdatePlayerStamina(player, constant.STAMINA_COST_IN_SKIFF)
 		} else {
@@ -257,8 +252,7 @@ func (g *Game) SustainStaminaHandler(player *model.Player) {
 		return
 	}
 	// 确保实体类型是否为载具 且 根据玩家是否处于载具中更新耐力
-	gadgetEntity := entity.GetGadgetEntity()
-	if gadgetEntity != nil && gadgetEntity.GetGadgetVehicleEntity() != nil && g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
+	if g.IsPlayerInVehicle(player, entity) {
 		// 更新载具耐力
 		g.UpdateVehicleStamina(player, entity, player.StaminaInfo.CostStamina)
 	} else {

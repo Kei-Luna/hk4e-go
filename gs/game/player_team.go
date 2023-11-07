@@ -270,8 +270,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 	}
 	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, player.ClientSeq, sceneEntityDisappearNotify, 0)
 
-	newAvatarId := world.GetPlayerActiveAvatarId(player)
-	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, newAvatarId)
+	newAvatarEntity := g.PacketSceneEntityInfoAvatar(scene, player, targetAvatarId)
 	sceneEntityAppearNotify := &proto.SceneEntityAppearNotify{
 		AppearType: proto.VisionType_VISION_REPLACE,
 		Param:      oldAvatarEntity.GetId(),
@@ -357,8 +356,8 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			SceneEntityInfo:   g.PacketSceneEntityInfoAvatar(worldPlayerScene, worldPlayer, worldAvatar.GetAvatarId()),
 			WeaponGuid:        worldPlayerAvatar.EquipWeapon.Guid,
 			WeaponEntityId:    world.GetPlayerWorldAvatarWeaponEntityId(worldPlayer, worldAvatar.GetAvatarId()),
-			IsPlayerCurAvatar: world.GetPlayerActiveAvatarId(worldPlayer) == worldAvatar.GetAvatarId(),
-			IsOnScene:         world.GetPlayerActiveAvatarId(worldPlayer) == worldAvatar.GetAvatarId(),
+			IsPlayerCurAvatar: world.IsPlayerActiveAvatarEntity(worldPlayer, worldAvatar.GetAvatarEntityId()),
+			IsOnScene:         world.IsPlayerActiveAvatarEntity(worldPlayer, worldAvatar.GetAvatarEntityId()),
 			AvatarAbilityInfo: &proto.AbilitySyncStateInfo{
 				IsInited:           len(worldAvatar.GetAbilityList()) != 0,
 				DynamicValueMap:    nil,

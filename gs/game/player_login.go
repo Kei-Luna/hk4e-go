@@ -61,13 +61,13 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 
 	// 创建世界
 	world := WORLD_MANAGER.CreateWorld(player)
-	world.AddPlayer(player, player.SceneId)
+	world.AddPlayer(player)
 	player.WorldId = world.GetId()
 	// 进入场景
 	player.SceneJump = true
 	player.SceneLoadState = model.SceneNone
 	player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_LOGIN)
-	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
+	g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerEnterSceneNotifyLogin(player))
 
 	g.SendMsg(cmd.SetPlayerBornDataRsp, player.PlayerId, player.ClientSeq, new(proto.SetPlayerBornDataRsp))
 }
@@ -121,13 +121,13 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		} else {
 			// 创建世界
 			world := WORLD_MANAGER.CreateWorld(player)
-			world.AddPlayer(player, player.SceneId)
+			world.AddPlayer(player)
 			player.WorldId = world.GetId()
 			// 进入场景
 			player.SceneJump = true
 			player.SceneLoadState = model.SceneNone
 			player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_LOGIN)
-			g.SendMsg(cmd.PlayerEnterSceneNotify, userId, clientSeq, g.PacketPlayerEnterSceneNotifyLogin(player, proto.EnterType_ENTER_SELF))
+			g.SendMsg(cmd.PlayerEnterSceneNotify, userId, clientSeq, g.PacketPlayerEnterSceneNotifyLogin(player))
 		}
 	} else {
 		g.SendMsg(cmd.DoSetPlayerBornDataNotify, userId, clientSeq, new(proto.DoSetPlayerBornDataNotify))

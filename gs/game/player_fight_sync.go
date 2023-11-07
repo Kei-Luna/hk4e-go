@@ -409,24 +409,18 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	oldVisionEntityMap := g.GetVisionEntity(scene, oldPos)
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
-	for entityId, entity := range oldVisionEntityMap {
+	for entityId := range oldVisionEntityMap {
 		_, exist = newVisionEntityMap[entityId]
 		if exist {
-			continue
-		}
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		// 旧有新没有的实体即为消失的
 		delEntityIdList = append(delEntityIdList, entityId)
 	}
 	addEntityIdList := make([]uint32, 0)
-	for entityId, entity := range newVisionEntityMap {
+	for entityId := range newVisionEntityMap {
 		_, exist = oldVisionEntityMap[entityId]
 		if exist {
-			continue
-		}
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		// 新有旧没有的实体即为出现的
@@ -435,9 +429,34 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	// 同步客户端消失和出现的场景实体
 	if len(delEntityIdList) > 0 {
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
+		for _, delEntityId := range delEntityIdList {
+			entity := scene.GetEntity(delEntityId)
+			if entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
+			otherPlayer := USER_MANAGER.GetOnlineUser(entity.GetAvatarEntity().GetUid())
+			if otherPlayer == nil {
+				logger.Error("get player is nil, target uid: %v, uid: %v", entity.GetAvatarEntity().GetUid(), player.PlayerId)
+				continue
+			}
+			g.RemoveSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MISS, []uint32{avatarEntityId})
+		}
 	}
 	if len(addEntityIdList) > 0 {
 		g.AddSceneEntityNotify(player, proto.VisionType_VISION_MEET, addEntityIdList, false, false)
+		for _, addEntityId := range addEntityIdList {
+			entity := scene.GetEntity(addEntityId)
+			if entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
+			otherPlayer := USER_MANAGER.GetOnlineUser(entity.GetAvatarEntity().GetUid())
+			if otherPlayer == nil {
+				logger.Error("get player is nil, target uid: %v, uid: %v", entity.GetAvatarEntity().GetUid(), player.PlayerId)
+				continue
+			}
+			sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, scene.GetEntity(avatarEntityId).GetAvatarEntity().GetAvatarId())
+			g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
+		}
 	}
 	// 场景区域触发器检测
 	g.SceneRegionTriggerCheck(player, oldPos, newPos, avatarEntityId)
@@ -534,7 +553,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 					logger.Error("get player is nil, target uid: %v, uid: %v", otherPlayerId, player.PlayerId)
 					continue
 				}
-				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, world.GetPlayerActiveAvatarId(player))
+				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, player, activeAvatarId)
 				g.AddSceneEntityNotifyToPlayer(otherPlayer, proto.VisionType_VISION_MEET, []*proto.SceneEntityInfo{sceneEntityInfoAvatar})
 			}
 		}
@@ -550,7 +569,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
 	for entityId, entity := range oldVisionEntityMap {
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 			continue
 		}
 		_, exist := newVisionEntityMap[entityId]
@@ -562,7 +581,7 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 	}
 	addEntityIdList := make([]uint32, 0)
 	for entityId, entity := range newVisionEntityMap {
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
 			continue
 		}
 		_, exist := oldVisionEntityMap[entityId]
@@ -946,10 +965,9 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 		}
 		yawAngle := ntf.InitEulerAngles.Y
 		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		bulletPhysicsEngine.CreateRigidBody(
 			ntf.EntityId,
-			world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
+			world.GetPlayerActiveAvatarEntity(player).GetId(),
 			player.SceneId,
 			ntf.InitPos.X, ntf.InitPos.Y, ntf.InitPos.Z,
 			pitchAngle, yawAngle,
@@ -969,7 +987,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	}
 	scene := world.GetSceneById(player.SceneId)
 	scene.DestroyEntity(ntf.EntityId)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{ntf.EntityId})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{ntf.EntityId}, 0)
 }
 
 func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Message) {

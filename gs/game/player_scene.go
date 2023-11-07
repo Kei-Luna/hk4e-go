@@ -53,19 +53,27 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 	if ctx.OldSceneId != 0 {
-		oldScene := world.GetSceneById(ctx.OldSceneId)
+		oldSceneId := ctx.OldSceneId
+		oldPos := ctx.OldPos
+		newSceneId := ctx.NewSceneId
+		newPos := ctx.NewPos
+		newRot := ctx.NewRot
+
+		oldScene := world.GetSceneById(oldSceneId)
+		newScene := world.GetSceneById(newSceneId)
+
 		delEntityIdList := make([]uint32, 0)
-		for entityId, entity := range g.GetVisionEntity(oldScene, ctx.OldPos) {
-			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
-				continue
-			}
+		for entityId := range g.GetVisionEntity(oldScene, oldPos) {
 			delEntityIdList = append(delEntityIdList, entityId)
 		}
 		g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, delEntityIdList)
 
+		activeAvatarEntity := world.GetPlayerActiveAvatarEntity(player)
+		g.RemoveSceneEntityNotifyBroadcast(oldScene, proto.VisionType_VISION_REMOVE, []uint32{activeAvatarEntity.GetId()}, player.PlayerId)
+
 		if !WORLD_MANAGER.IsAiWorld(world) {
 			// 卸载旧位置附近的group
-			for _, groupConfig := range g.GetNeighborGroup(ctx.OldSceneId, ctx.OldPos) {
+			for _, groupConfig := range g.GetNeighborGroup(oldSceneId, oldPos) {
 				if !world.IsMultiplayerWorld() {
 					// 单人世界直接卸载group
 					g.RemoveSceneGroup(player, oldScene, groupConfig)
@@ -91,6 +99,28 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 						g.RemoveSceneGroup(player, oldScene, groupConfig)
 					}
 				}
+			}
+		}
+
+		player.SceneLoadState = model.SceneNone
+
+		if player.SceneJump {
+			oldScene.RemovePlayer(player)
+
+			player.SetPos(newPos)
+			player.SetRot(newRot)
+
+			player.SceneId = newSceneId
+			newScene.AddPlayer(player)
+		} else {
+			player.SetPos(newPos)
+			player.SetRot(newRot)
+
+			for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+				entityId := worldAvatar.GetAvatarEntityId()
+				entity := oldScene.GetEntity(entityId)
+				entity.SetPos(newPos)
+				entity.SetRot(newRot)
 			}
 		}
 	}
@@ -204,9 +234,8 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		g.SendMsg(cmd.PlayerGameTimeNotify, player.PlayerId, player.ClientSeq, playerGameTimeNotify)
 
-		activeAvatarId := world.GetPlayerActiveAvatarId(player)
 		playerEnterSceneInfoNotify := &proto.PlayerEnterSceneInfoNotify{
-			CurAvatarEntityId: world.GetPlayerWorldAvatarEntityId(player, activeAvatarId),
+			CurAvatarEntityId: world.GetPlayerActiveAvatarEntity(player).GetId(),
 			EnterSceneToken:   req.EnterSceneToken,
 			TeamEnterInfo: &proto.TeamEnterSceneInfo{
 				TeamEntityId:        world.GetPlayerTeamEntityId(player),
@@ -336,17 +365,14 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	visionEntityMap := g.GetVisionEntity(scene, pos)
 	entityIdList := make([]uint32, 0)
 	for entityId, entity := range visionEntityMap {
-		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR || entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
-			continue
+		if WORLD_MANAGER.IsAiWorld(world) {
+			if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
 		}
 		entityIdList = append(entityIdList, entityId)
 	}
 	g.AddSceneEntityNotify(player, visionType, entityIdList, false, false)
-	// 加载该场景的载具
-	if world.GetOwner().PlayerId == player.PlayerId {
-		vehicleEntityIdList := g.CreateSceneVehicle(scene)
-		g.AddSceneEntityNotify(player, visionType, vehicleEntityIdList, false, false)
-	}
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
@@ -502,7 +528,7 @@ func (g *Game) RemoveSceneEntityNotifyToPlayer(player *model.Player, visionType 
 }
 
 // RemoveSceneEntityNotifyBroadcast 移除的场景实体广播
-func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32) {
+func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.VisionType, entityIdList []uint32, aecUid uint32) {
 	ntf := &proto.SceneEntityDisappearNotify{
 		EntityList:    entityIdList,
 		DisappearType: visionType,
@@ -510,7 +536,7 @@ func (g *Game) RemoveSceneEntityNotifyBroadcast(scene *Scene, visionType proto.V
 	world := scene.GetWorld()
 	owner := world.GetOwner()
 	// logger.Debug("[SceneEntityDisappearNotify BC], type: %v, len: %v, uid: %v", ntf.DisappearType, len(ntf.EntityList), owner.PlayerId)
-	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, owner.ClientSeq, ntf, 0)
+	g.SendToSceneA(scene, cmd.SceneEntityDisappearNotify, owner.ClientSeq, ntf, aecUid)
 }
 
 // AddSceneEntityNotify 添加的场景实体同步 封装接口
@@ -537,15 +563,9 @@ func (g *Game) AddSceneEntityNotify(player *model.Player, visionType proto.Visio
 			}
 			switch entity.GetEntityType() {
 			case constant.ENTITY_TYPE_AVATAR:
-				if visionType == proto.VisionType_VISION_MEET && entity.GetAvatarEntity().GetUid() == player.PlayerId {
-					continue
-				}
 				scenePlayer := USER_MANAGER.GetOnlineUser(entity.GetAvatarEntity().GetUid())
 				if scenePlayer == nil {
 					logger.Error("get scene player is nil, world id: %v, scene id: %v", world.GetId(), scene.GetId())
-					continue
-				}
-				if entity.GetAvatarEntity().GetAvatarId() != world.GetPlayerActiveAvatarId(scenePlayer) {
 					continue
 				}
 				sceneEntityInfoAvatar := g.PacketSceneEntityInfoAvatar(scene, scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer))
@@ -694,7 +714,7 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 
 	// 删除实体
 	g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_DIE, []uint32{entity.GetId()}, 0)
 	scene.DestroyEntity(entity.GetId())
 	group := scene.GetGroupById(entity.GetGroupId())
 	if group == nil {
@@ -770,15 +790,20 @@ func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Enti
 	ratio := float32(ENTITY_VISION_DISTANCE*ENTITY_VISION_DISTANCE) / float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE)
 	visionEntity := make(map[uint32]*Entity, int(float32(len(allEntityMap))*ratio))
 	for _, entity := range allEntityMap {
-		dx := int32(pos.X) - int32(entity.GetPos().X)
-		if dx < 0 {
-			dx *= -1
+		if !g.IsInVision(pos, entity.GetPos()) {
+			continue
 		}
-		dy := int32(pos.Z) - int32(entity.GetPos().Z)
-		if dy < 0 {
-			dy *= -1
+		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+			scenePlayer := USER_MANAGER.GetOnlineUser(entity.GetAvatarEntity().GetUid())
+			if scenePlayer == nil {
+				logger.Error("get scene player is nil, target uid: %v", entity.GetAvatarEntity().GetUid())
+				continue
+			}
+			if !scene.GetWorld().IsPlayerActiveAvatarEntity(scenePlayer, entity.GetId()) {
+				continue
+			}
 		}
-		if dx > ENTITY_VISION_DISTANCE || dy > ENTITY_VISION_DISTANCE {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_WEAPON {
 			continue
 		}
 		visionEntity[entity.GetId()] = entity
@@ -786,25 +811,19 @@ func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Enti
 	return visionEntity
 }
 
-// CreateSceneVehicle 创建场景内的载具
-func (g *Game) CreateSceneVehicle(scene *Scene) []uint32 {
-	world := scene.GetWorld()
-	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	entityIdList := make([]uint32, 0, len(dbScene.VehicleMap))
-	for _, vehicle := range dbScene.VehicleMap {
-		// 创建载具
-		entityId := scene.CreateEntityGadgetVehicle(vehicle.OwnerUid, vehicle.Pos, vehicle.Rot, vehicle.VehicleId)
-		if entityId == 0 {
-			logger.Error("create vehicle error, sceneId: %v", dbScene.SceneId)
-			return entityIdList
-		}
-		entityIdList = append(entityIdList, entityId)
-		// 记录数据
-		owner.VehicleInfo.CreateEntityIdMap[vehicle.VehicleId] = entityId
+func (g *Game) IsInVision(p1 *model.Vector, p2 *model.Vector) bool {
+	dx := int32(p1.X) - int32(p2.X)
+	if dx < 0 {
+		dx *= -1
 	}
-	return entityIdList
+	dy := int32(p1.Z) - int32(p2.Z)
+	if dy < 0 {
+		dy *= -1
+	}
+	if dx > ENTITY_VISION_DISTANCE || dy > ENTITY_VISION_DISTANCE {
+		return false
+	}
+	return true
 }
 
 // GetNeighborGroup 获取某位置附近的场景组
@@ -1364,7 +1383,7 @@ func (g *Game) SetPlayerWeather(player *model.Player, weatherAreaId uint32, clim
 
 var SceneTransactionSeq uint32 = 0
 
-func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType proto.EnterType) *proto.PlayerEnterSceneNotify {
+func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player) *proto.PlayerEnterSceneNotify {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
@@ -1380,7 +1399,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType
 		SceneId:                player.SceneId,
 		Pos:                    &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
 		SceneBeginTime:         uint64(scene.GetSceneCreateTime()),
-		Type:                   enterType,
+		Type:                   proto.EnterType_ENTER_SELF,
 		TargetUid:              player.PlayerId,
 		EnterSceneToken:        enterSceneToken,
 		WorldLevel:             player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL],
@@ -1405,32 +1424,33 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player, enterType
 func (g *Game) PacketPlayerEnterSceneNotifyTp(
 	player *model.Player,
 	enterType proto.EnterType,
-	prevSceneId uint32,
-	prevPos *model.Vector,
+	sceneId uint32,
+	pos *model.Vector,
 	dungeonId uint32,
-	dungeonPointId uint32,
+	enterSceneToken uint32,
 ) *proto.PlayerEnterSceneNotify {
-	return g.PacketPlayerEnterSceneNotifyCore(player, player, enterType, prevSceneId, prevPos, dungeonId, dungeonPointId)
+	return g.PacketPlayerEnterSceneNotifyCore(player, player, enterType, sceneId, pos, dungeonId, enterSceneToken)
 }
 
 func (g *Game) PacketPlayerEnterSceneNotifyMp(
 	player *model.Player,
 	targetPlayer *model.Player,
 	enterType proto.EnterType,
-	prevSceneId uint32,
-	prevPos *model.Vector,
+	sceneId uint32,
+	pos *model.Vector,
+	enterSceneToken uint32,
 ) *proto.PlayerEnterSceneNotify {
-	return g.PacketPlayerEnterSceneNotifyCore(player, targetPlayer, enterType, prevSceneId, prevPos, 0, 0)
+	return g.PacketPlayerEnterSceneNotifyCore(player, targetPlayer, enterType, sceneId, pos, 0, enterSceneToken)
 }
 
 func (g *Game) PacketPlayerEnterSceneNotifyCore(
 	player *model.Player,
 	targetPlayer *model.Player,
 	enterType proto.EnterType,
-	prevSceneId uint32,
-	prevPos *model.Vector,
+	sceneId uint32,
+	pos *model.Vector,
 	dungeonId uint32,
-	dungeonPointId uint32,
+	enterSceneToken uint32,
 ) *proto.PlayerEnterSceneNotify {
 	world := WORLD_MANAGER.GetWorldById(targetPlayer.WorldId)
 	if world == nil {
@@ -1438,21 +1458,11 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		return new(proto.PlayerEnterSceneNotify)
 	}
 	scene := world.GetSceneById(targetPlayer.SceneId)
-	enterSceneToken := world.AddEnterSceneContext(&EnterSceneContext{
-		OldSceneId: prevSceneId,
-		OldPos: &model.Vector{
-			X: prevPos.X,
-			Y: prevPos.Y,
-			Z: prevPos.Z,
-		},
-		OldDungeonPointId: dungeonPointId,
-		Uid:               player.PlayerId,
-	})
 	playerEnterSceneNotify := &proto.PlayerEnterSceneNotify{
-		PrevSceneId:     prevSceneId,
-		PrevPos:         &proto.Vector{X: float32(prevPos.X), Y: float32(prevPos.Y), Z: float32(prevPos.Z)},
-		SceneId:         targetPlayer.SceneId,
-		Pos:             &proto.Vector{X: float32(targetPlayer.GetPos().X), Y: float32(targetPlayer.GetPos().Y), Z: float32(targetPlayer.GetPos().Z)},
+		PrevSceneId:     player.SceneId,
+		PrevPos:         &proto.Vector{X: float32(player.GetPos().X), Y: float32(player.GetPos().Y), Z: float32(player.GetPos().Z)},
+		SceneId:         sceneId,
+		Pos:             &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
 		SceneBeginTime:  uint64(scene.GetSceneCreateTime()),
 		Type:            enterType,
 		TargetUid:       targetPlayer.PlayerId,
@@ -1464,12 +1474,12 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		SceneTagIdList:  make([]uint32, 0),
 	}
 	SceneTransactionSeq++
-	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(targetPlayer.SceneId)) + "-" +
+	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(sceneId)) + "-" +
 		strconv.Itoa(int(player.PlayerId)) + "-" +
 		strconv.Itoa(int(time.Now().Unix())) + "-" +
 		strconv.Itoa(int(SceneTransactionSeq))
 	for _, sceneTagDataConfig := range gdconf.GetSceneTagDataMap() {
-		if uint32(sceneTagDataConfig.SceneId) == targetPlayer.SceneId {
+		if uint32(sceneTagDataConfig.SceneId) == sceneId {
 			playerEnterSceneNotify.SceneTagIdList = append(playerEnterSceneNotify.SceneTagIdList, uint32(sceneTagDataConfig.SceneTagId))
 		}
 	}
@@ -1860,10 +1870,10 @@ func (g *Game) PacketSceneGadgetInfoVehicle(gadgetVehicleEntity *GadgetVehicleEn
 	return sceneGadgetInfo
 }
 
-func (g *Game) PacketDelTeamEntityNotify(scene *Scene, player *model.Player) *proto.DelTeamEntityNotify {
+func (g *Game) PacketDelTeamEntityNotify(world *World, player *model.Player) *proto.DelTeamEntityNotify {
 	delTeamEntityNotify := &proto.DelTeamEntityNotify{
 		SceneId:         player.SceneId,
-		DelEntityIdList: []uint32{scene.GetWorld().GetPlayerTeamEntityId(player)},
+		DelEntityIdList: []uint32{world.GetPlayerTeamEntityId(player)},
 	}
 	return delTeamEntityNotify
 }

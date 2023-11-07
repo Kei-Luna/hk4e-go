@@ -443,6 +443,13 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 			if aecUid == v.PlayerId {
 				continue
 			}
+			if SELF != nil {
+				p1 := g.GetPlayerPos(SELF)
+				p2 := g.GetPlayerPos(v)
+				if !g.IsInVision(p1, p2) {
+					continue
+				}
+			}
 			g.SendMsg(cmdId, v.PlayerId, seq, msg)
 		}
 	}
@@ -476,6 +483,13 @@ func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 			}
 			if v.ClientVersion != clientVersion {
 				continue
+			}
+			if SELF != nil {
+				p1 := g.GetPlayerPos(SELF)
+				p2 := g.GetPlayerPos(v)
+				if !g.IsInVision(p1, p2) {
+					continue
+				}
 			}
 			g.SendMsg(cmdId, v.PlayerId, seq, msg)
 		}

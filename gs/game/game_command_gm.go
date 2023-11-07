@@ -486,6 +486,7 @@ func (g *GMCmd) GMUnlockAllOpenState(userId uint32) {
 
 // GMFreeMode 自由探索模式
 func (g *GMCmd) GMFreeMode(userId uint32) {
+	GAME.LogoutPlayer(userId)
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -499,7 +500,10 @@ func (g *GMCmd) GMFreeMode(userId uint32) {
 	player.PropMap[constant.PLAYER_PROP_PLAYER_CAN_DIVE] = 1
 	player.PropMap[constant.PLAYER_PROP_DIVE_MAX_STAMINA] = 10000
 	player.PropMap[constant.PLAYER_PROP_DIVE_CUR_STAMINA] = 10000
-	GAME.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, GAME.PacketPlayerPropNotify(player))
+	g.GMUnlockAllOpenState(userId)
+	for _, sceneData := range gdconf.GetSceneDataMap() {
+		g.GMUnlockAllPoint(userId, uint32(sceneData.SceneId))
+	}
 }
 
 // 系统级GM指令
@@ -609,9 +613,8 @@ func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32, p
 	GAME.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
 		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
-	activeAvatarId := aiWorld.GetPlayerActiveAvatarId(robot)
 	entityMoveInfo := &proto.EntityMoveInfo{
-		EntityId: aiWorld.GetPlayerWorldAvatarEntityId(robot, activeAvatarId),
+		EntityId: aiWorld.GetPlayerActiveAvatarEntity(robot).GetId(),
 		MotionInfo: &proto.MotionInfo{
 			Pos:   &proto.Vector{X: float32(posX), Y: float32(posY), Z: float32(posZ)},
 			Rot:   &proto.Vector{X: float32(0.0), Y: float32(0.0), Z: float32(0.0)},

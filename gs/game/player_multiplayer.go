@@ -180,12 +180,18 @@ func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
 		player.SetRot(hostPlayer.GetRot())
 		g.WorldAddPlayer(hostWorld, player)
 
+		enterSceneToken := hostWorld.AddEnterSceneContext(&EnterSceneContext{
+			OldSceneId: 0,
+			Uid:        player.PlayerId,
+		})
+
 		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
 			player,
 			hostPlayer,
 			proto.EnterType_ENTER_OTHER,
-			0,
-			new(model.Vector),
+			hostPlayer.SceneId,
+			hostPlayer.GetPos(),
+			enterSceneToken,
 		)
 		g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, playerEnterSceneNotify)
 	} else {
@@ -365,12 +371,23 @@ func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
 
 	pos := g.GetPlayerPos(hostPlayer)
 
+	enterSceneToken := world.AddEnterSceneContext(&EnterSceneContext{
+		OldSceneId:        hostPlayer.SceneId,
+		OldPos:            pos,
+		NewSceneId:        hostPlayer.SceneId,
+		NewPos:            hostPlayer.GetPos(),
+		NewRot:            hostPlayer.GetRot(),
+		OldDungeonPointId: 0,
+		Uid:               hostPlayer.PlayerId,
+	})
+
 	hostPlayerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
 		hostPlayer,
 		hostPlayer,
 		proto.EnterType_ENTER_GOTO,
 		hostPlayer.SceneId,
-		pos,
+		hostPlayer.GetPos(),
+		enterSceneToken,
 	)
 	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
 }
@@ -407,7 +424,7 @@ func (g *Game) WorldAddPlayer(world *World, player *model.Player) {
 	if exist {
 		return
 	}
-	world.AddPlayer(player, player.SceneId)
+	world.AddPlayer(player)
 	player.WorldId = world.GetId()
 	if world.IsMultiplayerWorld() && world.GetWorldPlayerNum() > 1 {
 		g.UpdateWorldPlayerInfo(world, player)
@@ -437,25 +454,23 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 	}
 	scene := world.GetSceneById(player.SceneId)
 
+	// 清除玩家的载具
+	for vehicleId, entityId := range player.VehicleInfo.CreateEntityIdMap {
+		g.DestroyVehicleEntity(player, scene, vehicleId, entityId)
+	}
+
 	entityIdList := make([]uint32, 0)
 	for _, entity := range g.GetVisionEntity(scene, g.GetPlayerPos(player)) {
 		entityIdList = append(entityIdList, entity.GetId())
 	}
 	g.RemoveSceneEntityNotifyToPlayer(player, proto.VisionType_VISION_MISS, entityIdList)
 
-	delTeamEntityNotify := g.PacketDelTeamEntityNotify(scene, player)
+	delTeamEntityNotify := g.PacketDelTeamEntityNotify(world, player)
 	g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerId, player.ClientSeq, delTeamEntityNotify)
 
-	// 清除其他玩家的载具
-	if world.GetOwner().PlayerId != player.PlayerId {
-		for vehicleId, entityId := range player.VehicleInfo.CreateEntityIdMap {
-			g.DestroyVehicleEntity(player, scene, vehicleId, entityId)
-		}
-	}
-
 	if world.IsMultiplayerWorld() {
-		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{world.GetPlayerWorldAvatarEntityId(player, activeAvatarId)})
+		activeAvatarEntity := world.GetPlayerActiveAvatarEntity(player)
+		g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_REMOVE, []uint32{activeAvatarEntity.GetId()}, 0)
 	}
 
 	world.RemovePlayer(player)

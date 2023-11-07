@@ -3,6 +3,7 @@ package game
 import (
 	"time"
 
+	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
@@ -56,13 +57,6 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 	// 记录创建的载具信息
 	player.VehicleInfo.CreateEntityIdMap[req.VehicleId] = entityId
 	player.VehicleInfo.LastCreateTime = time.Now().UnixMilli()
-	// 记录房主的载具位置
-	owner := world.GetOwner()
-	if owner == player {
-		dbWorld := owner.GetDbWorld()
-		dbScene := dbWorld.GetSceneById(scene.GetId())
-		dbScene.AddVehicle(req.VehicleId, player.PlayerId, pos, rot)
-	}
 
 	// PacketCreateVehicleRsp
 	createVehicleRsp := &proto.CreateVehicleRsp{
@@ -132,7 +126,11 @@ func (g *Game) VehicleDestroyMotion(player *model.Player, entity *Entity, state 
 }
 
 // IsPlayerInVehicle 判断玩家是否在载具中
-func (g *Game) IsPlayerInVehicle(player *model.Player, gadgetVehicleEntity *GadgetVehicleEntity) bool {
+func (g *Game) IsPlayerInVehicle(player *model.Player, entity *Entity) bool {
+	if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
+		return false
+	}
+	gadgetVehicleEntity := entity.GetGadgetEntity().GetGadgetVehicleEntity()
 	if gadgetVehicleEntity == nil {
 		return false
 	}
@@ -165,7 +163,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 		return
 	}
 	// 如果玩家正在载具中
-	if g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
+	if g.IsPlayerInVehicle(player, entity) {
 		// 离开载具
 		dbTeam := player.GetDbTeam()
 		dbAvatar := player.GetDbAvatar()
@@ -173,18 +171,9 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 	}
 	// 删除已创建的载具
 	scene.DestroyEntity(entity.GetId())
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()})
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{entity.GetId()}, 0)
 	// 删除玩家载具在线数据
 	delete(player.VehicleInfo.CreateEntityIdMap, vehicleId)
-	// 删除房主的载具存档
-	world := scene.GetWorld()
-	owner := world.GetOwner()
-	if owner == player {
-		dbWorld := owner.GetDbWorld()
-		dbScene := dbWorld.GetSceneById(scene.GetId())
-		delete(dbScene.VehicleMap, vehicleId)
-	}
-
 }
 
 // EnterVehicle 进入载具
@@ -235,7 +224,7 @@ func (g *Game) EnterVehicle(player *model.Player, entity *Entity, avatarGuid uin
 func (g *Game) ExitVehicle(player *model.Player, entity *Entity, avatarGuid uint64) {
 	// 玩家是否进入载具
 	gadgetEntity := entity.GetGadgetEntity()
-	if !g.IsPlayerInVehicle(player, gadgetEntity.GetGadgetVehicleEntity()) {
+	if !g.IsPlayerInVehicle(player, entity) {
 		logger.Error("vehicle not has player, uid: %v", player.PlayerId)
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{}, proto.Retcode_RET_NOT_IN_VEHICLE)
 		return

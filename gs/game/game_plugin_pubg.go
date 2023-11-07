@@ -225,7 +225,7 @@ func (p *PluginPubg) GlobalTickPubg() {
 			GAME.handleEvtBeingHit(scenePlayer, scene, &proto.EvtBeingHitInfo{
 				AttackResult: &proto.AttackResult{
 					AttackerId: 0,
-					DefenseId:  world.GetPlayerWorldAvatarEntityId(scenePlayer, world.GetPlayerActiveAvatarId(scenePlayer)),
+					DefenseId:  world.GetPlayerActiveAvatarEntity(scenePlayer).GetId(),
 					Damage:     PUBG_HP_LOST,
 				},
 			})
@@ -560,9 +560,10 @@ func (p *PluginPubg) PubgHit(scene *Scene, defAvatarEntityId uint32, atkAvatarEn
 	}
 	GAME.handleEvtBeingHit(defPlayer, scene, &proto.EvtBeingHitInfo{
 		AttackResult: &proto.AttackResult{
-			AttackerId: atkAvatarEntity.GetId(),
-			DefenseId:  defAvatarEntity.GetId(),
-			Damage:     dmg,
+			AttackerId:   atkAvatarEntity.GetId(),
+			DefenseId:    defAvatarEntity.GetId(),
+			Damage:       dmg,
+			DamageShield: dmg,
 		},
 	})
 	if attackResultTemplate == nil {
