@@ -376,6 +376,7 @@ func (p *PluginPubg) StartPubg() {
 			FightPropMap: avatar.FightPropMap,
 		})
 		p.playerHitTimeMap[player.PlayerId] = 0
+		player.StaminaInf = true
 	}
 }
 

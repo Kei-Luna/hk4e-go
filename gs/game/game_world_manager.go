@@ -367,27 +367,12 @@ func (w *World) AddPlayer(player *model.Player) {
 	// 将玩家自身当前的队伍角色信息复制到世界的玩家本地队伍
 	dbTeam := player.GetDbTeam()
 	team := dbTeam.GetActiveTeam()
-	if player.PlayerId == w.owner.PlayerId {
-		w.SetPlayerLocalTeam(player, team.GetAvatarIdList())
-	} else {
-		activeAvatarId := dbTeam.GetActiveAvatarId()
-		w.SetPlayerLocalTeam(player, []uint32{activeAvatarId})
-	}
+	w.SetPlayerLocalTeam(player, team.GetAvatarIdList())
+	w.SetPlayerActiveAvatarId(player, dbTeam.GetActiveAvatarId())
 	if WORLD_MANAGER.IsAiWorld(w) {
 		w.AddMultiplayerTeam(player)
 	} else {
 		w.UpdateMultiplayerTeam()
-	}
-	for _, worldPlayer := range w.playerMap {
-		list := w.GetPlayerWorldAvatarList(worldPlayer)
-		maxIndex := len(list) - 1
-		worldPlayerDbTeam := worldPlayer.GetDbTeam()
-		index := int(worldPlayerDbTeam.CurrAvatarIndex)
-		if index > maxIndex {
-			w.SetPlayerAvatarIndex(worldPlayer, 0)
-		} else {
-			w.SetPlayerAvatarIndex(worldPlayer, index)
-		}
 	}
 
 	scene := w.GetSceneById(player.SceneId)
@@ -404,8 +389,8 @@ func (w *World) RemovePlayer(player *model.Player) {
 	delete(w.playerMap, player.PlayerId)
 	delete(w.playerFirstEnterMap, player.PlayerId)
 	delete(w.multiplayerTeam.localTeamMap, player.PlayerId)
-	delete(w.multiplayerTeam.localAvatarIndexMap, player.PlayerId)
 	delete(w.multiplayerTeam.localTeamEntityMap, player.PlayerId)
+	delete(w.multiplayerTeam.localActiveAvatarMap, player.PlayerId)
 	if WORLD_MANAGER.IsAiWorld(w) {
 		w.RemoveMultiplayerTeam(player)
 	} else {
@@ -556,25 +541,25 @@ func (w *World) GetPlayerWorldAvatarWeaponEntityId(player *model.Player, avatarI
 	return worldAvatar.weaponEntityId
 }
 
-// GetPlayerAvatarIndex 获取某玩家当前角色索引
-func (w *World) GetPlayerAvatarIndex(player *model.Player) int {
-	return w.multiplayerTeam.localAvatarIndexMap[player.PlayerId]
-}
-
-// SetPlayerAvatarIndex 设置某玩家当前角色索引
-func (w *World) SetPlayerAvatarIndex(player *model.Player, index int) {
-	if index > len(w.GetPlayerLocalTeam(player))-1 {
-		return
-	}
-	w.multiplayerTeam.localAvatarIndexMap[player.PlayerId] = index
-}
-
 // GetPlayerActiveAvatarId 获取玩家当前活跃角色id
 func (w *World) GetPlayerActiveAvatarId(player *model.Player) uint32 {
-	avatarIndex := w.GetPlayerAvatarIndex(player)
+	return w.multiplayerTeam.localActiveAvatarMap[player.PlayerId]
+}
+
+// SetPlayerActiveAvatarId 设置玩家当前活跃角色id
+func (w *World) SetPlayerActiveAvatarId(player *model.Player, avatarId uint32) {
 	localTeam := w.GetPlayerLocalTeam(player)
-	worldTeamAvatar := localTeam[avatarIndex]
-	return worldTeamAvatar.avatarId
+	exist := false
+	for _, worldAvatar := range localTeam {
+		if worldAvatar.avatarId == avatarId {
+			exist = true
+			break
+		}
+	}
+	if !exist {
+		return
+	}
+	w.multiplayerTeam.localActiveAvatarMap[player.PlayerId] = avatarId
 }
 
 // GetPlayerAvatarIndexByAvatarId 获取玩家某角色的索引
@@ -594,6 +579,9 @@ func (w *World) GetPlayerActiveAvatarEntity(player *model.Player) *Entity {
 	avatarEntityId := w.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
 	scene := w.GetSceneById(player.SceneId)
 	entity := scene.GetEntity(avatarEntityId)
+	if entity == nil {
+		panic("fuck")
+	}
 	return entity
 }
 
@@ -609,9 +597,10 @@ func (w *World) IsPlayerActiveAvatarEntity(player *model.Player, entityId uint32
 type MultiplayerTeam struct {
 	// key:uid value:玩家的本地队伍
 	localTeamMap map[uint32][]*WorldAvatar
-	// key:uid value:玩家当前角色索引
-	localAvatarIndexMap map[uint32]int
-	localTeamEntityMap  map[uint32]uint32
+	// key:uid value:玩家的本地队伍实体id
+	localTeamEntityMap map[uint32]uint32
+	// key:uid value:玩家当前活跃角色id
+	localActiveAvatarMap map[uint32]uint32
 	// 最终的世界队伍
 	worldTeam []*WorldAvatar
 }
@@ -619,8 +608,8 @@ type MultiplayerTeam struct {
 func CreateMultiplayerTeam() (r *MultiplayerTeam) {
 	r = new(MultiplayerTeam)
 	r.localTeamMap = make(map[uint32][]*WorldAvatar)
-	r.localAvatarIndexMap = make(map[uint32]int)
 	r.localTeamEntityMap = make(map[uint32]uint32)
+	r.localActiveAvatarMap = make(map[uint32]uint32)
 	r.worldTeam = make([]*WorldAvatar, 0)
 	return r
 }
@@ -692,27 +681,6 @@ func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) 
 	w.multiplayerTeam.localTeamMap[player.PlayerId] = newLocalTeam
 }
 
-func (w *World) copyLocalTeamToWorld(start int, end int, peerId uint32) {
-	player := w.GetPlayerByPeerId(peerId)
-	localTeam := w.GetPlayerLocalTeam(player)
-	localTeamIndex := 0
-	for index := start; index <= end; index++ {
-		if localTeamIndex >= len(localTeam) {
-			w.multiplayerTeam.worldTeam[index] = &WorldAvatar{
-				uid:            0,
-				avatarId:       0,
-				avatarEntityId: 0,
-				weaponEntityId: 0,
-				abilityMap:     nil,
-				modifierMap:    nil,
-			}
-			continue
-		}
-		w.multiplayerTeam.worldTeam[index] = localTeam[localTeamIndex]
-		localTeamIndex++
-	}
-}
-
 // 为了实现大世界无限人数写的
 // 现在看来把世界里所有人放进队伍里发给客户端超过8个客户端会崩溃
 // 看来还是不能简单的走通用逻辑 需要对大世界场景队伍做特殊处理 欺骗客户端其他玩家仅仅以场景角色实体的形式出现
@@ -743,23 +711,93 @@ func (w *World) UpdateMultiplayerTeam() {
 	switch playerNum {
 	case 1:
 		// 1P*4
-		w.copyLocalTeamToWorld(0, 3, 1)
+		p1 := w.GetPlayerByPeerId(1)
+		p1LocalTeam := w.GetPlayerLocalTeam(p1)
+		for index := 0; index <= 3; index++ {
+			worldAvatar := &WorldAvatar{
+				uid:            0,
+				avatarId:       0,
+				avatarEntityId: 0,
+				weaponEntityId: 0,
+				abilityMap:     nil,
+				modifierMap:    nil,
+			}
+			if index < len(p1LocalTeam) {
+				worldAvatar = p1LocalTeam[index]
+			}
+			w.multiplayerTeam.worldTeam[index] = worldAvatar
+		}
 	case 2:
 		// 1P*2 + 2P*2
-		w.copyLocalTeamToWorld(0, 1, 1)
-		w.copyLocalTeamToWorld(2, 3, 2)
+		for index := 0; index <= 3; index++ {
+			switch index {
+			case 0:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(1, true)
+			case 1:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(1, false)
+			case 2:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(2, true)
+			case 3:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(2, false)
+			}
+		}
 	case 3:
 		// 1P*2 + 2P*1 + 3P*1
-		w.copyLocalTeamToWorld(0, 1, 1)
-		w.copyLocalTeamToWorld(2, 2, 2)
-		w.copyLocalTeamToWorld(3, 3, 3)
+		for index := 0; index <= 3; index++ {
+			switch index {
+			case 0:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(1, true)
+			case 1:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(1, false)
+			case 2:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(2, true)
+			case 3:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(3, true)
+			}
+		}
 	case 4:
 		// 1P*1 + 2P*1 + 3P*1 + 4P*1
-		w.copyLocalTeamToWorld(0, 0, 1)
-		w.copyLocalTeamToWorld(1, 1, 2)
-		w.copyLocalTeamToWorld(2, 2, 3)
-		w.copyLocalTeamToWorld(3, 3, 4)
+		for index := 0; index <= 3; index++ {
+			switch index {
+			case 0:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(1, true)
+			case 1:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(2, true)
+			case 2:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(3, true)
+			case 3:
+				w.multiplayerTeam.worldTeam[index] = w.SelectPlayerWorldAvatar(4, true)
+			}
+		}
 	}
+}
+
+func (w *World) SelectPlayerWorldAvatar(peerId uint32, active bool) *WorldAvatar {
+	worldAvatar := &WorldAvatar{
+		uid:            0,
+		avatarId:       0,
+		avatarEntityId: 0,
+		weaponEntityId: 0,
+		abilityMap:     nil,
+		modifierMap:    nil,
+	}
+	player := w.GetPlayerByPeerId(peerId)
+	localTeam := w.GetPlayerLocalTeam(player)
+	activeAvatarId := w.GetPlayerActiveAvatarId(player)
+	for _, wa := range localTeam {
+		if active {
+			if wa.avatarId == activeAvatarId {
+				worldAvatar = wa
+				break
+			}
+		} else {
+			if wa.avatarId != activeAvatarId {
+				worldAvatar = wa
+				break
+			}
+		}
+	}
+	return worldAvatar
 }
 
 // 世界聊天

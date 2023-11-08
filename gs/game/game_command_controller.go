@@ -40,6 +40,9 @@ func (c *CommandManager) InitController() {
 		c.NewWeatherCommandController(),
 		c.NewClearCommandController(),
 		c.NewDebugCommandController(),
+		c.NewWudiCommandController(),
+		c.NewEnergyCommandController(),
+		c.NewStaminaCommandController(),
 	}
 	c.RegAllController(controllerList...)
 }
@@ -950,6 +953,154 @@ func (c *CommandManager) DebugCommand(content *CommandContent) bool {
 			GAME.GCGStartChallenge(content.AssignPlayer)
 			content.SendSuccMessage(content.Executor, "已开始七圣召唤对局，指定UID：%v。", content.AssignPlayer.PlayerId)
 			return true
+		default:
+			return false
+		}
+	})
+}
+
+func (c *CommandManager) NewWudiCommandController() *CommandController {
+	return &CommandController{
+		Name:        "开关无敌",
+		AliasList:   []string{"wudi"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>开关无敌</color>",
+		UsageList: []string{
+			"{alias} global avatar <on/off> 开关玩家无敌",
+		},
+		Perm: CommandPermNormal,
+		Func: c.WudiCommand,
+	}
+}
+
+func (c *CommandManager) WudiCommand(content *CommandContent) bool {
+	var mode1 string  // 模式
+	var mode2 string  // 模式
+	var param1 string // 参数
+
+	return content.Dynamic("string", func(param any) bool {
+		// 模式
+		mode1 = param.(string)
+		return true
+	}).Dynamic("string", func(param any) bool {
+		// 模式
+		mode2 = param.(string)
+		return true
+	}).Option("string", func(param any) bool {
+		// 参数1
+		param1 = param.(string)
+		return true
+	}).Execute(func() bool {
+		switch mode1 {
+		case "global":
+			switch mode2 {
+			case "avatar":
+				switch param1 {
+				case "on":
+					c.gmCmd.GMSetPlayerWuDi(content.AssignPlayer.PlayerId, true)
+					content.SendSuccMessage(content.Executor, "已开启玩家无敌，指定UID：%v。", content.AssignPlayer.PlayerId)
+					return true
+				case "off":
+					c.gmCmd.GMSetPlayerWuDi(content.AssignPlayer.PlayerId, false)
+					content.SendSuccMessage(content.Executor, "已关闭玩家无敌，指定UID：%v。", content.AssignPlayer.PlayerId)
+					return true
+				default:
+					return false
+				}
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	})
+}
+
+func (c *CommandManager) NewEnergyCommandController() *CommandController {
+	return &CommandController{
+		Name:        "元素能量",
+		AliasList:   []string{"energy"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>元素能量</color>",
+		UsageList: []string{
+			"{alias} infinite <on/off> 开关无限元素爆发",
+		},
+		Perm: CommandPermNormal,
+		Func: c.EnergyCommand,
+	}
+}
+
+func (c *CommandManager) EnergyCommand(content *CommandContent) bool {
+	var mode1 string  // 模式
+	var param1 string // 参数
+
+	return content.Dynamic("string", func(param any) bool {
+		// 模式
+		mode1 = param.(string)
+		return true
+	}).Option("string", func(param any) bool {
+		// 参数1
+		param1 = param.(string)
+		return true
+	}).Execute(func() bool {
+		switch mode1 {
+		case "infinite":
+			switch param1 {
+			case "on":
+				c.gmCmd.GMSetPlayerEnergyInf(content.AssignPlayer.PlayerId, true)
+				content.SendSuccMessage(content.Executor, "已开启无限元素爆发，指定UID：%v。", content.AssignPlayer.PlayerId)
+				return true
+			case "off":
+				c.gmCmd.GMSetPlayerEnergyInf(content.AssignPlayer.PlayerId, false)
+				content.SendSuccMessage(content.Executor, "已关闭无限元素爆发，指定UID：%v。", content.AssignPlayer.PlayerId)
+				return true
+			default:
+				return false
+			}
+		default:
+			return false
+		}
+	})
+}
+
+func (c *CommandManager) NewStaminaCommandController() *CommandController {
+	return &CommandController{
+		Name:        "无限耐力",
+		AliasList:   []string{"stamina"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>无限耐力</color>",
+		UsageList: []string{
+			"{alias} infinite <on/off> 开关无限耐力",
+		},
+		Perm: CommandPermNormal,
+		Func: c.StaminaCommand,
+	}
+}
+
+func (c *CommandManager) StaminaCommand(content *CommandContent) bool {
+	var mode1 string  // 模式
+	var param1 string // 参数
+
+	return content.Dynamic("string", func(param any) bool {
+		// 模式
+		mode1 = param.(string)
+		return true
+	}).Option("string", func(param any) bool {
+		// 参数1
+		param1 = param.(string)
+		return true
+	}).Execute(func() bool {
+		switch mode1 {
+		case "infinite":
+			switch param1 {
+			case "on":
+				c.gmCmd.GMSetPlayerStaminaInf(content.AssignPlayer.PlayerId, true)
+				content.SendSuccMessage(content.Executor, "已开启无限耐力，指定UID：%v。", content.AssignPlayer.PlayerId)
+				return true
+			case "off":
+				c.gmCmd.GMSetPlayerStaminaInf(content.AssignPlayer.PlayerId, false)
+				content.SendSuccMessage(content.Executor, "已关闭无限耐力，指定UID：%v。", content.AssignPlayer.PlayerId)
+				return true
+			default:
+				return false
+			}
 		default:
 			return false
 		}

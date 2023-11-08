@@ -240,7 +240,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 			TeamEnterInfo: &proto.TeamEnterSceneInfo{
 				TeamEntityId:        world.GetPlayerTeamEntityId(player),
 				TeamAbilityInfo:     new(proto.AbilitySyncStateInfo),
-				AbilityControlBlock: new(proto.AbilityControlBlock),
+				AbilityControlBlock: g.PacketTeamAbilityControlBlock(),
 			},
 			MpLevelEntityInfo: &proto.MPLevelEntityInfo{
 				EntityId:        world.GetMpLevelEntityId(),
@@ -635,7 +635,9 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 	}
 
 	avatar.LifeState = constant.LIFE_STATE_DEAD
-	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 0
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 0.0
+
+	g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
 
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	if avatarId == activeAvatarId {
@@ -653,30 +655,23 @@ func (g *Game) KillPlayerAvatar(player *model.Player, avatarId uint32, dieType p
 
 // RevivePlayerAvatar 复活玩家活跃角色实体
 func (g *Game) RevivePlayerAvatar(player *model.Player, avatarId uint32) {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+
 	dbAvatar := player.GetDbAvatar()
 	avatar, exist := dbAvatar.AvatarMap[avatarId]
 	if !exist {
 		logger.Error("get db avatar is nil, avatarId: %v", avatarId)
 		return
 	}
+
 	avatar.LifeState = constant.LIFE_STATE_ALIVE
-	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 100
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = 100.0
 
-	g.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
-		AvatarGuid:   avatar.Guid,
-		FightPropMap: avatar.FightPropMap,
-	})
-
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		return
-	}
-	worldAvatar := world.GetPlayerWorldAvatar(player, avatarId)
-	if worldAvatar == nil {
-		return
-	}
-	scene := world.GetSceneById(player.SceneId)
-	entity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 
 	ntf := &proto.AvatarLifeStateChangeNotify{
 		AvatarGuid:      avatar.Guid,
@@ -686,8 +681,13 @@ func (g *Game) RevivePlayerAvatar(player *model.Player, avatarId uint32) {
 	}
 	g.SendToWorldA(world, cmd.AvatarLifeStateChangeNotify, 0, ntf, 0)
 
+	worldAvatar := world.GetPlayerWorldAvatar(player, avatarId)
+	if worldAvatar == nil {
+		return
+	}
+	entity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
 	entity.SetLifeState(constant.LIFE_STATE_ALIVE)
-	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 100
+	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 100.0
 }
 
 // KillEntity 杀死实体
@@ -699,7 +699,7 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 	// 设置血量
 	entity.SetLastDieType(int32(dieType))
 	entity.SetLifeState(constant.LIFE_STATE_DEAD)
-	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 0
+	entity.GetFightProp()[constant.FIGHT_PROP_CUR_HP] = 0.0
 	ntf := &proto.LifeStateChangeNotify{
 		EntityId:        entity.GetId(),
 		LifeState:       uint32(entity.GetLifeState()),

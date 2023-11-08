@@ -129,6 +129,7 @@ func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
 		EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
 	})
 	robot.SetPos(&model.Vector{X: 500.0, Y: 900.0, Z: -500.0})
+	robot.WuDi = true
 	return robot
 }
 

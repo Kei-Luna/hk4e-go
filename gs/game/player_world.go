@@ -443,9 +443,7 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 		// TODO 元素能量球吸收
 		interactType = proto.InteractType_INTERACT_PICK_ITEM
 		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		dbAvatar := player.GetDbAvatar()
-		dbAvatar.SetCurrEnergy(activeAvatarId, 0, true)
-		g.UpdatePlayerAvatarFightProp(player.PlayerId, activeAvatarId)
+		g.AddPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 10.0, false)
 	case constant.GADGET_TYPE_GATHER_OBJECT:
 		// 采集物摘取
 		interactType = proto.InteractType_INTERACT_GATHER
@@ -490,18 +488,12 @@ func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.M
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	dbTeam := player.GetDbTeam()
-	activeTeam := dbTeam.GetActiveTeam()
-	for _, avatarId := range activeTeam.GetAvatarIdList() {
-		avatar := dbAvatar.AvatarMap[avatarId]
+	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+		avatar := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
 		if avatar.LifeState == constant.LIFE_STATE_DEAD {
-			g.RevivePlayerAvatar(player, avatarId)
+			g.RevivePlayerAvatar(player, worldAvatar.GetAvatarId())
 		}
-		avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP]
-		g.SendMsg(cmd.AvatarFightPropUpdateNotify, player.PlayerId, player.ClientSeq, &proto.AvatarFightPropUpdateNotify{
-			AvatarGuid:   avatar.Guid,
-			FightPropMap: avatar.FightPropMap,
-		})
+		g.AddPlayerAvatarHp(player.PlayerId, worldAvatar.GetAvatarId(), 0.0, true, proto.ChangHpReason_CHANGE_HP_ADD_GM)
 	}
 }
 

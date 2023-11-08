@@ -202,9 +202,13 @@ func (g *GMCmd) GMKillSelf(userId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	// 激活的角色id
-	activeAvatarId := player.GetDbTeam().GetActiveAvatarId()
-	// 杀死角色
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	// 杀死当前活跃角色
+	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	GAME.KillPlayerAvatar(player, activeAvatarId, proto.PlayerDieType_PLAYER_DIE_GM)
 }
 
@@ -504,6 +508,59 @@ func (g *GMCmd) GMFreeMode(userId uint32) {
 	for _, sceneData := range gdconf.GetSceneDataMap() {
 		g.GMUnlockAllPoint(userId, uint32(sceneData.SceneId))
 	}
+}
+
+// GMChangeSkillDepot 切换当前角色技能库
+func (g *GMCmd) GMChangeSkillDepot(userId uint32, skillDepotId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	GAME.ChangePlayerAvatarSkillDepot(player.PlayerId, world.GetPlayerActiveAvatarId(player), skillDepotId, 0)
+}
+
+// GMSetPlayerWuDi 开启关闭玩家角色无敌
+func (g *GMCmd) GMSetPlayerWuDi(userId uint32, open bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.WuDi = open
+}
+
+// GMSetPlayerEnergyInf 开启关闭玩家角色无限能量
+func (g *GMCmd) GMSetPlayerEnergyInf(userId uint32, open bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.EnergyInf = open
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+		GAME.AddPlayerAvatarEnergy(player.PlayerId, worldAvatar.GetAvatarId(), 0.0, true)
+	}
+}
+
+// GMSetPlayerStaminaInf 开启关闭玩家无限耐力
+func (g *GMCmd) GMSetPlayerStaminaInf(userId uint32, open bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.StaminaInf = open
 }
 
 // 系统级GM指令

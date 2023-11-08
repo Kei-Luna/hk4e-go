@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"time"
 
 	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/gs/model"
+	"hk4e/pkg/alg"
 	"hk4e/pkg/logger"
 	"hk4e/pkg/reflection"
 	"hk4e/protocol/cmd"
@@ -189,64 +189,46 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		logger.Error("not found def entity, DefenseId: %v", attackResult.DefenseId)
 		return
 	}
-
-	if WORLD_MANAGER.IsAiWorld(world) {
-		if defEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR &&
-			defEntity.GetAvatarEntity().GetUid() == world.GetOwner().PlayerId {
-			return
-		}
-	}
-
-	fightProp := defEntity.GetFightProp()
-	maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
-	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
-	if currHp == 0.0 {
-		return
-	}
-	currHp -= attackResult.Damage
-	deltaHp := -attackResult.Damage
-	if currHp < 0.0 {
-		deltaHp -= currHp
-		currHp = 0.0
-	}
-	fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
-	g.EntityFightPropUpdateNotifyBroadcast(scene, defEntity)
 	switch defEntity.GetEntityType() {
 	case constant.ENTITY_TYPE_AVATAR:
-		g.SendMsg(cmd.EntityFightPropChangeReasonNotify, player.PlayerId, player.ClientSeq, &proto.EntityFightPropChangeReasonNotify{
-			PropDelta:      deltaHp,
-			ChangeHpReason: proto.ChangHpReason_CHANGE_HP_SUB_GM,
-			EntityId:       defEntity.GetId(),
-			PropType:       constant.FIGHT_PROP_CUR_HP,
-		})
-		if currHp == 0.0 {
-			defAvatarEntity := defEntity.GetAvatarEntity()
-			g.KillPlayerAvatar(player, defAvatarEntity.GetAvatarId(), proto.PlayerDieType_PLAYER_DIE_GM)
-
-			if WORLD_MANAGER.IsAiWorld(world) {
-				defPlayer := USER_MANAGER.GetOnlineUser(defAvatarEntity.GetUid())
-				if defPlayer == nil {
+		g.SubPlayerAvatarHp(player.PlayerId, defEntity.GetAvatarEntity().GetAvatarId(), attackResult.Damage, false, proto.ChangHpReason_CHANGE_HP_SUB_MONSTER)
+		if WORLD_MANAGER.IsAiWorld(world) {
+			fightProp := defEntity.GetFightProp()
+			currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+			if currHp > 0.0 {
+				return
+			}
+			defPlayer := USER_MANAGER.GetOnlineUser(defEntity.GetAvatarEntity().GetUid())
+			if defPlayer == nil {
+				return
+			}
+			atkEntity := scene.GetEntity(attackResult.AttackerId)
+			if atkEntity != nil && atkEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+				atkPlayer := USER_MANAGER.GetOnlineUser(atkEntity.GetAvatarEntity().GetUid())
+				if atkPlayer == nil {
 					return
 				}
-				atkEntity := scene.GetEntity(attackResult.AttackerId)
-				if atkEntity != nil && atkEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-					atkAvatarEntity := atkEntity.GetAvatarEntity()
-					atkPlayer := USER_MANAGER.GetOnlineUser(atkAvatarEntity.GetUid())
-					if atkPlayer == nil {
-						return
-					}
-					info := fmt.Sprintf("『%v』击败了『%v』。", atkPlayer.NickName, defPlayer.NickName)
-					g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-				}
+				info := fmt.Sprintf("『%v』击败了『%v』。", atkPlayer.NickName, defPlayer.NickName)
+				g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
 			}
 		}
 	case constant.ENTITY_TYPE_MONSTER:
+		fightProp := defEntity.GetFightProp()
+		currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+		maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
+		lastHp := currHp
+		currHp -= attackResult.Damage
+		if currHp < 0.0 {
+			currHp = 0.0
+		}
+		fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
+		g.EntityFightPropUpdateNotifyBroadcast(scene, defEntity)
 		monsterDataConfig := gdconf.GetMonsterDataById(int32(defEntity.GetMonsterEntity().GetMonsterId()))
 		if monsterDataConfig == nil {
 			logger.Error("get monster data config is nil, monsterId: %v", defEntity.GetMonsterEntity().GetMonsterId())
-			break
+			return
 		}
-		lastHpPercent := (currHp - deltaHp) / maxHp * 100.0
+		lastHpPercent := lastHp / maxHp * 100.0
 		currHpPercent := currHp / maxHp * 100.0
 		for _, hpDrop := range monsterDataConfig.HpDropList {
 			if hpDrop.HpPercent >= int32(currHpPercent) && hpDrop.HpPercent <= int32(lastHpPercent) {
@@ -261,7 +243,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
 		if gadgetDataConfig == nil {
 			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
-			break
+			return
 		}
 		logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, defEntity.GetId(), player.PlayerId)
 		g.handleGadgetEntityBeHitLow(player, defEntity, attackResult.ElementType)
@@ -289,14 +271,22 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		g.SceneWeatherAreaCheck(player, oldPos, pos)
 		// 更新玩家角色实体的位置信息
 		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
-			waAvatarEntityId := worldAvatar.GetAvatarEntityId()
-			waAvatarEntity := scene.GetEntity(waAvatarEntityId)
-			waAvatarEntity.SetPos(pos)
-			waAvatarEntity.SetRot(rot)
-			waWeaponEntityId := worldAvatar.GetWeaponEntityId()
-			waWeaponEntity := scene.GetEntity(waWeaponEntityId)
-			waWeaponEntity.SetPos(pos)
-			waWeaponEntity.SetRot(rot)
+			worldAvatarEntityId := worldAvatar.GetAvatarEntityId()
+			worldAvatarEntity := scene.GetEntity(worldAvatarEntityId)
+			if worldAvatarEntity == nil {
+				logger.Error("world avatar entity is nil, worldAvatar: %+v, uid: %v", worldAvatar, player.PlayerId)
+				continue
+			}
+			worldAvatarEntity.SetPos(pos)
+			worldAvatarEntity.SetRot(rot)
+			worldWeaponEntityId := worldAvatar.GetWeaponEntityId()
+			worldWeaponEntity := scene.GetEntity(worldWeaponEntityId)
+			if worldWeaponEntity == nil {
+				logger.Error("world weapon entity is nil, worldAvatar: %+v, uid: %v", worldAvatar, player.PlayerId)
+				continue
+			}
+			worldWeaponEntity.SetPos(pos)
+			worldWeaponEntity.SetRot(rot)
 		}
 	}
 	// 更新场景实体的位置信息
@@ -306,26 +296,38 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		motionInfo := moveInfo.MotionInfo
 		switch entity.GetEntityType() {
 		case constant.ENTITY_TYPE_AVATAR:
-			// 玩家安全位置更新
 			switch motionInfo.State {
-			case proto.MotionState_MOTION_DANGER_RUN,
-				proto.MotionState_MOTION_RUN,
-				proto.MotionState_MOTION_DANGER_STANDBY_MOVE,
-				proto.MotionState_MOTION_DANGER_STANDBY,
-				proto.MotionState_MOTION_LADDER_TO_STANDBY,
-				proto.MotionState_MOTION_STANDBY_MOVE,
-				proto.MotionState_MOTION_STANDBY,
-				proto.MotionState_MOTION_DANGER_WALK,
-				proto.MotionState_MOTION_WALK,
-				proto.MotionState_MOTION_DASH:
-				// 仅在陆地时更新玩家安全位置
+			case proto.MotionState_MOTION_STANDBY, proto.MotionState_MOTION_WALK, proto.MotionState_MOTION_RUN, proto.MotionState_MOTION_DASH,
+				58, 59, 60, 64, 65, 66:
+				// 更新玩家安全位置
 				player.SetPos(pos)
 				player.SetRot(rot)
 			}
 			// 处理耐力消耗
 			g.ImmediateStamina(player, motionInfo.State)
+			// 坠落撞击死亡
+			if player.Speed == nil {
+				player.Speed = &model.Vector{X: float64(motionInfo.Speed.X), Y: float64(motionInfo.Speed.Y), Z: float64(motionInfo.Speed.Z)}
+			}
+			if motionInfo.State == proto.MotionState_MOTION_FALL_ON_GROUND || motionInfo.State == proto.MotionState_MOTION_FIGHT {
+				oldSpeed := &alg.Vector3{X: float32(player.Speed.X), Y: float32(player.Speed.Y), Z: float32(player.Speed.Z)}
+				newSpeed := &alg.Vector3{X: motionInfo.Speed.X, Y: motionInfo.Speed.Y, Z: motionInfo.Speed.Z}
+				deltaSpeed := alg.Vector3Sub(oldSpeed, newSpeed)
+				deltaSpeedMag := alg.Vector3Magnitude(deltaSpeed)
+				if deltaSpeedMag > 20.0 {
+					logger.Debug("player fall on ground, deltaSpeed: %+v, deltaSpeedMag: %v, uid: %v", deltaSpeed, deltaSpeedMag, player.PlayerId)
+					rate := deltaSpeedMag - 20.0
+					if rate > 10.0 {
+						rate = 10.0
+					}
+					rate /= 10.0
+					fightProp := entity.GetFightProp()
+					maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
+					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), maxHp*rate, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
+				}
+			}
+			player.Speed = &model.Vector{X: float64(motionInfo.Speed.X), Y: float64(motionInfo.Speed.Y), Z: float64(motionInfo.Speed.Z)}
 		case constant.ENTITY_TYPE_GADGET:
-			// 载具耐力消耗
 			gadgetEntity := entity.GetGadgetEntity()
 			if gadgetEntity.GetGadgetVehicleEntity() != nil {
 				// 处理耐力消耗
@@ -344,12 +346,6 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	if !world.IsValidSceneBlockPos(scene.GetId(), float32(newPos.X), 0.0, float32(newPos.Z)) {
 		return
 	}
-	// 服务器处理玩家移动场景区块aoi事件频率限制
-	now := uint64(time.Now().UnixMilli())
-	if now-player.LastSceneBlockAoiMoveTime < 200 {
-		return
-	}
-	player.LastSceneBlockAoiMoveTime = now
 	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
 	aoiManager, exist := sceneBlockAoiMap[player.SceneId]
 	if !exist {
@@ -761,8 +757,7 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 		return
 	}
 	if int32(ntf.SkillId) == avatarSkillDataConfig.AvatarSkillId {
-		dbAvatar.SetCurrEnergy(activeAvatarId, 0, false)
-		g.UpdatePlayerAvatarFightProp(player.PlayerId, activeAvatarId)
+		g.CostPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 0, true)
 	}
 
 	if !WORLD_MANAGER.IsAiWorld(world) {

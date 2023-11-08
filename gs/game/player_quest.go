@@ -274,7 +274,8 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 			if err != nil {
 				continue
 			}
-			g.ChangePlayerAvatarElementType(player, elementType)
+			dbAvatar := player.GetDbAvatar()
+			g.ChangePlayerAvatarSkillDepot(player.PlayerId, dbAvatar.MainCharAvatarId, 0, elementType)
 		case constant.QUEST_EXEC_TYPE_SET_IS_FLYABLE:
 			if len(questExec.Param) != 1 {
 				continue

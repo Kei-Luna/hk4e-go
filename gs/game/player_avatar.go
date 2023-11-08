@@ -498,6 +498,8 @@ func (g *Game) UpgradePlayerAvatar(player *model.Player, avatar *model.Avatar, e
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	// 角色属性表更新通知
 	g.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, g.PacketAvatarPropNotify(avatar))
+
+	g.AddPlayerAvatarHp(player.PlayerId, avatar.AvatarId, 0.0, true, proto.ChangHpReason_CHANGE_HP_ADD_UPGRADE)
 }
 
 // UpdatePlayerAvatarFightProp 更新玩家角色战斗属性
@@ -507,20 +509,19 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil || WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
-
 	dbAvatar := player.GetDbAvatar()
 	avatar, exist := dbAvatar.AvatarMap[avatarId]
 	if !exist {
 		logger.Error("avatar not exist, avatarId: %v", avatar.AvatarId)
 		return
 	}
-	// 角色初始化面板
-	dbAvatar.InitAvatarFightProp(avatar)
+
+	// 更新角色面板
+	dbAvatar.UpdateAvatarFightProp(avatar)
 
 	avatarFightPropNotify := &proto.AvatarFightPropNotify{
 		AvatarGuid:   avatar.Guid,
@@ -529,51 +530,187 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 	g.SendMsg(cmd.AvatarFightPropNotify, userId, player.ClientSeq, avatarFightPropNotify)
 }
 
-func (g *Game) ChangePlayerAvatarElementType(player *model.Player, elementType int) {
-	dbAvatar := player.GetDbAvatar()
-	avatar := dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId]
-	switchSkillDepotId := uint32(0)
-	avatarDataConfig := gdconf.GetAvatarDataById(int32(avatar.AvatarId))
-	if avatarDataConfig == nil {
+func (g *Game) ChangePlayerAvatarSkillDepot(userId uint32, avatarId uint32, changeSkillDepotId uint32, elementType int) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	for _, skillDepotId := range avatarDataConfig.SkillDepotIdList {
-		skillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(skillDepotId)
-		if skillDepotDataConfig == nil {
-			continue
-		}
-		avatarSkillDataConfig := gdconf.GetAvatarSkillDataById(skillDepotDataConfig.EnergySkill)
-		if avatarSkillDataConfig == nil {
-			continue
-		}
-		if avatarSkillDataConfig.CostElemType != int32(elementType) {
-			continue
-		}
-		switchSkillDepotId = uint32(skillDepotId)
-		break
-	}
-	dbAvatar.SwitchSkillDepot(avatar.AvatarId, switchSkillDepotId)
-
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
-	entityId := world.GetPlayerWorldAvatarEntityId(player, avatar.AvatarId)
+	if changeSkillDepotId == 0 {
+		avatarDataConfig := gdconf.GetAvatarDataById(int32(avatarId))
+		if avatarDataConfig == nil {
+			return
+		}
+		for _, skillDepotId := range avatarDataConfig.SkillDepotIdList {
+			skillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(skillDepotId)
+			if skillDepotDataConfig == nil {
+				continue
+			}
+			avatarSkillDataConfig := gdconf.GetAvatarSkillDataById(skillDepotDataConfig.EnergySkill)
+			if avatarSkillDataConfig == nil {
+				continue
+			}
+			if avatarSkillDataConfig.CostElemType != int32(elementType) {
+				continue
+			}
+			changeSkillDepotId = uint32(skillDepotId)
+			break
+		}
+	}
+	dbAvatar := player.GetDbAvatar()
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		return
+	}
+
+	dbAvatar.ChangeSkillDepot(avatarId, changeSkillDepotId)
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
 
 	g.SendMsg(cmd.AvatarSkillDepotChangeNotify, player.PlayerId, player.ClientSeq, &proto.AvatarSkillDepotChangeNotify{
 		EntityId:      entityId,
 		AvatarGuid:    avatar.Guid,
-		SkillDepotId:  switchSkillDepotId,
+		SkillDepotId:  changeSkillDepotId,
 		SkillLevelMap: avatar.SkillLevelMap,
 	})
 
 	g.SendMsg(cmd.AbilityChangeNotify, player.PlayerId, player.ClientSeq, &proto.AbilityChangeNotify{
 		EntityId:            entityId,
-		AbilityControlBlock: g.PacketAbilityControlBlock(avatar.AvatarId, switchSkillDepotId),
+		AbilityControlBlock: g.PacketAvatarAbilityControlBlock(avatar.AvatarId, changeSkillDepotId),
 	})
 
-	dbAvatar.SetCurrEnergy(avatar.AvatarId, 0, true)
+	dbAvatar.AddCurrEnergy(avatar.AvatarId, 0, true)
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
+}
+
+func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, max bool, reason proto.ChangHpReason) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
+	entity := scene.GetEntity(entityId)
+	fightProp := entity.GetFightProp()
+	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+	maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
+	deltaHp := float32(0.0)
+	if max {
+		deltaHp = maxHp - currHp
+		fightProp[constant.FIGHT_PROP_CUR_HP] = maxHp
+	} else {
+		currHp += value
+		deltaHp = value
+		if currHp > maxHp {
+			deltaHp = value - (currHp - maxHp)
+			currHp = maxHp
+		}
+		fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
+	}
+	g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
+	g.SendMsg(cmd.EntityFightPropChangeReasonNotify, player.PlayerId, player.ClientSeq, &proto.EntityFightPropChangeReasonNotify{
+		PropDelta:      deltaHp,
+		ChangeHpReason: reason,
+		EntityId:       entity.GetId(),
+		PropType:       constant.FIGHT_PROP_CUR_HP,
+	})
+}
+
+func (g *Game) SubPlayerAvatarHp(userId uint32, avatarId uint32, value float32, max bool, reason proto.ChangHpReason) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	if player.WuDi {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
+	entity := scene.GetEntity(entityId)
+	fightProp := entity.GetFightProp()
+	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+	deltaHp := float32(0.0)
+	if max {
+		deltaHp = currHp
+		fightProp[constant.FIGHT_PROP_CUR_HP] = 0.0
+	} else {
+		currHp -= value
+		deltaHp = -value
+		if currHp < 0.0 {
+			deltaHp = value - currHp
+			currHp = 0.0
+		}
+		fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
+	}
+	g.EntityFightPropUpdateNotifyBroadcast(scene, entity)
+	g.SendMsg(cmd.EntityFightPropChangeReasonNotify, player.PlayerId, player.ClientSeq, &proto.EntityFightPropChangeReasonNotify{
+		PropDelta:      deltaHp,
+		ChangeHpReason: reason,
+		EntityId:       entity.GetId(),
+		PropType:       constant.FIGHT_PROP_CUR_HP,
+	})
+	if currHp == 0.0 {
+		var dieType proto.PlayerDieType
+		switch reason {
+		case proto.ChangHpReason_CHANGE_HP_SUB_MONSTER:
+			dieType = proto.PlayerDieType_PLAYER_DIE_KILL_BY_MONSTER
+		case proto.ChangHpReason_CHANGE_HP_SUB_GEAR:
+			dieType = proto.PlayerDieType_PLAYER_DIE_KILL_BY_GEAR
+		case proto.ChangHpReason_CHANGE_HP_SUB_FALL:
+			dieType = proto.PlayerDieType_PLAYER_DIE_FALL
+		case proto.ChangHpReason_CHANGE_HP_SUB_DRAWN:
+			dieType = proto.PlayerDieType_PLAYER_DIE_DRAWN
+		case proto.ChangHpReason_CHANGE_HP_SUB_ABYSS:
+			dieType = proto.PlayerDieType_PLAYER_DIE_ABYSS
+		case proto.ChangHpReason_CHANGE_HP_SUB_GM:
+			dieType = proto.PlayerDieType_PLAYER_DIE_GM
+		case proto.ChangHpReason_CHANGE_HP_SUB_CLIMATE_COLD:
+			dieType = proto.PlayerDieType_PLAYER_DIE_CLIMATE_COLD
+		case proto.ChangHpReason_CHANGE_HP_SUB_STORM_LIGHTNING:
+			dieType = proto.PlayerDieType_PLAYER_DIE_STORM_LIGHTING
+		default:
+			dieType = proto.PlayerDieType_PLAYER_DIE_GM
+		}
+		g.KillPlayerAvatar(player, entity.GetAvatarEntity().GetAvatarId(), dieType)
+	}
+}
+
+func (g *Game) AddPlayerAvatarEnergy(userId uint32, avatarId uint32, value float32, max bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbAvatar := player.GetDbAvatar()
+	dbAvatar.AddCurrEnergy(avatarId, float64(value), max)
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
+}
+
+func (g *Game) CostPlayerAvatarEnergy(userId uint32, avatarId uint32, value float32, max bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	if player.EnergyInf {
+		return
+	}
+	dbAvatar := player.GetDbAvatar()
+	dbAvatar.CostCurrEnergy(avatarId, float64(value), max)
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
 /************************************************** 打包封装 **************************************************/
