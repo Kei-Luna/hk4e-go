@@ -1024,27 +1024,25 @@ func (g *Game) RefreshSceneGroupSuite(player *model.Player, groupId uint32, suit
 	if world == nil {
 		return
 	}
+
 	scene := world.GetSceneById(player.SceneId)
 	group := scene.GetGroupById(groupId)
-	if group == nil {
-		return
-	}
-	suite := group.GetSuiteById(suiteId)
-	if suite == nil {
-		return
-	}
+	if group != nil {
+		suite := group.GetSuiteById(suiteId)
+		if suite != nil {
+			entityIdList := make([]uint32, 0)
+			for _, entity := range suite.GetAllEntity() {
+				entityIdList = append(entityIdList, entity.GetId())
+			}
+			g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, entityIdList, 0)
+			scene.RemoveGroupSuite(groupId, suiteId)
 
-	entityIdList := make([]uint32, 0)
-	for _, entity := range suite.GetAllEntity() {
-		entityIdList = append(entityIdList, entity.GetId())
+			dbWorld := player.GetDbWorld()
+			dbScene := dbWorld.GetSceneById(player.SceneId)
+			dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+			dbSceneGroup.RemoveAllKill()
+		}
 	}
-	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, entityIdList, 0)
-	scene.RemoveGroupSuite(groupId, suiteId)
-
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
-	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
-	dbSceneGroup.RemoveAllKill()
 
 	g.AddSceneGroupSuite(player, groupId, suiteId)
 }
