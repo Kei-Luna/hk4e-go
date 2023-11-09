@@ -323,7 +323,11 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 					rate /= 10.0
 					fightProp := entity.GetFightProp()
 					maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
-					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), maxHp*rate, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
+					damage := maxHp * rate
+					if motionInfo.State == proto.MotionState_MOTION_FIGHT {
+						damage /= 2.0
+					}
+					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), damage, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
 				}
 			}
 			player.Speed = &model.Vector{X: float64(motionInfo.Speed.X), Y: float64(motionInfo.Speed.Y), Z: float64(motionInfo.Speed.Z)}

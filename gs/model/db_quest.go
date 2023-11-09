@@ -130,3 +130,15 @@ func (q *DbQuest) ForceFinishQuest(questId uint32) {
 		q.AddQuestProgress(questId, index, uint32(finishCond.Count))
 	}
 }
+
+func (q *DbQuest) FailQuest(questId uint32) {
+	quest, exist := q.QuestMap[questId]
+	if !exist {
+		logger.Error("get quest is nil, questId: %v", questId)
+		return
+	}
+	if quest.State != constant.QUEST_STATE_UNFINISHED {
+		return
+	}
+	quest.State = constant.QUEST_STATE_FAILED
+}

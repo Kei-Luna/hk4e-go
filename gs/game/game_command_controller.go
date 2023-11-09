@@ -84,7 +84,7 @@ func (c *CommandManager) NewHelpCommandController() *CommandController {
 	return &CommandController{
 		Name:        "帮助",
 		AliasList:   []string{"help"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>查看简要帮助信息</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>帮助</color>",
 		UsageList: []string{
 			"{alias} 查看简要帮助信息",
 			"{alias} <序号/命令别名> 查看详细帮助信息",
@@ -128,8 +128,6 @@ func (c *CommandManager) HelpCommand(content *CommandContent) bool {
 				}
 				helpText += fmt.Sprintf("<color=%v>%v. %v</color> <color=#FFE5CC>-</color> %v\n", permColor, commandCount, controller.Name, strings.ReplaceAll(controller.Description, "{alias}", controller.AliasList[0]))
 			}
-			helpText += "\n<color=#FFFFCC>help</color> <color=#FFCCE5><命令别名></color> <color=#FF9999>能查看详细用法哦~</color>\n"
-			helpText += "<color=#FF6347><></color> <color=#87CEFA>代表必填参数</color> <color=#FF6347>[]</color> <color=#87CEFA>代表可选参数</color> <color=#FF6347>/</color> <color=#87CEFA>代表或者</color>"
 			content.SendMessage(content.Executor, helpText)
 			return true
 		}
@@ -267,9 +265,9 @@ func (c *CommandManager) JumpCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewEquipCommandController() *CommandController {
 	return &CommandController{
-		Name:        "管理武器",
+		Name:        "武器",
 		AliasList:   []string{"equip", "weapon"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的武器</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>武器</color>",
 		UsageList: []string{
 			"{alias} add <武器ID/all> [武器等级] [突破等级] 添加武器",
 		},
@@ -328,12 +326,12 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewItemCommandController() *CommandController {
 	return &CommandController{
-		Name:        "管理物品",
+		Name:        "道具",
 		AliasList:   []string{"item"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的物品</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>道具</color>",
 		UsageList: []string{
-			"{alias} add <物品ID/all> [数量] 添加物品",
-			"{alias} clear 清除全部物品",
+			"{alias} add <道具ID/all> [数量] 添加道具",
+			"{alias} clear 清除全部道具",
 		},
 		Perm: CommandPermNormal,
 		Func: c.ItemCommand,
@@ -388,9 +386,9 @@ func (c *CommandManager) ItemCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewAvatarCommandController() *CommandController {
 	return &CommandController{
-		Name:        "管理角色",
+		Name:        "角色",
 		AliasList:   []string{"avatar"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的角色</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>角色</color>",
 		UsageList: []string{
 			"{alias} add <角色ID/all>",
 		},
@@ -439,9 +437,9 @@ func (c *CommandManager) AvatarCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewGiveCommandController() *CommandController {
 	return &CommandController{
-		Name:        "给予物品",
+		Name:        "物品",
 		AliasList:   []string{"give"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>获得全部物品</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>物品</color>",
 		UsageList: []string{
 			"模式：ID / item (所有物品) / weapon (所有武器) / reliquary (所有圣遗物) / avatar (所有角色) / costume (所有时装) / flycloak (所有风之翼) / all (全部)\n不要加上括号内的中文！！",
 			"{alias} <模式> [数量] 给予指定物品",
@@ -575,7 +573,7 @@ func (c *CommandManager) NewKillCommandController() *CommandController {
 	return &CommandController{
 		Name:        "杀死实体",
 		AliasList:   []string{"kill"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>杀死讨厌的实体</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>杀死实体</color>",
 		UsageList: []string{
 			"{alias} self 杀死自己",
 			"{alias} monster <实体ID/all> 杀死怪物",
@@ -636,9 +634,9 @@ func (c *CommandManager) KillCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewMonsterCommandController() *CommandController {
 	return &CommandController{
-		Name:        "生成怪物",
+		Name:        "怪物",
 		AliasList:   []string{"monster"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>生成原魔</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>怪物</color>",
 		UsageList: []string{
 			"{alias} <怪物ID> [数量] [等级] [姿势 (暂时无效)] [坐标X] [坐标Y] [坐标Z] 生成怪物",
 		},
@@ -688,9 +686,9 @@ func (c *CommandManager) MonsterCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewGadgetCommandController() *CommandController {
 	return &CommandController{
-		Name:        "生成物件",
+		Name:        "物件",
 		AliasList:   []string{"gadget"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>生成物件</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>物件</color>",
 		UsageList: []string{
 			"{alias} <物件ID> [数量] 附近生成物件",
 		},
@@ -719,9 +717,9 @@ func (c *CommandManager) GadgetCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewQuestCommandController() *CommandController {
 	return &CommandController{
-		Name:        "管理任务",
+		Name:        "任务",
 		AliasList:   []string{"quest"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>管理你的任务</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>任务</color>",
 		UsageList: []string{
 			"{alias} <add/accept> <任务ID> 接受任务",
 			"{alias} finish <任务ID/all> 完成任务",
@@ -785,9 +783,9 @@ func (c *CommandManager) QuestCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewPointCommandController() *CommandController {
 	return &CommandController{
-		Name:        "解锁锚点",
+		Name:        "锚点",
 		AliasList:   []string{"point"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>解锁地图上的锚点</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>锚点</color>",
 		UsageList: []string{
 			"{alias} [场景ID] <锚点ID/all> 解锁锚点",
 		},
@@ -830,9 +828,9 @@ func (c *CommandManager) PointCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewWeatherCommandController() *CommandController {
 	return &CommandController{
-		Name:        "更改天气",
+		Name:        "天气",
 		AliasList:   []string{"weather"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>更改天气</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>天气</color>",
 		UsageList: []string{
 			"{alias} [天气区域ID] <气象类型> 更改天气",
 		},
@@ -961,9 +959,9 @@ func (c *CommandManager) DebugCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewWudiCommandController() *CommandController {
 	return &CommandController{
-		Name:        "开关无敌",
+		Name:        "无敌",
 		AliasList:   []string{"wudi"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>开关无敌</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>无敌</color>",
 		UsageList: []string{
 			"{alias} global avatar <on/off> 开关玩家无敌",
 		},
@@ -1063,9 +1061,9 @@ func (c *CommandManager) EnergyCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewStaminaCommandController() *CommandController {
 	return &CommandController{
-		Name:        "无限耐力",
+		Name:        "耐力",
 		AliasList:   []string{"stamina"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>无限耐力</color>",
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>耐力</color>",
 		UsageList: []string{
 			"{alias} infinite <on/off> 开关无限耐力",
 		},

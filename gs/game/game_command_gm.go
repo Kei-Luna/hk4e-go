@@ -490,7 +490,6 @@ func (g *GMCmd) GMUnlockAllOpenState(userId uint32) {
 
 // GMFreeMode 自由探索模式
 func (g *GMCmd) GMFreeMode(userId uint32) {
-	GAME.LogoutPlayer(userId)
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -504,7 +503,13 @@ func (g *GMCmd) GMFreeMode(userId uint32) {
 	player.PropMap[constant.PLAYER_PROP_PLAYER_CAN_DIVE] = 1
 	player.PropMap[constant.PLAYER_PROP_DIVE_MAX_STAMINA] = 10000
 	player.PropMap[constant.PLAYER_PROP_DIVE_CUR_STAMINA] = 10000
-	g.GMUnlockAllOpenState(userId)
+	GAME.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, GAME.PacketPlayerPropNotify(player))
+	for _, openStateData := range gdconf.GetOpenStateDataMap() {
+		player.OpenStateMap[uint32(openStateData.OpenStateId)] = 1
+	}
+	GAME.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
+		OpenStateMap: player.OpenStateMap,
+	})
 	for _, sceneData := range gdconf.GetSceneDataMap() {
 		g.GMUnlockAllPoint(userId, uint32(sceneData.SceneId))
 	}

@@ -209,6 +209,9 @@ func PrintContextLog(luaState *lua.LState) int {
 }
 
 func BeginCameraSceneLook(luaState *lua.LState) int {
+	// TODO 由于解锁风之翼任务相关原因暂时屏蔽
+	luaState.Push(lua.LNumber(-1))
+	return 1
 	ctx, ok := luaState.Get(1).(*lua.LTable)
 	if !ok {
 		luaState.Push(lua.LNumber(-1))
@@ -282,6 +285,10 @@ func ChangeGroupGadget(luaState *lua.LState) int {
 	gadgetStateInfo := new(gdconf.Gadget)
 	gdconf.ParseLuaTableToObject(gadgetInfo, gadgetStateInfo)
 	entity := group.GetEntityByConfigId(uint32(gadgetStateInfo.ConfigId))
+	if entity == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	GAME.ChangeGadgetState(player, entity.GetId(), uint32(gadgetStateInfo.State))
 	luaState.Push(lua.LNumber(0))
 	return 1

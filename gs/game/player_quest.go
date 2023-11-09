@@ -153,6 +153,11 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 			}
 		}
 		if canAccept {
+			if questData.QuestId == 35721 {
+				// TODO 由于第一次风龙任务进入秘境客户端会无限重连相关原因暂时屏蔽
+				COMMAND_MANAGER.gmCmd.GMFreeMode(player.PlayerId)
+				continue
+			}
 			dbQuest.AddQuest(uint32(questData.QuestId))
 			addQuestIdList = append(addQuestIdList, uint32(questData.QuestId))
 		}
@@ -238,7 +243,7 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 			if err != nil {
 				continue
 			}
-			g.AddSceneGroupSuite(player, uint32(groupId), uint8(suiteId))
+			g.RefreshSceneGroupSuite(player, uint32(groupId), uint8(suiteId))
 		case constant.QUEST_EXEC_TYPE_SET_OPEN_STATE:
 			if len(questExec.Param) != 2 {
 				continue
@@ -335,6 +340,18 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 				continue
 			}
 			g.ChangeGameTime(scene, uint32(hour*60))
+		case constant.QUEST_EXEC_TYPE_ROLLBACK_QUEST:
+			if len(questExec.Param) != 1 {
+				continue
+			}
+			rollbackQuestId, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			dbQuest := player.GetDbQuest()
+			rollbackQuest := dbQuest.GetQuestById(uint32(rollbackQuestId))
+			rollbackQuest.State = constant.QUEST_STATE_UNSTARTED
+			g.StartQuest(player, rollbackQuest.QuestId, true)
 		}
 	}
 }
@@ -357,12 +374,26 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 	dbQuest := player.GetDbQuest()
 	updateQuestIdList := make([]uint32, 0)
 	for _, quest := range dbQuest.GetQuestMap() {
-		if quest.State == constant.QUEST_STATE_FINISHED {
+		if quest.State != constant.QUEST_STATE_UNFINISHED {
 			continue
 		}
 		questDataConfig := gdconf.GetQuestDataById(int32(quest.QuestId))
 		if questDataConfig == nil {
 			continue
+		}
+		for _, questCond := range questDataConfig.FailCondList {
+			if questCond.Type != cond {
+				continue
+			}
+			switch cond {
+			case constant.QUEST_FINISH_COND_TYPE_LUA_NOTIFY:
+				// LUA侧通知 复杂参数
+				if questCond.ComplexParam != complexParam {
+					continue
+				}
+				dbQuest.FailQuest(quest.QuestId)
+				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
+			}
 		}
 		for _, questCond := range questDataConfig.FinishCondList {
 			if questCond.Type != cond {
@@ -429,15 +460,6 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				dbQuest.ForceFinishQuest(quest.QuestId)
 				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
 			}
-			if quest.State == constant.QUEST_STATE_FINISHED {
-				g.QuestExec(player, quest.QuestId, QuestExecTypeFinish)
-				if len(questDataConfig.ItemIdList) != 0 {
-					for index, itemId := range questDataConfig.ItemIdList {
-						questItem := []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(questDataConfig.ItemCountList[index])}}
-						g.AddPlayerItem(player.PlayerId, questItem, true, 0)
-					}
-				}
-			}
 		}
 	}
 	if len(updateQuestIdList) > 0 {
@@ -498,6 +520,25 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 			g.SendMsg(cmd.FinishedParentQuestUpdateNotify, player.PlayerId, player.ClientSeq, &proto.FinishedParentQuestUpdateNotify{
 				ParentQuestList: parentQuestList,
 			})
+		}
+		for _, questId := range updateQuestIdList {
+			quest := dbQuest.GetQuestById(questId)
+			questDataConfig := gdconf.GetQuestDataById(int32(quest.QuestId))
+			if questDataConfig == nil {
+				continue
+			}
+			if quest.State == constant.QUEST_STATE_FINISHED {
+				g.QuestExec(player, quest.QuestId, QuestExecTypeFinish)
+				if len(questDataConfig.ItemIdList) != 0 {
+					for index, itemId := range questDataConfig.ItemIdList {
+						questItem := []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(questDataConfig.ItemCountList[index])}}
+						g.AddPlayerItem(player.PlayerId, questItem, true, 0)
+					}
+				}
+			}
+			if quest.State == constant.QUEST_STATE_FAILED {
+				g.QuestExec(player, quest.QuestId, QuestExecTypeFail)
+			}
 		}
 		g.AcceptQuest(player, true)
 	}

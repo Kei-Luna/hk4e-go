@@ -1019,6 +1019,36 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 	scene.AddGroupSuite(groupId, suiteId, entityMap)
 }
 
+func (g *Game) RefreshSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	group := scene.GetGroupById(groupId)
+	if group == nil {
+		return
+	}
+	suite := group.GetSuiteById(suiteId)
+	if suite == nil {
+		return
+	}
+
+	entityIdList := make([]uint32, 0)
+	for _, entity := range suite.GetAllEntity() {
+		entityIdList = append(entityIdList, entity.GetId())
+	}
+	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, entityIdList, 0)
+	scene.RemoveGroupSuite(groupId, suiteId)
+
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(player.SceneId)
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	dbSceneGroup.RemoveAllKill()
+
+	g.AddSceneGroupSuite(player, groupId, suiteId)
+}
+
 // CreateConfigEntity 创建配置表里的实体
 func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any) uint32 {
 	world := scene.GetWorld()

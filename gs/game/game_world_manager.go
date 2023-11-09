@@ -579,9 +579,6 @@ func (w *World) GetPlayerActiveAvatarEntity(player *model.Player) *Entity {
 	avatarEntityId := w.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
 	scene := w.GetSceneById(player.SceneId)
 	entity := scene.GetEntity(avatarEntityId)
-	if entity == nil {
-		panic("fuck")
-	}
 	return entity
 }
 
