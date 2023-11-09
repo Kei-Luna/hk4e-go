@@ -367,7 +367,11 @@ func (w *World) AddPlayer(player *model.Player) {
 	// 将玩家自身当前的队伍角色信息复制到世界的玩家本地队伍
 	dbTeam := player.GetDbTeam()
 	team := dbTeam.GetActiveTeam()
-	w.SetPlayerLocalTeam(player, team.GetAvatarIdList())
+	if WORLD_MANAGER.IsAiWorld(w) {
+		w.SetPlayerLocalTeam(player, []uint32{dbTeam.GetActiveAvatarId()})
+	} else {
+		w.SetPlayerLocalTeam(player, team.GetAvatarIdList())
+	}
 	w.SetPlayerActiveAvatarId(player, dbTeam.GetActiveAvatarId())
 	if WORLD_MANAGER.IsAiWorld(w) {
 		w.AddMultiplayerTeam(player)
