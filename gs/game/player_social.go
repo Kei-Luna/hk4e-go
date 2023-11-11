@@ -225,7 +225,6 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.AskAddFriendRsp, player.PlayerId, player.ClientSeq, askAddFriendRsp)
 
 	targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
-	targetDbSocial := targetPlayer.GetDbSocial()
 	if targetPlayer == nil {
 		// 非本地玩家
 		if USER_MANAGER.GetRemoteUserOnlineState(targetUid) {
@@ -260,7 +259,7 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 				logger.Error("apply add friend target player is nil, uid: %v", targetUid)
 				return
 			}
-			targetDbSocial = targetPlayer.GetDbSocial()
+			targetDbSocial := targetPlayer.GetDbSocial()
 			if targetDbSocial.IsFriend(player.PlayerId) {
 				logger.Error("friend or apply already exist, uid: %v", player.PlayerId)
 				return
@@ -271,6 +270,7 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
+	targetDbSocial := targetPlayer.GetDbSocial()
 	if targetDbSocial.IsFriend(player.PlayerId) {
 		logger.Error("friend or apply already exist, uid: %v", player.PlayerId)
 		return
@@ -322,7 +322,6 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 
 	if agree {
 		targetPlayer := USER_MANAGER.GetOnlineUser(targetUid)
-		targetDbSocial := targetPlayer.GetDbSocial()
 		if targetPlayer == nil {
 			// 非本地玩家
 			if USER_MANAGER.GetRemoteUserOnlineState(targetUid) {
@@ -347,7 +346,7 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 			} else {
 				// 全服离线玩家
 				targetPlayer = USER_MANAGER.LoadTempOfflineUser(targetUid, true)
-				targetDbSocial = targetPlayer.GetDbSocial()
+				targetDbSocial := targetPlayer.GetDbSocial()
 				if targetPlayer == nil {
 					logger.Error("apply add friend target player is nil, uid: %v", targetUid)
 					return
@@ -357,6 +356,7 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 			}
 			return
 		}
+		targetDbSocial := targetPlayer.GetDbSocial()
 		targetDbSocial.AddFriend(player.PlayerId)
 	}
 }

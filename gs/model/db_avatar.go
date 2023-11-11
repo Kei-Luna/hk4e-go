@@ -69,6 +69,16 @@ func (a *DbAvatar) InitDbAvatar(player *Player) {
 func (a *DbAvatar) InitAvatar(player *Player, avatar *Avatar) {
 	// 角色战斗属性
 	avatar.FightPropMap = make(map[uint32]float32)
+	// 当前血量
+	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = float32(avatar.CurrHP)
+	// 当前元素能量
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig != nil {
+		fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+		avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatar.CurrEnergy)
+	}
+	// 更新角色面板
 	a.UpdateAvatarFightProp(avatar)
 	// guid
 	avatar.Guid = player.GetNextGameObjectGuid()
@@ -95,20 +105,11 @@ func (a *DbAvatar) UpdateAvatarFightProp(avatar *Avatar) {
 	avatar.FightPropMap[constant.FIGHT_PROP_CUR_ATTACK] = avatarDataConfig.GetBaseAttackByLevel(avatar.Level)
 	avatar.FightPropMap[constant.FIGHT_PROP_CUR_DEFENSE] = avatarDataConfig.GetBaseDefenseByLevel(avatar.Level)
 	avatar.FightPropMap[constant.FIGHT_PROP_MAX_HP] = avatarDataConfig.GetBaseHpByLevel(avatar.Level)
-	// 当前血量
-	avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP] = float32(avatar.CurrHP)
 	// 双暴
 	avatar.FightPropMap[constant.FIGHT_PROP_CRITICAL] = avatarDataConfig.Critical
 	avatar.FightPropMap[constant.FIGHT_PROP_CRITICAL_HURT] = avatarDataConfig.CriticalHurt
 	// 元素充能
 	avatar.FightPropMap[constant.FIGHT_PROP_CHARGE_EFFICIENCY] = 1.0
-	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
-	if avatarSkillDataConfig == nil {
-		return
-	}
-	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
-	avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
-	avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatar.CurrEnergy)
 }
 
 func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
@@ -176,43 +177,6 @@ func (a *DbAvatar) ChangeSkillDepot(avatarId uint32, skillDepotId uint32) {
 		_, exist = avatar.SkillLevelMap[uint32(skillId)]
 		if !exist {
 			avatar.SkillLevelMap[uint32(skillId)] = 1
-		}
-	}
-}
-
-func (a *DbAvatar) AddCurrEnergy(avatarId uint32, value float64, max bool) {
-	avatar, exist := a.AvatarMap[avatarId]
-	if !exist {
-		logger.Error("avatar not exist, avatarId: %v", avatarId)
-		return
-	}
-	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
-	if avatarSkillDataConfig == nil {
-		logger.Error("get avatar energy skill is nil, skillDepotId: %v", avatar.SkillDepotId)
-		return
-	}
-	if max {
-		avatar.CurrEnergy = float64(avatarSkillDataConfig.CostElemVal)
-	} else {
-		avatar.CurrEnergy += value
-		if avatar.CurrEnergy > float64(avatarSkillDataConfig.CostElemVal) {
-			avatar.CurrEnergy = float64(avatarSkillDataConfig.CostElemVal)
-		}
-	}
-}
-
-func (a *DbAvatar) CostCurrEnergy(avatarId uint32, value float64, max bool) {
-	avatar, exist := a.AvatarMap[avatarId]
-	if !exist {
-		logger.Error("avatar not exist, avatarId: %v", avatarId)
-		return
-	}
-	if max {
-		avatar.CurrEnergy = 0.0
-	} else {
-		avatar.CurrEnergy -= value
-		if avatar.CurrEnergy < 0.0 {
-			avatar.CurrEnergy = 0.0
 		}
 	}
 }

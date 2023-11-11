@@ -80,13 +80,13 @@ type Player struct {
 	ClientVersion         int                                      `bson:"-" msgpack:"-"` // 玩家在线的客户端版本
 	OfflineClear          bool                                     `bson:"-" msgpack:"-"` // 是否离线时清除账号数据
 	NotSave               bool                                     `bson:"-" msgpack:"-"` // 是否离线回档
-	RemoteWorldPlayerNum  uint32                                   `bson:"-" msgpack:"-"` // 远程展示世界内人数
 	Speed                 *Vector                                  `bson:"-" msgpack:"-"` // 速度
 	WuDi                  bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家角色无敌
 	EnergyInf             bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家角色无限能量
 	StaminaInf            bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家无限耐力
 	// 特殊数据
-	ChatMsgMap map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
+	ChatMsgMap           map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
+	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 在线同步到redis 不保存到db
 }
 
 func (p *Player) GetPos() *Vector {

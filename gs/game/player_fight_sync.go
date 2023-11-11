@@ -186,7 +186,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 	}
 	defEntity := scene.GetEntity(attackResult.DefenseId)
 	if defEntity == nil {
-		logger.Error("not found def entity, DefenseId: %v", attackResult.DefenseId)
+		// logger.Error("not found def entity, DefenseId: %v", attackResult.DefenseId)
 		return
 	}
 	switch defEntity.GetEntityType() {
@@ -223,6 +223,12 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		}
 		fightProp[constant.FIGHT_PROP_CUR_HP] = currHp
 		g.EntityFightPropUpdateNotifyBroadcast(scene, defEntity)
+		if currHp == 0.0 {
+			g.KillEntity(player, scene, defEntity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
+		}
+		if defEntity.GetGroupId() == 0 {
+			return
+		}
 		monsterDataConfig := gdconf.GetMonsterDataById(int32(defEntity.GetMonsterEntity().GetMonsterId()))
 		if monsterDataConfig == nil {
 			logger.Error("get monster data config is nil, monsterId: %v", defEntity.GetMonsterEntity().GetMonsterId())
@@ -234,9 +240,6 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 			if hpDrop.HpPercent >= int32(currHpPercent) && hpDrop.HpPercent <= int32(lastHpPercent) {
 				g.monsterDrop(player, MonsterDropTypeHp, hpDrop.Id, defEntity)
 			}
-		}
-		if currHp == 0.0 {
-			g.KillEntity(player, scene, defEntity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		}
 	case constant.ENTITY_TYPE_GADGET:
 		gadgetEntity := defEntity.GetGadgetEntity()
@@ -322,10 +325,13 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 					}
 					rate /= 10.0
 					fightProp := entity.GetFightProp()
+					currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
 					maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
-					damage := maxHp * rate
-					if motionInfo.State == proto.MotionState_MOTION_FIGHT {
-						damage /= 2.0
+					damage := float32(0.0)
+					if motionInfo.State == proto.MotionState_MOTION_FALL_ON_GROUND {
+						damage = maxHp * rate
+					} else if motionInfo.State == proto.MotionState_MOTION_FIGHT {
+						damage = currHp * rate
 					}
 					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), damage, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
 				}

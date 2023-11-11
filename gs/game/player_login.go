@@ -61,8 +61,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 
 	// 创建世界
 	world := WORLD_MANAGER.CreateWorld(player)
-	world.AddPlayer(player)
-	player.WorldId = world.GetId()
+	g.WorldAddPlayer(world, player)
 	// 进入场景
 	player.SceneJump = true
 	player.SceneLoadState = model.SceneNone
@@ -121,8 +120,7 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		} else {
 			// 创建世界
 			world := WORLD_MANAGER.CreateWorld(player)
-			world.AddPlayer(player)
-			player.WorldId = world.GetId()
+			g.WorldAddPlayer(world, player)
 			// 进入场景
 			player.SceneJump = true
 			player.SceneLoadState = model.SceneNone
@@ -249,6 +247,17 @@ func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
 		return
 	}
 
+	// 回写当前血量和元素能量属性
+	dbAvatar := player.GetDbAvatar()
+	for _, avatar := range dbAvatar.AvatarMap {
+		avatar.CurrHP = float64(avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP])
+		avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+		if avatarSkillDataConfig != nil {
+			fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+			avatar.CurrEnergy = float64(avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)])
+		}
+	}
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world != nil {
 		g.WorldRemovePlayer(world, player)
@@ -257,6 +266,11 @@ func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
 	TICK_MANAGER.DestroyUserGlobalTick(userId)
 
 	USER_MANAGER.UserOfflineSave(player, changeGsInfo)
+
+	game, exist := GCG_MANAGER.gameMap[player.GCGCurGameGuid]
+	if exist {
+		GCG_MANAGER.DestroyGame(game.guid)
+	}
 }
 
 func (g *Game) LoginNotify(userId uint32, clientSeq uint32, player *model.Player) {

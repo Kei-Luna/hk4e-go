@@ -166,7 +166,7 @@ func (u *UserManager) UserLoginLoad(userId uint32, clientSeq uint32, gateAppId s
 // OnlineUser 玩家上线
 func (u *UserManager) OnlineUser(player *model.Player) {
 	player.Online = true
-	player.OnlineTime = uint32(time.Now().UnixMilli())
+	player.OnlineTime = uint32(time.Now().Unix())
 	USER_MANAGER.AddUser(player)
 	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
 		MsgType: mq.MsgTypeServer,
@@ -193,7 +193,7 @@ type PlayerOfflineInfo struct {
 func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *ChangeGsInfo) {
 	player.Online = false
 	player.OfflineTime = uint32(time.Now().Unix())
-	player.TotalOnlineTime += uint32(time.Now().UnixMilli()) - player.OnlineTime
+	player.TotalOnlineTime += uint32(time.Now().Unix()) - player.OnlineTime
 	if player.NotSave {
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserOfflineSaveToDbFinish,

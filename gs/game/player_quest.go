@@ -153,6 +153,12 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 			}
 		}
 		if canAccept {
+			if questData.QuestId == 35304 {
+				world := WORLD_MANAGER.GetWorldById(player.WorldId)
+				if world != nil {
+					g.AddPlayerAvatarEnergy(player.PlayerId, world.GetPlayerActiveAvatarId(player), 0.0, true)
+				}
+			}
 			if questData.QuestId == 35721 {
 				// TODO 由于第一次风龙任务进入秘境客户端会无限重连相关原因暂时屏蔽
 				COMMAND_MANAGER.gmCmd.GMFreeMode(player.PlayerId)

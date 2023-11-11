@@ -190,6 +190,10 @@ func (g *GCGManager) CreateGame(gameId uint32, playerList []*model.Player) *GCGG
 	return game
 }
 
+func (g *GCGManager) DestroyGame(gameGuid uint32) {
+	delete(g.gameMap, gameGuid)
+}
+
 // PhaseStart 阶段开始
 func (g *GCGManager) PhaseStart(game *GCGGame) {
 	// 设置除了先手的玩家不允许操控

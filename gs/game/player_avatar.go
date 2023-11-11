@@ -582,8 +582,14 @@ func (g *Game) ChangePlayerAvatarSkillDepot(userId uint32, avatarId uint32, chan
 		AbilityControlBlock: g.PacketAvatarAbilityControlBlock(avatar.AvatarId, changeSkillDepotId),
 	})
 
-	dbAvatar.AddCurrEnergy(avatar.AvatarId, 0, true)
-	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		return
+	}
+	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+	avatar.FightPropMap[uint32(fightPropEnergy.MaxEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+	avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatar.CurrEnergy)
+	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
 func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, max bool, reason proto.ChangHpReason) {
@@ -598,6 +604,9 @@ func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	}
 	scene := world.GetSceneById(player.SceneId)
 	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
+	if entityId == 0 {
+		return
+	}
 	entity := scene.GetEntity(entityId)
 	fightProp := entity.GetFightProp()
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
@@ -639,6 +648,9 @@ func (g *Game) SubPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	}
 	scene := world.GetSceneById(player.SceneId)
 	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
+	if entityId == 0 {
+		return
+	}
 	entity := scene.GetEntity(entityId)
 	fightProp := entity.GetFightProp()
 	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
@@ -695,7 +707,25 @@ func (g *Game) AddPlayerAvatarEnergy(userId uint32, avatarId uint32, value float
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	dbAvatar.AddCurrEnergy(avatarId, float64(value), max)
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("avatar not exist, avatarId: %v", avatarId)
+		return
+	}
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		logger.Error("get avatar energy skill is nil, skillDepotId: %v", avatar.SkillDepotId)
+		return
+	}
+	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+	if max {
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+	} else {
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] += value
+		if avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] > float32(avatarSkillDataConfig.CostElemVal) {
+			avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = float32(avatarSkillDataConfig.CostElemVal)
+		}
+	}
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
@@ -709,7 +739,25 @@ func (g *Game) CostPlayerAvatarEnergy(userId uint32, avatarId uint32, value floa
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	dbAvatar.CostCurrEnergy(avatarId, float64(value), max)
+	avatar, exist := dbAvatar.AvatarMap[avatarId]
+	if !exist {
+		logger.Error("avatar not exist, avatarId: %v", avatarId)
+		return
+	}
+	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
+	if avatarSkillDataConfig == nil {
+		logger.Error("get avatar energy skill is nil, skillDepotId: %v", avatar.SkillDepotId)
+		return
+	}
+	fightPropEnergy := constant.ELEMENT_TYPE_FIGHT_PROP_ENERGY_MAP[int(avatarSkillDataConfig.CostElemType)]
+	if max {
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = 0.0
+	} else {
+		avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] -= value
+		if avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] < 0.0 {
+			avatar.FightPropMap[uint32(fightPropEnergy.CurEnergy)] = 0.0
+		}
+	}
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
