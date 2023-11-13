@@ -233,7 +233,7 @@ func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content a
 		if USER_MANAGER.GetRemoteUserOnlineState(targetUid) {
 			// 目标玩家在别的服在线
 			gsAppId := USER_MANAGER.GetRemoteUserGsAppId(targetUid)
-			MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+			g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 				MsgType: mq.MsgTypeServer,
 				EventId: mq.ServerChatMsgNotify,
 				ServerMsg: &mq.ServerMsg{

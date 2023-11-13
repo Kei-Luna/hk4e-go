@@ -135,7 +135,7 @@ func (g *Game) WorldPlayerLocationNotify(world *World) {
 		pos := g.GetPlayerPos(worldPlayer)
 		rot := g.GetPlayerRot(worldPlayer)
 		playerWorldLocationInfo := &proto.PlayerWorldLocationInfo{
-			SceneId: worldPlayer.SceneId,
+			SceneId: worldPlayer.GetSceneId(),
 			PlayerLoc: &proto.PlayerLocationInfo{
 				Uid: worldPlayer.PlayerId,
 				Pos: &proto.Vector{X: float32(pos.X), Y: float32(pos.Y), Z: float32(pos.Z)},
@@ -214,7 +214,7 @@ func (g *Game) SceneTimeNotify(world *World) {
 	for _, scene := range world.GetAllScene() {
 		for _, player := range scene.GetAllPlayer() {
 			sceneTimeNotify := &proto.SceneTimeNotify{
-				SceneId:   player.SceneId,
+				SceneId:   player.GetSceneId(),
 				SceneTime: uint64(scene.GetSceneTime()),
 			}
 			g.SendMsg(cmd.SceneTimeNotify, player.PlayerId, 0, sceneTimeNotify)
@@ -235,9 +235,9 @@ func (g *Game) PlayerTimeNotify(world *World) {
 
 func (g *Game) PlayerGameTimeNotify(world *World) {
 	for _, player := range world.GetAllPlayer() {
-		scene := world.GetSceneById(player.SceneId)
+		scene := world.GetSceneById(player.GetSceneId())
 		if scene == nil {
-			logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+			logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 			return
 		}
 		for _, scenePlayer := range scene.GetAllPlayer() {

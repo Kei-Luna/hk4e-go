@@ -32,6 +32,14 @@ type Weapon struct {
 	Guid        uint64   `bson:"-" msgpack:"-"`
 }
 
+func (w *DbWeapon) GetWeaponById(weaponId uint64) *Weapon {
+	return w.WeaponMap[weaponId]
+}
+
+func (w *DbWeapon) GetWeaponMap() map[uint64]*Weapon {
+	return w.WeaponMap
+}
+
 func (w *DbWeapon) GetWeaponMapLen() int {
 	return len(w.WeaponMap)
 }
@@ -48,7 +56,7 @@ func (w *DbWeapon) InitWeapon(player *Player, weapon *Weapon) {
 	w.WeaponMap[weapon.WeaponId] = weapon
 	if weapon.AvatarId != 0 {
 		dbAvatar := player.GetDbAvatar()
-		avatar := dbAvatar.AvatarMap[weapon.AvatarId]
+		avatar := dbAvatar.GetAvatarById(weapon.AvatarId)
 		avatar.EquipGuidMap[weapon.Guid] = weapon.Guid
 		avatar.EquipWeapon = weapon
 	}

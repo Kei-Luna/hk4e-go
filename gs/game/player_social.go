@@ -112,8 +112,8 @@ func (g *Game) SetPlayerHeadImageReq(player *model.Player, payloadMsg pb.Message
 	req := payloadMsg.(*proto.SetPlayerHeadImageReq)
 	avatarId := req.AvatarId
 	dbAvatar := player.GetDbAvatar()
-	_, exist := dbAvatar.AvatarMap[avatarId]
-	if !exist {
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
 		logger.Error("the head img of the avatar not exist, uid: %v", player.PlayerId)
 		return
 	}
@@ -230,7 +230,7 @@ func (g *Game) AskAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 		if USER_MANAGER.GetRemoteUserOnlineState(targetUid) {
 			// 远程在线玩家
 			gsAppId := USER_MANAGER.GetRemoteUserGsAppId(targetUid)
-			MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+			g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 				MsgType: mq.MsgTypeServer,
 				EventId: mq.ServerAddFriendNotify,
 				ServerMsg: &mq.ServerMsg{
@@ -327,7 +327,7 @@ func (g *Game) DealAddFriendReq(player *model.Player, payloadMsg pb.Message) {
 			if USER_MANAGER.GetRemoteUserOnlineState(targetUid) {
 				// 远程在线玩家
 				gsAppId := USER_MANAGER.GetRemoteUserGsAppId(targetUid)
-				MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+				g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 					MsgType: mq.MsgTypeServer,
 					EventId: mq.ServerAddFriendNotify,
 					ServerMsg: &mq.ServerMsg{

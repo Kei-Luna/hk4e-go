@@ -185,7 +185,7 @@ func (c *CommandManager) GotoCommand(content *CommandContent) bool {
 		return pos, true
 	}
 	// 传送玩家到场景以及坐标
-	var sceneId = content.AssignPlayer.SceneId
+	var sceneId = content.AssignPlayer.GetSceneId()
 	var posX, posY, posZ float64
 
 	// 解析命令
@@ -212,7 +212,7 @@ func (c *CommandManager) GotoCommand(content *CommandContent) bool {
 		// 传送玩家至指定的位置
 		c.gmCmd.GMTeleportPlayer(content.AssignPlayer.PlayerId, sceneId, posX, posY, posZ)
 		// 发送消息给执行者
-		content.SendSuccMessage(content.Executor, "已传送至指定位置，指定UID：%v，场景ID：%v，X：%.2f，Y：%.2f，Z：%.2f。", content.AssignPlayer.PlayerId, content.AssignPlayer.SceneId, posX, posY, posZ)
+		content.SendSuccMessage(content.Executor, "已传送至指定位置，指定UID：%v，场景ID：%v，X：%.2f，Y：%.2f，Z：%.2f。", content.AssignPlayer.PlayerId, content.AssignPlayer.GetSceneId(), posX, posY, posZ)
 		return true
 	})
 }
@@ -256,7 +256,7 @@ func (c *CommandManager) JumpCommand(content *CommandContent) bool {
 		// 传送玩家至指定的位置
 		c.gmCmd.GMTeleportPlayer(content.AssignPlayer.PlayerId, sceneId, posX, posY, posZ)
 		// 发送消息给执行者
-		content.SendSuccMessage(content.Executor, "已传送至指定场景，指定UID：%v，场景ID：%v，X：%.2f，Y：%.2f，Z：%.2f。", content.AssignPlayer.PlayerId, content.AssignPlayer.SceneId, posX, posY, posZ)
+		content.SendSuccMessage(content.Executor, "已传送至指定场景，指定UID：%v，场景ID：%v，X：%.2f，Y：%.2f，Z：%.2f。", content.AssignPlayer.PlayerId, content.AssignPlayer.GetSceneId(), posX, posY, posZ)
 		return true
 	})
 }
@@ -304,7 +304,7 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 			// 添加武器
 			// 判断是否要添加全部武器
 			if param1 == "all" {
-				c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, 1, level, promote, 1)
+				c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, 1, level, promote, 0)
 				content.SendSuccMessage(content.Executor, "已给予所有武器，指定UID：%v，武器等级：%v，突破等级：%v。", content.AssignPlayer.PlayerId, level, promote)
 				return true
 			}
@@ -313,7 +313,7 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 			if err != nil {
 				return false
 			}
-			c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, level, promote, 1)
+			c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, level, promote, 0)
 			content.SendSuccMessage(content.Executor, "已给予武器，指定UID：%v，武器ID：%v，武器等级：%v，突破等级：%v。", content.AssignPlayer.PlayerId, itemId, level, promote)
 		default:
 			return false
@@ -492,7 +492,7 @@ func (c *CommandManager) GiveCommand(content *CommandContent) bool {
 			_, ok = GAME.GetAllWeaponDataConfig()[int32(itemId)]
 			if ok {
 				// 给予玩家武器
-				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, itemId, count, 1, 0, 1)
+				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, itemId, count, 1, 0, 0)
 				content.SendSuccMessage(content.Executor, "已给予武器，指定UID：%v，ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
 				return true
 			}
@@ -538,7 +538,7 @@ func (c *CommandManager) GiveCommand(content *CommandContent) bool {
 			content.SendSuccMessage(content.Executor, "已给予所有物品，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
 		case "weapon":
 			// 给予玩家所有武器
-			c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, count, 1, 0, 1)
+			c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, count, 1, 0, 0)
 			content.SendSuccMessage(content.Executor, "已给予所有武器，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
 		case "reliquary":
 			// 给予玩家所有圣遗物
@@ -795,8 +795,8 @@ func (c *CommandManager) NewPointCommandController() *CommandController {
 }
 
 func (c *CommandManager) PointCommand(content *CommandContent) bool {
-	var sceneId = content.AssignPlayer.SceneId // 场景id
-	var param1 string                          // 参数1
+	var sceneId = content.AssignPlayer.GetSceneId() // 场景id
+	var param1 string                               // 参数1
 
 	return content.Option("uint32", func(param any) bool {
 		// 场景id
@@ -810,7 +810,7 @@ func (c *CommandManager) PointCommand(content *CommandContent) bool {
 		if param1 == "all" {
 			// 解锁当前场景所有锚点
 			c.gmCmd.GMUnlockAllPoint(content.AssignPlayer.PlayerId, sceneId)
-			content.SendSuccMessage(content.Executor, "已解锁所有锚点，指定UID：%v，场景ID：%v。", content.AssignPlayer.PlayerId, content.AssignPlayer.SceneId)
+			content.SendSuccMessage(content.Executor, "已解锁所有锚点，指定UID：%v，场景ID：%v。", content.AssignPlayer.PlayerId, content.AssignPlayer.GetSceneId())
 			return true
 		}
 		// 锚点id
@@ -819,7 +819,7 @@ func (c *CommandManager) PointCommand(content *CommandContent) bool {
 			return false
 		}
 		c.gmCmd.GMUnlockPoint(content.AssignPlayer.PlayerId, sceneId, uint32(pointId))
-		content.SendSuccMessage(content.Executor, "已解锁锚点，指定UID：%v，场景ID：%v，锚点ID：%v。", content.AssignPlayer.PlayerId, content.AssignPlayer.SceneId, pointId)
+		content.SendSuccMessage(content.Executor, "已解锁锚点，指定UID：%v，场景ID：%v，锚点ID：%v。", content.AssignPlayer.PlayerId, content.AssignPlayer.GetSceneId(), pointId)
 		return true
 	})
 }

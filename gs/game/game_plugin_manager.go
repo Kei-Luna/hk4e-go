@@ -30,20 +30,15 @@ type PluginEventId uint16
 
 const (
 	PluginEventIdNone = PluginEventId(iota)
-	PluginEventIdPlayerKillAvatar
 	PluginEventIdMarkMap
 	PluginEventIdAvatarDieAnimationEnd
 	PluginEventIdGadgetInteract
 	PluginEventIdPostEnterScene
+	PluginEventIdEvtDoSkillSucc
+	PluginEventIdEvtBeingHit
+	PluginEventIdEvtCreateGadget
+	PluginEventIdEvtBulletHit
 )
-
-// PluginEventKillAvatar 角色被杀死
-type PluginEventKillAvatar struct {
-	*PluginEvent
-	Player   *model.Player       // 玩家
-	AvatarId uint32              // 角色id
-	DieType  proto.PlayerDieType // 死亡类型
-}
 
 // PluginEventMarkMap 地图标点
 type PluginEventMarkMap struct {
@@ -71,6 +66,34 @@ type PluginEventPostEnterScene struct {
 	*PluginEvent
 	Player *model.Player            // 玩家
 	Req    *proto.PostEnterSceneReq // 请求
+}
+
+// PluginEventEvtDoSkillSucc 使用技能
+type PluginEventEvtDoSkillSucc struct {
+	*PluginEvent
+	Player *model.Player               // 玩家
+	Ntf    *proto.EvtDoSkillSuccNotify // 请求
+}
+
+// PluginEventEvtBeingHit 实体受击
+type PluginEventEvtBeingHit struct {
+	*PluginEvent
+	Player  *model.Player          // 玩家
+	HitInfo *proto.EvtBeingHitInfo // 请求
+}
+
+// PluginEventEvtCreateGadget 创建物件实体
+type PluginEventEvtCreateGadget struct {
+	*PluginEvent
+	Player *model.Player                // 玩家
+	Ntf    *proto.EvtCreateGadgetNotify // 请求
+}
+
+// PluginEventEvtBulletHit 子弹命中
+type PluginEventEvtBulletHit struct {
+	*PluginEvent
+	Player *model.Player             // 玩家
+	Ntf    *proto.EvtBulletHitNotify // 请求
 }
 
 type PluginEventFunc func(event IPluginEvent)

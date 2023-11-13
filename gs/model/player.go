@@ -84,29 +84,69 @@ type Player struct {
 	WuDi                  bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家角色无敌
 	EnergyInf             bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家角色无限能量
 	StaminaInf            bool                                     `bson:"-" msgpack:"-"` // 是否开启玩家无限耐力
+	IsInMp                bool                                     `bson:"-" msgpack:"-"` // 是否位于多人世界
+	MpSceneId             uint32                                   `bson:"-" msgpack:"-"` // 多人世界场景
+	MpPos                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界坐标
+	MpRot                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界朝向
 	// 特殊数据
 	ChatMsgMap           map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
 	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 在线同步到redis 不保存到db
 }
 
-func (p *Player) GetPos() *Vector {
-	return &Vector{X: p.Pos.X, Y: p.Pos.Y, Z: p.Pos.Z}
+func (p *Player) GetSceneId() uint32 {
+	if p.IsInMp {
+		return p.MpSceneId
+	} else {
+		return p.SceneId
+	}
 }
 
-func (p *Player) GetRot() *Vector {
-	return &Vector{X: p.Rot.X, Y: p.Rot.Y, Z: p.Rot.Z}
+func (p *Player) SetSceneId(sceneId uint32) {
+	if p.IsInMp {
+		p.MpSceneId = sceneId
+	} else {
+		p.SceneId = sceneId
+	}
+}
+
+func (p *Player) GetPos() *Vector {
+	if p.IsInMp {
+		return &Vector{X: p.MpPos.X, Y: p.MpPos.Y, Z: p.MpPos.Z}
+	} else {
+		return &Vector{X: p.Pos.X, Y: p.Pos.Y, Z: p.Pos.Z}
+	}
 }
 
 func (p *Player) SetPos(pos *Vector) {
-	p.Pos.X = pos.X
-	p.Pos.Y = pos.Y
-	p.Pos.Z = pos.Z
+	if p.IsInMp {
+		p.MpPos.X = pos.X
+		p.MpPos.Y = pos.Y
+		p.MpPos.Z = pos.Z
+	} else {
+		p.Pos.X = pos.X
+		p.Pos.Y = pos.Y
+		p.Pos.Z = pos.Z
+	}
+}
+
+func (p *Player) GetRot() *Vector {
+	if p.IsInMp {
+		return &Vector{X: p.MpRot.X, Y: p.MpRot.Y, Z: p.MpRot.Z}
+	} else {
+		return &Vector{X: p.Rot.X, Y: p.Rot.Y, Z: p.Rot.Z}
+	}
 }
 
 func (p *Player) SetRot(rot *Vector) {
-	p.Rot.X = rot.X
-	p.Rot.Y = rot.Y
-	p.Rot.Z = rot.Z
+	if p.IsInMp {
+		p.MpRot.X = rot.X
+		p.MpRot.Y = rot.Y
+		p.MpRot.Z = rot.Z
+	} else {
+		p.Rot.X = rot.X
+		p.Rot.Y = rot.Y
+		p.Rot.Z = rot.Z
+	}
 }
 
 func (p *Player) GetNextGameObjectGuid() uint64 {

@@ -75,6 +75,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		aoiManager.Init3DRectAoiManager(120, 12, 120, true)
 		world.aiWorldAoi = aoiManager
 		logger.Info("ai world aoi init finish")
+		world.NewPhysicsEngine()
 	}
 
 	return world
@@ -100,8 +101,6 @@ func (w *WorldManager) GetAiWorld() *World {
 // InitAiWorld 初始化Ai世界
 func (w *WorldManager) InitAiWorld(owner *model.Player) {
 	w.aiWorld = w.GetWorldById(owner.WorldId)
-	w.aiWorld.ChangeToMultiplayer()
-	w.aiWorld.NewPhysicsEngine()
 }
 
 func (w *WorldManager) IsAiWorld(world *World) bool {
@@ -379,7 +378,7 @@ func (w *World) AddPlayer(player *model.Player) {
 		w.UpdateMultiplayerTeam()
 	}
 
-	scene := w.GetSceneById(player.SceneId)
+	scene := w.GetSceneById(player.GetSceneId())
 	scene.AddPlayer(player)
 	w.InitPlayerTeamEntityId(player)
 }
@@ -387,7 +386,7 @@ func (w *World) AddPlayer(player *model.Player) {
 func (w *World) RemovePlayer(player *model.Player) {
 	peerId := w.GetPlayerPeerId(player)
 	w.peerList = append(w.peerList[:peerId-1], w.peerList[peerId:]...)
-	scene := w.sceneMap[player.SceneId]
+	scene := w.sceneMap[player.GetSceneId()]
 	scene.RemovePlayer(player)
 	w.RemoveAllEnterSceneContextByUid(player.PlayerId)
 	delete(w.playerMap, player.PlayerId)
@@ -507,7 +506,7 @@ func (w *World) GetWorldAvatarByEntityId(avatarEntityId uint32) *WorldAvatar {
 
 // UpdatePlayerWorldAvatar 更新某玩家在世界队伍中的所有角色
 func (w *World) UpdatePlayerWorldAvatar(player *model.Player) {
-	scene := w.GetSceneById(player.SceneId)
+	scene := w.GetSceneById(player.GetSceneId())
 	for _, worldAvatar := range w.GetPlayerWorldAvatarList(player) {
 		if worldAvatar.avatarEntityId != 0 {
 			continue
@@ -581,7 +580,7 @@ func (w *World) GetPlayerAvatarIndexByAvatarId(player *model.Player, avatarId ui
 func (w *World) GetPlayerActiveAvatarEntity(player *model.Player) *Entity {
 	activeAvatarId := w.GetPlayerActiveAvatarId(player)
 	avatarEntityId := w.GetPlayerWorldAvatarEntityId(player, activeAvatarId)
-	scene := w.GetSceneById(player.SceneId)
+	scene := w.GetSceneById(player.GetSceneId())
 	entity := scene.GetEntity(avatarEntityId)
 	return entity
 }
@@ -666,7 +665,7 @@ func (w *World) SetPlayerLocalTeam(player *model.Player, avatarIdList []uint32) 
 			modifierMap:    make(map[uint32]*proto.AbilityAppliedModifier),
 		}
 	}
-	scene := w.GetSceneById(player.SceneId)
+	scene := w.GetSceneById(player.GetSceneId())
 	for _, worldAvatar := range oldLocalTeam {
 		exist := false
 		for _, avatarId := range avatarIdList {
@@ -818,6 +817,7 @@ func (w *World) GetChatList() []*proto.ChatInfo {
 func (w *World) ChangeToMultiplayer() {
 	WORLD_MANAGER.multiplayerWorldNum++
 	w.multiplayer = true
+	w.owner.IsInMp = true
 }
 
 // IsPlayerFirstEnter 获取玩家是否首次加入本世界

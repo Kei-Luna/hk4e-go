@@ -168,7 +168,7 @@ func (u *UserManager) OnlineUser(player *model.Player) {
 	player.Online = true
 	player.OnlineTime = uint32(time.Now().Unix())
 	USER_MANAGER.AddUser(player)
-	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
+	GAME.messageQueue.SendToAll(&mq.NetMsg{
 		MsgType: mq.MsgTypeServer,
 		EventId: mq.ServerUserOnlineStateChangeNotify,
 		ServerMsg: &mq.ServerMsg{
@@ -241,7 +241,7 @@ func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *Change
 // OfflineUser 玩家离线
 func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsInfo) {
 	USER_MANAGER.DeleteUser(player.PlayerId)
-	MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
+	GAME.messageQueue.SendToAll(&mq.NetMsg{
 		MsgType: mq.MsgTypeServer,
 		EventId: mq.ServerUserOnlineStateChangeNotify,
 		ServerMsg: &mq.ServerMsg{
@@ -252,7 +252,7 @@ func (u *UserManager) OfflineUser(player *model.Player, changeGsInfo *ChangeGsIn
 	atomic.AddInt32(&ONLINE_PLAYER_NUM, -1)
 	if changeGsInfo.IsChangeGs {
 		gsAppId := USER_MANAGER.GetRemoteUserGsAppId(changeGsInfo.JoinHostUserId)
-		MESSAGE_QUEUE.SendToGate(player.GateAppId, &mq.NetMsg{
+		GAME.messageQueue.SendToGate(player.GateAppId, &mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerUserGsChangeNotify,
 			ServerMsg: &mq.ServerMsg{
@@ -311,7 +311,7 @@ func (u *UserManager) autoSyncRemotePlayerMap() {
 }
 
 func (u *UserManager) syncRemotePlayerMap() {
-	rsp, err := GAME.discovery.GetGlobalGsOnlineMap(context.TODO(), nil)
+	rsp, err := GAME.discoveryClient.GetGlobalGsOnlineMap(context.TODO(), nil)
 	if err != nil {
 		logger.Error("get global gs online map error: %v", err)
 		return

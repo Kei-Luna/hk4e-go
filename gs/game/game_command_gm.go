@@ -12,7 +12,6 @@ import (
 	"hk4e/protocol/proto"
 
 	"google.golang.org/protobuf/encoding/protojson"
-	pb "google.golang.org/protobuf/proto"
 )
 
 // GM函数模块
@@ -101,16 +100,15 @@ func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level, promote uint8) {
 		return
 	}
 	// 获取角色
-	avatar, ok := player.GetDbAvatar().AvatarMap[avatarId]
-	if !ok {
+	avatar := player.GetDbAvatar().GetAvatarById(avatarId)
+	if avatar == nil {
 		logger.Error("avatar not exist, avatarId: %v", avatarId)
 		return
 	}
-	// 设置角色的突破等级
-	avatar.Promote = promote
-	// 设置角色的等级
+	// 修正角色属性
 	avatar.Level = level
-	avatar.Exp = 0
+	avatar.Promote = promote
+	GAME.AddPlayerAvatarHp(player.PlayerId, avatarId, 0.0, true, proto.ChangHpReason_CHANGE_HP_ADD_GM)
 	// 角色更新面板
 	GAME.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	// 角色属性表更新通知
@@ -184,11 +182,11 @@ func (g *GMCmd) GMAddAll(userId uint32) {
 	// 给予玩家所有物品
 	g.GMAddAllItem(userId, 9999)
 	// 给予玩家所有武器
-	g.GMAddAllWeapon(userId, 1, 90, 5, 5)
+	g.GMAddAllWeapon(userId, 1, 90, 6, 4)
 	// 给予玩家所有圣遗物
 	g.GMAddAllReliquary(userId, 5)
 	// 给予玩家所有角色
-	g.GMAddAllAvatar(userId, 90, 5)
+	g.GMAddAllAvatar(userId, 90, 6)
 	// 给予玩家所有时装
 	g.GMAddAllCostume(userId)
 	// 给予玩家所有风之翼
@@ -224,9 +222,9 @@ func (g *GMCmd) GMKillMonster(userId uint32, entityId uint32) {
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
 	// 获取实体
@@ -255,9 +253,9 @@ func (g *GMCmd) GMKillAllMonster(userId uint32) {
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
 	// 杀死所有怪物实体
@@ -386,9 +384,9 @@ func (g *GMCmd) GMCreateMonster(userId uint32, monsterId uint32, posX, posY, pos
 		logger.Error("world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
 	if count > 100 {
@@ -654,8 +652,8 @@ func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32, p
 	dbAvatar := robot.GetDbAvatar()
 	GAME.SetUpAvatarTeamReq(robot, &proto.SetUpAvatarTeamReq{
 		TeamId:             1,
-		AvatarTeamGuidList: []uint64{dbAvatar.AvatarMap[avatarId].Guid},
-		CurAvatarGuid:      dbAvatar.AvatarMap[avatarId].Guid,
+		AvatarTeamGuidList: []uint64{dbAvatar.GetAvatarById(avatarId).Guid},
+		CurAvatarGuid:      dbAvatar.GetAvatarById(avatarId).Guid,
 	})
 	GAME.SetPlayerHeadImageReq(robot, &proto.SetPlayerHeadImageReq{
 		AvatarId: avatarId,
@@ -675,28 +673,14 @@ func (g *GMCmd) CreateRobotInAiWorld(uid uint32, name string, avatarId uint32, p
 	GAME.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
 		EnterSceneToken: aiWorld.GetEnterSceneToken(),
 	})
-	entityMoveInfo := &proto.EntityMoveInfo{
-		EntityId: aiWorld.GetPlayerActiveAvatarEntity(robot).GetId(),
+	GAME.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
 		MotionInfo: &proto.MotionInfo{
-			Pos:   &proto.Vector{X: float32(posX), Y: float32(posY), Z: float32(posZ)},
-			Rot:   &proto.Vector{X: float32(0.0), Y: float32(0.0), Z: float32(0.0)},
-			State: proto.MotionState_MOTION_STANDBY,
+			Pos: &proto.Vector{X: float32(posX), Y: float32(posY), Z: float32(posZ)},
+			Rot: new(proto.Vector),
 		},
-		SceneTime:   0,
-		ReliableSeq: 0,
-	}
-	combatData, err := pb.Marshal(entityMoveInfo)
-	if err != nil {
-		return
-	}
-	GAME.CombatInvocationsNotify(robot, &proto.CombatInvocationsNotify{
-		InvokeList: []*proto.CombatInvokeEntry{{
-			CombatData:   combatData,
-			ForwardType:  proto.ForwardType_FORWARD_TO_ALL_EXCEPT_CUR,
-			ArgumentType: proto.CombatTypeArgument_ENTITY_MOVE,
-		}},
+		EntityId: aiWorld.GetPlayerActiveAvatarEntity(robot).GetId(),
 	})
-	GAME.UnionCmdNotify(robot, &proto.UnionCmdNotify{})
+	robot.SetPos(&model.Vector{X: posX, Y: posY, Z: posZ})
 }
 
 func (g *GMCmd) ServerAnnounce(announceId uint32, announceMsg string, isRevoke bool) {
@@ -766,7 +750,7 @@ func (g *GMCmd) AiWorldAoiDebug(v bool) {
 	if aiWorld == nil {
 		return
 	}
-	scene := aiWorld.GetSceneById(aiWorld.GetOwner().SceneId)
+	scene := aiWorld.GetSceneById(aiWorld.GetOwner().GetSceneId())
 	aiWorldAoi := aiWorld.GetAiWorldAoi()
 	gridMap := aiWorldAoi.Debug()
 	logger.Debug("total grid num: %v", len(gridMap))

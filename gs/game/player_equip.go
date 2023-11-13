@@ -150,15 +150,15 @@ func (g *Game) WearPlayerAvatarReliquary(userId uint32, avatarId uint32, reliqua
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[avatarId]
-	if !ok {
-		logger.Error("avatar error, avatarId: %v", avatarId)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 	dbReliquary := player.GetDbReliquary()
-	reliquary, ok := dbReliquary.ReliquaryMap[reliquaryId]
-	if !ok {
-		logger.Error("reliquary error, reliquaryId: %v", reliquaryId)
+	reliquary := dbReliquary.GetReliquaryById(reliquaryId)
+	if reliquary == nil {
+		logger.Error("get reliquary is nil, reliquaryId: %v", reliquaryId)
 		return
 	}
 	// 获取圣遗物配置表
@@ -171,9 +171,9 @@ func (g *Game) WearPlayerAvatarReliquary(userId uint32, avatarId uint32, reliqua
 	avatarCurReliquary := avatar.EquipReliquaryMap[uint8(reliquaryConfig.ReliquaryType)]
 	if reliquary.AvatarId != 0 {
 		// 圣遗物在别的角色身上
-		targetReliquaryAvatar, ok := dbAvatar.AvatarMap[reliquary.AvatarId]
-		if !ok {
-			logger.Error("avatar error, avatarId: %v", reliquary.AvatarId)
+		targetReliquaryAvatar := dbAvatar.GetAvatarById(reliquary.AvatarId)
+		if targetReliquaryAvatar == nil {
+			logger.Error("get avatar is nil, avatarId: %v", reliquary.AvatarId)
 			return
 		}
 		// 确保目前角色已装备圣遗物
@@ -209,15 +209,15 @@ func (g *Game) WearPlayerAvatarWeapon(userId uint32, avatarId uint32, weaponId u
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[avatarId]
-	if !ok {
-		logger.Error("avatar error, avatarId: %v", avatarId)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 	dbWeapon := player.GetDbWeapon()
-	weapon, ok := dbWeapon.WeaponMap[weaponId]
-	if !ok {
-		logger.Error("weapon error, weaponId: %v", weaponId)
+	weapon := dbWeapon.GetWeaponById(weaponId)
+	if weapon == nil {
+		logger.Error("get weapon is nil, weaponId: %v", weaponId)
 		return
 	}
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
@@ -231,9 +231,9 @@ func (g *Game) WearPlayerAvatarWeapon(userId uint32, avatarId uint32, weaponId u
 	if avatarCurWeapon != nil {
 		if weapon.AvatarId != 0 {
 			// 武器在别的角色身上
-			targetWeaponAvatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
-			if !ok {
-				logger.Error("avatar error, avatarId: %v", weapon.AvatarId)
+			targetWeaponAvatar := dbAvatar.GetAvatarById(weapon.AvatarId)
+			if targetWeaponAvatar == nil {
+				logger.Error("get avatar is nil, avatarId: %v", weapon.AvatarId)
 				return
 			}
 			// 卸下角色已装备的武器

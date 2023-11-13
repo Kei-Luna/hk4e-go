@@ -13,7 +13,7 @@ func forEachPlayerSceneGroup(player *model.Player, handleFunc func(suiteConfig *
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	for groupId, group := range scene.GetAllGroup() {
 		groupConfig := gdconf.GetSceneGroup(int32(groupId))
 		if groupConfig == nil {
@@ -32,7 +32,7 @@ func forEachPlayerSceneGroupTrigger(player *model.Player, handleFunc func(trigge
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	for groupId, group := range scene.GetAllGroup() {
 		groupConfig := gdconf.GetSceneGroup(int32(groupId))
 		if groupConfig == nil {

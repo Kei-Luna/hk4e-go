@@ -93,9 +93,9 @@ func (s *Scene) RemovePlayer(player *model.Player) {
 func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32 {
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_AVATAR)
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[avatarId]
-	if !ok {
-		logger.Error("avatar error, avatarId: %v", avatar)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatar)
 		return 0
 	}
 	entity := &Entity{

@@ -32,6 +32,14 @@ type Reliquary struct {
 	Guid             uint64   `bson:"-" msgpack:"-"`
 }
 
+func (r *DbReliquary) GetReliquaryById(reliquaryId uint64) *Reliquary {
+	return r.ReliquaryMap[reliquaryId]
+}
+
+func (r *DbReliquary) GetReliquaryMap() map[uint64]*Reliquary {
+	return r.ReliquaryMap
+}
+
 func (r *DbReliquary) GetReliquaryMapLen() int {
 	return len(r.ReliquaryMap)
 }
@@ -54,7 +62,7 @@ func (r *DbReliquary) InitReliquary(player *Player, reliquary *Reliquary) {
 	r.ReliquaryMap[reliquary.ReliquaryId] = reliquary
 	if reliquary.AvatarId != 0 {
 		dbAvatar := player.GetDbAvatar()
-		avatar := dbAvatar.AvatarMap[reliquary.AvatarId]
+		avatar := dbAvatar.GetAvatarById(reliquary.AvatarId)
 		avatar.EquipGuidMap[reliquary.Guid] = reliquary.Guid
 		avatar.EquipReliquaryMap[uint8(reliquaryConfig.ReliquaryType)] = reliquary
 	}

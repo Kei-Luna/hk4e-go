@@ -66,7 +66,7 @@ func (g *Game) SetUpAvatarTeamReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.SetUpAvatarTeamRsp, player, &proto.SetUpAvatarTeamRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	oldAvatarEntity := world.GetPlayerActiveAvatarEntity(player)
 	g.ChangeTeam(player, teamId, avatarIdList, currAvatar.AvatarId)
@@ -105,7 +105,7 @@ func (g *Game) ChooseCurAvatarTeamReq(player *model.Player, payloadMsg pb.Messag
 		g.SendError(cmd.ChooseCurAvatarTeamRsp, player, &proto.ChooseCurAvatarTeamRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if world.IsMultiplayerWorld() {
 		g.SendError(cmd.ChooseCurAvatarTeamRsp, player, &proto.ChooseCurAvatarTeamRsp{})
 		return
@@ -178,7 +178,7 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if WORLD_MANAGER.IsAiWorld(world) || !world.IsMultiplayerWorld() || len(avatarIdList) == 0 || len(avatarIdList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
@@ -226,7 +226,7 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 触发事件
 	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdAvatarDieAnimationEnd, &PluginEventAvatarDieAnimationEnd{
@@ -246,7 +246,7 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 		g.TeleportPlayer(
 			player,
 			proto.EnterReason_ENTER_REASON_REVIVAL,
-			player.SceneId,
+			player.GetSceneId(),
 			player.GetPos(),
 			player.GetRot(),
 			0,
@@ -256,9 +256,9 @@ func (g *Game) AvatarDieAnimationEndReq(player *model.Player, payloadMsg pb.Mess
 		targetAvatarId := uint32(0)
 		for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
 			dbAvatar := player.GetDbAvatar()
-			avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
-			if !exist {
-				logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+			avatar := dbAvatar.GetAvatarById(worldAvatar.GetAvatarId())
+			if avatar == nil {
+				logger.Error("get avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
 				continue
 			}
 			if avatar.LifeState != constant.LIFE_STATE_ALIVE {
@@ -291,7 +291,7 @@ func (g *Game) WorldPlayerReviveReq(player *model.Player, payloadMsg pb.Message)
 	g.TeleportPlayer(
 		player,
 		proto.EnterReason_ENTER_REASON_REVIVAL,
-		player.SceneId,
+		player.GetSceneId(),
 		player.GetPos(),
 		player.GetRot(),
 		0,
@@ -308,7 +308,7 @@ func (g *Game) ChangeAvatar(player *model.Player, targetAvatarId uint32) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	oldAvatarId := world.GetPlayerActiveAvatarId(player)
 	if targetAvatarId == oldAvatarId {
 		logger.Error("can not change to the same avatar, uid: %v, oldAvatarId: %v, targetAvatarId: %v", player.PlayerId, oldAvatarId, targetAvatarId)
@@ -370,7 +370,7 @@ func (g *Game) ChangeTeam(player *model.Player, teamId uint32, avatarIdList []ui
 			AvatarGuidList: make([]uint64, 0),
 		}
 		for _, avatarId := range team.GetAvatarIdList() {
-			avatarTeam.AvatarGuidList = append(avatarTeam.AvatarGuidList, dbAvatar.AvatarMap[avatarId].Guid)
+			avatarTeam.AvatarGuidList = append(avatarTeam.AvatarGuidList, dbAvatar.GetAvatarById(avatarId).Guid)
 		}
 		avatarTeamUpdateNotify.AvatarTeamMap[uint32(teamIndex)+1] = avatarTeam
 	}
@@ -407,9 +407,9 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 			logger.Error("player is nil, uid: %v", worldAvatar.GetUid())
 			continue
 		}
-		worldPlayerScene := world.GetSceneById(worldPlayer.SceneId)
+		worldPlayerScene := world.GetSceneById(worldPlayer.GetSceneId())
 		worldPlayerDbAvatar := worldPlayer.GetDbAvatar()
-		worldPlayerAvatar := worldPlayerDbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+		worldPlayerAvatar := worldPlayerDbAvatar.GetAvatarById(worldAvatar.GetAvatarId())
 		equipIdList := make([]uint32, 0)
 		weapon := worldPlayerAvatar.EquipWeapon
 		equipIdList = append(equipIdList, weapon.ItemId)
@@ -419,7 +419,7 @@ func (g *Game) PacketSceneTeamUpdateNotify(world *World, player *model.Player) *
 		sceneTeamAvatar := &proto.SceneTeamAvatar{
 			PlayerUid:         worldPlayer.PlayerId,
 			AvatarGuid:        worldPlayerAvatar.Guid,
-			SceneId:           worldPlayer.SceneId,
+			SceneId:           worldPlayer.GetSceneId(),
 			EntityId:          world.GetPlayerWorldAvatarEntityId(worldPlayer, worldAvatar.GetAvatarId()),
 			SceneEntityInfo:   g.PacketSceneEntityInfoAvatar(worldPlayerScene, worldPlayer, worldAvatar.GetAvatarId()),
 			WeaponGuid:        worldPlayerAvatar.EquipWeapon.Guid,

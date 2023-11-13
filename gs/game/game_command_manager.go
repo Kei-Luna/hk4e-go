@@ -487,10 +487,11 @@ func (c *CommandManager) CallGMCmd(funcName string, paramList []string) (bool, s
 func (c *CommandManager) HandleCommand(command *CommandMessage) {
 	switch command.GMType {
 	case PlayerChatGM, DevClientGM:
+		logger.Info("run gm cmd, text: %v, uid: %v", command.Text, command.Executor.PlayerId)
 		// 执行命令
 		c.ExecCommand(command)
 	case SystemFuncGM:
-		logger.Info("run gm cmd, FuncName: %v, ParamList: %v", command.FuncName, command.ParamList)
+		logger.Info("run gm func, funcName: %v, paramList: %v", command.FuncName, command.ParamList)
 		// 反射调用game_command_gm.go中的函数并反射解析传入参数类型
 		ok, ret := c.CallGMCmd(command.FuncName, command.ParamList)
 		if command.ResultChan != nil {

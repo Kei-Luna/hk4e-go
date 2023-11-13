@@ -273,9 +273,9 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if scene == nil {
-		logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
 	logger.Debug("change game time, gameTime: %v, uid: %v", gameTime, player.PlayerId)
@@ -411,64 +411,68 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	entity := scene.GetEntity(req.GadgetEntityId)
 	if entity == nil {
 		logger.Error("get entity is nil, entityId: %v, uid: %v", req.GadgetEntityId, player.PlayerId)
 		return
 	}
-	if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
-		logger.Error("entity type is not gadget, entityType: %v, uid: %v", entity.GetEntityType(), player.PlayerId)
-		return
-	}
-	gadgetEntity := entity.GetGadgetEntity()
-	gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
-	if gadgetDataConfig == nil {
-		logger.Error("get gadget data config is nil, gadgetId: %v, uid: %v", gadgetEntity.GetGadgetId(), player.PlayerId)
-		return
-	}
-	logger.Debug("[GadgetInteractReq] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, entity.GetId(), player.PlayerId)
+
 	interactType := proto.InteractType_INTERACT_NONE
-	switch gadgetDataConfig.Type {
-	case constant.GADGET_TYPE_GADGET:
-		// 掉落物捡起
-		interactType = proto.InteractType_INTERACT_PICK_ITEM
-		gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
-		g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-			ItemId:      gadgetNormalEntity.GetItemId(),
-			ChangeCount: 1,
-		}}, true, 0)
-		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
-	case constant.GADGET_TYPE_ENERGY_BALL:
-		// TODO 元素能量球吸收
-		interactType = proto.InteractType_INTERACT_PICK_ITEM
-		activeAvatarId := world.GetPlayerActiveAvatarId(player)
-		g.AddPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 10.0, false)
-	case constant.GADGET_TYPE_GATHER_OBJECT:
-		// 采集物摘取
-		interactType = proto.InteractType_INTERACT_GATHER
-		gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
-		g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-			ItemId:      gadgetNormalEntity.GetItemId(),
-			ChangeCount: 1,
-		}}, true, 0)
-		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
-	case constant.GADGET_TYPE_CHEST:
-		// 宝箱开启
-		interactType = proto.InteractType_INTERACT_OPEN_CHEST
-		// 宝箱交互结束 开启宝箱
-		if req.OpType == proto.InterOpType_INTER_OP_FINISH {
-			// 随机掉落
-			g.chestDrop(player, entity)
-			// 更新宝箱状态
-			g.SendMsg(cmd.WorldChestOpenNotify, player.PlayerId, player.ClientSeq, &proto.WorldChestOpenNotify{
-				GroupId:  entity.GetGroupId(),
-				SceneId:  scene.GetId(),
-				ConfigId: entity.GetConfigId(),
-			})
-			g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_CHEST_OPENED)
-			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
+	switch entity.GetEntityType() {
+	case constant.ENTITY_TYPE_GADGET:
+		gadgetEntity := entity.GetGadgetEntity()
+		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
+		if gadgetDataConfig == nil {
+			logger.Error("get gadget data config is nil, gadgetId: %v, uid: %v", gadgetEntity.GetGadgetId(), player.PlayerId)
+			return
 		}
+		logger.Debug("[GadgetInteractReq] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, entity.GetId(), player.PlayerId)
+		switch gadgetDataConfig.Type {
+		case constant.GADGET_TYPE_GADGET:
+			// 掉落物捡起
+			interactType = proto.InteractType_INTERACT_PICK_ITEM
+			gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
+				ItemId:      gadgetNormalEntity.GetItemId(),
+				ChangeCount: 1,
+			}}, true, 0)
+			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
+		case constant.GADGET_TYPE_ENERGY_BALL:
+			// TODO 元素能量球吸收
+			interactType = proto.InteractType_INTERACT_PICK_ITEM
+			activeAvatarId := world.GetPlayerActiveAvatarId(player)
+			g.AddPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 10.0, false)
+		case constant.GADGET_TYPE_GATHER_OBJECT:
+			// 采集物摘取
+			interactType = proto.InteractType_INTERACT_GATHER
+			gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
+				ItemId:      gadgetNormalEntity.GetItemId(),
+				ChangeCount: 1,
+			}}, true, 0)
+			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
+		case constant.GADGET_TYPE_CHEST:
+			// 宝箱开启
+			interactType = proto.InteractType_INTERACT_OPEN_CHEST
+			// 宝箱交互结束 开启宝箱
+			if req.OpType == proto.InterOpType_INTER_OP_FINISH {
+				// 随机掉落
+				g.chestDrop(player, entity)
+				// 更新宝箱状态
+				g.SendMsg(cmd.WorldChestOpenNotify, player.PlayerId, player.ClientSeq, &proto.WorldChestOpenNotify{
+					GroupId:  entity.GetGroupId(),
+					SceneId:  scene.GetId(),
+					ConfigId: entity.GetConfigId(),
+				})
+				g.ChangeGadgetState(player, entity.GetId(), constant.GADGET_STATE_CHEST_OPENED)
+				g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
+			}
+		default:
+			logger.Error("not support gadget type: %v, uid: %v", gadgetDataConfig.Type, player.PlayerId)
+		}
+	default:
+		logger.Error("not support entity type: %v, uid: %v", entity.GetEntityType(), player.PlayerId)
 	}
 
 	rsp := &proto.GadgetInteractRsp{
@@ -489,7 +493,7 @@ func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.M
 	}
 	dbAvatar := player.GetDbAvatar()
 	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
-		avatar := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
+		avatar := dbAvatar.GetAvatarById(worldAvatar.GetAvatarId())
 		if avatar.LifeState == constant.LIFE_STATE_DEAD {
 			g.RevivePlayerAvatar(player, worldAvatar.GetAvatarId())
 		}
@@ -724,7 +728,7 @@ func (g *Game) TeleportPlayer(
 		return
 	}
 
-	oldSceneId := player.SceneId
+	oldSceneId := player.GetSceneId()
 	oldPos := g.GetPlayerPos(player)
 	newSceneId := sceneId
 	newPos := pos
@@ -733,17 +737,17 @@ func (g *Game) TeleportPlayer(
 	var enterType proto.EnterType
 	if newSceneId != oldSceneId {
 		player.SceneJump = true
-		logger.Debug("player jump scene, scene: %v, pos: %v", player.SceneId, newPos)
+		logger.Debug("player jump scene, scene: %v, pos: %v", player.GetSceneId(), newPos)
 		enterType = proto.EnterType_ENTER_JUMP
 		if enterReason == proto.EnterReason_ENTER_REASON_DUNGEON_ENTER {
-			logger.Debug("player tp to dungeon scene, sceneId: %v, pos: %v", player.SceneId, newPos)
+			logger.Debug("player tp to dungeon scene, sceneId: %v, pos: %v", player.GetSceneId(), newPos)
 			enterType = proto.EnterType_ENTER_DUNGEON
 		}
 		delTeamEntityNotify := g.PacketDelTeamEntityNotify(world, player)
 		g.SendMsg(cmd.DelTeamEntityNotify, player.PlayerId, player.ClientSeq, delTeamEntityNotify)
 	} else {
 		player.SceneJump = false
-		logger.Debug("player goto scene, scene: %v, pos: %v", player.SceneId, newPos)
+		logger.Debug("player goto scene, scene: %v, pos: %v", player.GetSceneId(), newPos)
 		enterType = proto.EnterType_ENTER_GOTO
 	}
 

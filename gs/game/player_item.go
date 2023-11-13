@@ -49,6 +49,7 @@ func (g *Game) UseItemReq(player *model.Player, payloadMsg pb.Message) {
 /************************************************** 游戏功能 **************************************************/
 
 func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
+	g.EndlessLoopCheck(EndlessLoopCheckTypeUseItem)
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -70,8 +71,8 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 				continue
 			}
 			dbAvatar := player.GetDbAvatar()
-			_, exist := dbAvatar.AvatarMap[uint32(avatarId)]
-			if !exist {
+			avatar := dbAvatar.GetAvatarById(uint32(avatarId))
+			if avatar == nil {
 				g.AddPlayerAvatar(userId, uint32(avatarId))
 			} else {
 				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, true, 0)
@@ -342,9 +343,9 @@ func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreN
 	playerStoreNotify := &proto.PlayerStoreNotify{
 		StoreType:   proto.StoreType_STORE_PACK,
 		WeightLimit: constant.STORE_PACK_LIMIT_WEIGHT,
-		ItemList:    make([]*proto.Item, 0, len(dbItem.ItemMap)+len(dbWeapon.WeaponMap)+len(dbReliquary.ReliquaryMap)),
+		ItemList:    make([]*proto.Item, 0, dbItem.GetItemMapLen()+dbWeapon.GetWeaponMapLen()+dbReliquary.GetReliquaryMapLen()),
 	}
-	for _, weapon := range dbWeapon.WeaponMap {
+	for _, weapon := range dbWeapon.GetWeaponMap() {
 		itemDataConfig := gdconf.GetItemDataById(int32(weapon.ItemId))
 		if itemDataConfig == nil {
 			logger.Error("get item data config is nil, itemId: %v", weapon.ItemId)
@@ -376,7 +377,7 @@ func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreN
 		}
 		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
 	}
-	for _, reliquary := range dbReliquary.ReliquaryMap {
+	for _, reliquary := range dbReliquary.GetReliquaryMap() {
 		itemDataConfig := gdconf.GetItemDataById(int32(reliquary.ItemId))
 		if itemDataConfig == nil {
 			logger.Error("get item data config is nil, itemId: %v", reliquary.ItemId)
@@ -405,7 +406,7 @@ func (g *Game) PacketPlayerStoreNotify(player *model.Player) *proto.PlayerStoreN
 		}
 		playerStoreNotify.ItemList = append(playerStoreNotify.ItemList, pbItem)
 	}
-	for _, item := range dbItem.ItemMap {
+	for _, item := range dbItem.GetItemMap() {
 		itemDataConfig := gdconf.GetItemDataById(int32(item.ItemId))
 		if itemDataConfig == nil {
 			logger.Error("get item data config is nil, itemId: %v", item.ItemId)

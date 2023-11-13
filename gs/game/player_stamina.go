@@ -171,7 +171,7 @@ func (g *Game) RestoreCountStaminaHandler(player *model.Player) {
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	// 处理载具
 	// 遍历玩家创建的载具实体
 	for _, entityId := range player.VehicleInfo.CreateEntityIdMap {
@@ -214,7 +214,7 @@ func (g *Game) VehicleRestoreStaminaHandler(player *model.Player) {
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	// 遍历玩家创建的载具实体
 	for _, entityId := range player.VehicleInfo.CreateEntityIdMap {
 		// 获取载具实体
@@ -243,7 +243,7 @@ func (g *Game) SustainStaminaHandler(player *model.Player) {
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	// 获取玩家处于的载具实体
 	entity := scene.GetEntity(player.VehicleInfo.InVehicleEntityId)
 	if entity == nil {
@@ -375,9 +375,9 @@ func (g *Game) HandleDrown(player *model.Player, stamina uint32) {
 	}
 	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
 		dbAvatar := player.GetDbAvatar()
-		avatar, exist := dbAvatar.AvatarMap[worldAvatar.GetAvatarId()]
-		if !exist {
-			logger.Error("get db avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
+		avatar := dbAvatar.GetAvatarById(worldAvatar.GetAvatarId())
+		if avatar == nil {
+			logger.Error("get avatar is nil, avatarId: %v", worldAvatar.GetAvatarId())
 			continue
 		}
 		if avatar.LifeState != constant.LIFE_STATE_ALIVE {

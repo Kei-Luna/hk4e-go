@@ -20,6 +20,14 @@ type Item struct {
 	Guid   uint64 `bson:"-" msgpack:"-"`
 }
 
+func (i *DbItem) GetItemMap() map[uint32]*Item {
+	return i.ItemMap
+}
+
+func (i *DbItem) GetItemMapLen() int {
+	return len(i.ItemMap)
+}
+
 func (i *DbItem) InitDbItem(player *Player) {
 	for itemId, item := range i.ItemMap {
 		item.Guid = player.GetNextGameObjectGuid()
@@ -42,10 +50,6 @@ func (i *DbItem) GetItemCount(itemId uint32) uint32 {
 		return 0
 	}
 	return itemInfo.Count
-}
-
-func (i *DbItem) GetItemMapLen() int {
-	return len(i.ItemMap)
 }
 
 func (i *DbItem) AddItem(player *Player, itemId uint32, count uint32) {

@@ -25,7 +25,7 @@ func (g *Game) CreateVehicleReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 创建载具冷却时间
 	createVehicleCd := int64(5000) // TODO 冷却时间读取配置表
@@ -76,7 +76,7 @@ func (g *Game) VehicleInteractReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.VehicleInteractRsp, player, &proto.VehicleInteractRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 获取载具实体
 	entity := scene.GetEntity(req.EntityId)
@@ -95,7 +95,7 @@ func (g *Game) VehicleInteractReq(player *model.Player, payloadMsg pb.Message) {
 
 	dbTeam := player.GetDbTeam()
 	dbAvatar := player.GetDbAvatar()
-	avatarGuid := dbAvatar.AvatarMap[dbTeam.GetActiveAvatarId()].Guid
+	avatarGuid := dbAvatar.GetAvatarById(dbTeam.GetActiveAvatarId()).Guid
 
 	switch req.InteractType {
 	case proto.VehicleInteractType_VEHICLE_INTERACT_IN:
@@ -116,7 +116,7 @@ func (g *Game) VehicleDestroyMotion(player *model.Player, entity *Entity, state 
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 状态等于 MOTION_STATE_DESTROY_VEHICLE 代表请求销毁
 	if state == proto.MotionState_MOTION_DESTROY_VEHICLE {
@@ -167,7 +167,7 @@ func (g *Game) DestroyVehicleEntity(player *model.Player, scene *Scene, vehicleI
 		// 离开载具
 		dbTeam := player.GetDbTeam()
 		dbAvatar := player.GetDbAvatar()
-		g.ExitVehicle(player, entity, dbAvatar.AvatarMap[dbTeam.GetActiveAvatarId()].Guid)
+		g.ExitVehicle(player, entity, dbAvatar.GetAvatarById(dbTeam.GetActiveAvatarId()).Guid)
 	}
 	// 删除已创建的载具
 	scene.DestroyEntity(entity.GetId())

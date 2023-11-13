@@ -260,8 +260,8 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 		if itemId > 1000 && itemId < 2000 {
 			avatarId := (itemId % 1000) + 10000000
 			dbAvatar := player.GetDbAvatar()
-			_, exist := dbAvatar.AvatarMap[avatarId]
-			if !exist {
+			avatar := dbAvatar.GetAvatarById(avatarId)
+			if avatar == nil {
 				g.AddPlayerAvatar(player.PlayerId, avatarId)
 			} else {
 				constellationItemId := itemId + 100

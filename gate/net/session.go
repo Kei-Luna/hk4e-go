@@ -223,6 +223,7 @@ func (k *KcpConnManager) gameMsgHandle(
 		}
 		if len(session.sendChan) == SessionSendChanLen {
 			logger.Error("session send chan is full, sessionId: %v", protoMsg.SessionId)
+			k.forceCloseKcpConn(sessionId, kcp.EnetWaitSndMax)
 			return
 		}
 		if protoMsg.CmdId == cmd.PlayerLoginRsp {
@@ -380,6 +381,7 @@ func (k *KcpConnManager) forwardRobotMsgToClientHandle(session *Session) {
 		case <-ticker.C:
 			if session.connState == ConnClose {
 				logger.Debug("robot msg forward handle stop")
+				ticker.Stop()
 				return
 			}
 		case netMsg := <-k.messageQueue.GetNetMsg():
@@ -397,6 +399,7 @@ func (k *KcpConnManager) forwardRobotMsgToClientHandle(session *Session) {
 						ok := k.keyExchange(session, rsp.Uid, rsp)
 						if !ok {
 							logger.Error("key exchange error, uid: %v", rsp.Uid)
+							session.conn.Close()
 							continue
 						}
 						// 关联玩家uid和连接信息
@@ -415,6 +418,7 @@ func (k *KcpConnManager) forwardRobotMsgToClientHandle(session *Session) {
 					}
 					if len(session.sendChan) == SessionSendChanLen {
 						logger.Error("session send chan is full, sessionId: %v", protoMsg.SessionId)
+						session.conn.Close()
 						continue
 					}
 					session.sendChan <- protoMsg

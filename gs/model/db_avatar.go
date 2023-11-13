@@ -60,6 +60,14 @@ type Avatar struct {
 	FightPropMap      map[uint32]float32   `bson:"-" msgpack:"-"`
 }
 
+func (a *DbAvatar) GetAvatarById(avatarId uint32) *Avatar {
+	return a.AvatarMap[avatarId]
+}
+
+func (a *DbAvatar) GetAvatarMap() map[uint32]*Avatar {
+	return a.AvatarMap
+}
+
 func (a *DbAvatar) InitDbAvatar(player *Player) {
 	for _, avatar := range a.AvatarMap {
 		a.InitAvatar(player, avatar)

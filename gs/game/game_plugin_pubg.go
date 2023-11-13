@@ -80,11 +80,14 @@ func NewPluginPubg() *PluginPubg {
 // OnEnable 插件启用生命周期
 func (p *PluginPubg) OnEnable() {
 	// 监听事件
-	p.ListenEvent(PluginEventIdPlayerKillAvatar, PluginEventPriorityNormal, p.EventKillAvatar)
 	p.ListenEvent(PluginEventIdMarkMap, PluginEventPriorityNormal, p.EventMarkMap)
 	p.ListenEvent(PluginEventIdAvatarDieAnimationEnd, PluginEventPriorityNormal, p.EventAvatarDieAnimationEnd)
 	p.ListenEvent(PluginEventIdGadgetInteract, PluginEventPriorityNormal, p.EventGadgetInteract)
 	p.ListenEvent(PluginEventIdPostEnterScene, PluginEventPriorityNormal, p.EventPostEnterScene)
+	p.ListenEvent(PluginEventIdEvtDoSkillSucc, PluginEventPriorityNormal, p.EventEvtDoSkillSucc)
+	p.ListenEvent(PluginEventIdEvtBeingHit, PluginEventPriorityNormal, p.EventEvtBeingHit)
+	p.ListenEvent(PluginEventIdEvtCreateGadget, PluginEventPriorityNormal, p.EvtCreateGadget)
+	p.ListenEvent(PluginEventIdEvtBulletHit, PluginEventPriorityNormal, p.EvtBulletHit)
 	// 添加全局定时器
 	p.AddGlobalTick(PluginGlobalTickSecond, p.GlobalTickPubg)
 	p.AddGlobalTick(PluginGlobalTickMinuteChange, p.GlobalTickMinuteChange)
@@ -93,17 +96,6 @@ func (p *PluginPubg) OnEnable() {
 }
 
 /************************************************** 事件监听 **************************************************/
-
-// EventKillAvatar 角色被杀死事件
-func (p *PluginPubg) EventKillAvatar(iEvent IPluginEvent) {
-	event := iEvent.(*PluginEventKillAvatar)
-	player := event.Player
-	// 确保游戏开启
-	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
-		return
-	}
-	p.CreateUserTimer(player.PlayerId, 10, p.UserTimerPubgDieExit, p.world.GetId())
-}
 
 // EventMarkMap 地图标点事件
 func (p *PluginPubg) EventMarkMap(iEvent IPluginEvent) {
@@ -132,6 +124,7 @@ func (p *PluginPubg) EventAvatarDieAnimationEnd(iEvent IPluginEvent) {
 	event.Cancel()
 }
 
+// EventGadgetInteract gadget交互事件
 func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventGadgetInteract)
 	player := event.Player
@@ -144,7 +137,7 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	if exist {
 		dbAvatar := player.GetDbAvatar()
 		avatarId := p.world.GetPlayerActiveAvatarId(player)
-		avatar := dbAvatar.AvatarMap[avatarId]
+		avatar := dbAvatar.GetAvatarById(avatarId)
 		pubgWorldGadgetDataConfig := gdconf.GetPubgWorldGadgetDataById(worldGadgetId)
 		switch pubgWorldGadgetDataConfig.Type {
 		case gdconf.PubgWorldGadgetTypeIncAtk:
@@ -166,7 +159,7 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	GAME.KillEntity(player, scene, req.GadgetEntityId, proto.PlayerDieType_PLAYER_DIE_NONE)
 	rsp := &proto.GadgetInteractRsp{
 		GadgetEntityId: req.GadgetEntityId,
@@ -178,6 +171,7 @@ func (p *PluginPubg) EventGadgetInteract(iEvent IPluginEvent) {
 	event.Cancel()
 }
 
+// EventPostEnterScene 进入场景后事件
 func (p *PluginPubg) EventPostEnterScene(iEvent IPluginEvent) {
 	event := iEvent.(*PluginEventPostEnterScene)
 	player := event.Player
@@ -205,6 +199,164 @@ func (p *PluginPubg) EventPostEnterScene(iEvent IPluginEvent) {
 	})
 }
 
+// EventEvtDoSkillSucc 使用技能事件
+func (p *PluginPubg) EventEvtDoSkillSucc(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventEvtDoSkillSucc)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	ntf := event.Ntf
+	worldAvatar := world.GetWorldAvatarByEntityId(ntf.CasterId)
+	if worldAvatar == nil {
+		return
+	}
+	avatarDataConfig := gdconf.GetAvatarDataById(int32(worldAvatar.GetAvatarId()))
+	if avatarDataConfig == nil {
+		return
+	}
+	logger.Debug("avatar normal attack, avatarId: %v, weaponType: %v, uid: %v", avatarDataConfig.AvatarId, avatarDataConfig.WeaponType, player.PlayerId)
+	switch avatarDataConfig.WeaponType {
+	case constant.WEAPON_TYPE_SWORD_ONE_HAND, constant.WEAPON_TYPE_CLAYMORE, constant.WEAPON_TYPE_POLE, constant.WEAPON_TYPE_CATALYST:
+		scene := world.GetSceneById(player.GetSceneId())
+		avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
+		for _, entity := range scene.GetAllEntity() {
+			if entity.GetId() == avatarEntity.GetId() || entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
+				continue
+			}
+			distance3D := math.Sqrt(
+				(avatarEntity.GetPos().X-entity.GetPos().X)*(avatarEntity.GetPos().X-entity.GetPos().X) +
+					(avatarEntity.GetPos().Y-entity.GetPos().Y)*(avatarEntity.GetPos().Y-entity.GetPos().Y) +
+					(avatarEntity.GetPos().Z-entity.GetPos().Z)*(avatarEntity.GetPos().Z-entity.GetPos().Z),
+			)
+			if distance3D > PUBG_NORMAL_ATTACK_DISTANCE {
+				continue
+			}
+			p.PubgHit(scene, entity.GetId(), avatarEntity.GetId(), false)
+		}
+	default:
+	}
+}
+
+// EventEvtBeingHit 实体受击事件
+func (p *PluginPubg) EventEvtBeingHit(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventEvtBeingHit)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	scene := world.GetSceneById(player.GetSceneId())
+	hitInfo := event.HitInfo
+	attackResult := hitInfo.AttackResult
+	if attackResult == nil {
+		return
+	}
+	defEntity := scene.GetEntity(attackResult.DefenseId)
+	if defEntity == nil {
+		return
+	}
+	if defEntity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
+		return
+	}
+	fightProp := defEntity.GetFightProp()
+	currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
+	if currHp-attackResult.Damage > 0.0 {
+		return
+	}
+	defPlayer := USER_MANAGER.GetOnlineUser(defEntity.GetAvatarEntity().GetUid())
+	if defPlayer == nil {
+		return
+	}
+	atkEntity := scene.GetEntity(attackResult.AttackerId)
+	if atkEntity != nil && atkEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
+		atkPlayer := USER_MANAGER.GetOnlineUser(atkEntity.GetAvatarEntity().GetUid())
+		if atkPlayer == nil {
+			return
+		}
+		info := fmt.Sprintf("『%v』击败了『%v』。", atkPlayer.NickName, defPlayer.NickName)
+		GAME.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
+		p.CreateUserTimer(defPlayer.PlayerId, 10, p.UserTimerPubgDieExit, p.world.GetId())
+	}
+}
+
+// EvtCreateGadget 创建物件实体事件
+func (p *PluginPubg) EvtCreateGadget(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventEvtCreateGadget)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	ntf := event.Ntf
+	gadgetDataConfig := gdconf.GetGadgetDataById(int32(ntf.ConfigId))
+	if gadgetDataConfig == nil {
+		logger.Error("gadget data config is nil, gadgetId: %v", ntf.ConfigId)
+		return
+	}
+	// 蓄力箭
+	if gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_ArrowAiming" &&
+		gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_Venti_ArrowAiming" {
+		return
+	}
+	pitchAngleRaw := ntf.InitEulerAngles.X
+	pitchAngle := float32(0.0)
+	if pitchAngleRaw < 90.0 {
+		pitchAngle = -pitchAngleRaw
+	} else if pitchAngleRaw > 270.0 {
+		pitchAngle = 360.0 - pitchAngleRaw
+	} else {
+		logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
+		return
+	}
+	yawAngle := ntf.InitEulerAngles.Y
+	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+	bulletPhysicsEngine.CreateRigidBody(
+		ntf.EntityId,
+		world.GetPlayerActiveAvatarEntity(player).GetId(),
+		player.GetSceneId(),
+		ntf.InitPos.X, ntf.InitPos.Y, ntf.InitPos.Z,
+		pitchAngle, yawAngle,
+	)
+}
+
+// EvtBulletHit 子弹命中事件
+func (p *PluginPubg) EvtBulletHit(iEvent IPluginEvent) {
+	event := iEvent.(*PluginEventEvtBulletHit)
+	player := event.Player
+	// 确保游戏开启
+	if !p.IsStartPubg() || p.world.GetId() != player.WorldId {
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		return
+	}
+	ntf := event.Ntf
+	bulletPhysicsEngine := world.GetBulletPhysicsEngine()
+	if bulletPhysicsEngine.IsRigidBody(ntf.EntityId) {
+		bulletPhysicsEngine.DestroyRigidBody(ntf.EntityId)
+		_ = ntf.HitPoint
+	}
+}
+
 /************************************************** 全局定时器 **************************************************/
 
 // GlobalTickPubg pubg游戏定时器
@@ -218,7 +370,7 @@ func (p *PluginPubg) GlobalTickPubg() {
 		return
 	}
 	p.UpdateArea()
-	scene := world.GetSceneById(world.GetOwner().SceneId)
+	scene := world.GetSceneById(world.GetOwner().GetSceneId())
 	for _, scenePlayer := range scene.GetAllPlayer() {
 		pos := GAME.GetPlayerPos(scenePlayer)
 		if !p.IsInBlueArea(pos) {
@@ -263,6 +415,19 @@ func (p *PluginPubg) UserTimerPubgEnd(player *model.Player, data []any) {
 	GAME.WorldRemovePlayer(oldWorld, player)
 	newWorld := WORLD_MANAGER.CreateWorld(player)
 	GAME.WorldAddPlayer(newWorld, player)
+	GAME.HostEnterMpWorld(player)
+	GAME.EnterSceneReadyReq(player, &proto.EnterSceneReadyReq{
+		EnterSceneToken: newWorld.GetEnterSceneToken(),
+	})
+	GAME.SceneInitFinishReq(player, &proto.SceneInitFinishReq{
+		EnterSceneToken: newWorld.GetEnterSceneToken(),
+	})
+	GAME.EnterSceneDoneReq(player, &proto.EnterSceneDoneReq{
+		EnterSceneToken: newWorld.GetEnterSceneToken(),
+	})
+	GAME.PostEnterSceneReq(player, &proto.PostEnterSceneReq{
+		EnterSceneToken: newWorld.GetEnterSceneToken(),
+	})
 	WORLD_MANAGER.InitAiWorld(player)
 	roomNumber := GAME.GetGsId() - 1
 	startMinute := roomNumber % 6 * 10
@@ -362,7 +527,7 @@ func (p *PluginPubg) StartPubg() {
 	for _, player := range world.GetAllPlayer() {
 		dbAvatar := player.GetDbAvatar()
 		avatarId := p.world.GetPlayerActiveAvatarId(player)
-		avatar := dbAvatar.AvatarMap[avatarId]
+		avatar := dbAvatar.GetAvatarById(avatarId)
 		for k := range avatar.FightPropMap {
 			avatar.FightPropMap[k] = 0.0
 		}
@@ -514,7 +679,7 @@ func (p *PluginPubg) SyncMapMarkArea() {
 
 // GetAlivePlayerList 获取存活玩家列表
 func (p *PluginPubg) GetAlivePlayerList() []*model.Player {
-	scene := p.world.GetSceneById(p.world.GetOwner().SceneId)
+	scene := p.world.GetSceneById(p.world.GetOwner().GetSceneId())
 	alivePlayerList := make([]*model.Player, 0)
 	for _, scenePlayer := range scene.GetAllPlayer() {
 		if scenePlayer.PlayerId == p.world.GetOwner().PlayerId {

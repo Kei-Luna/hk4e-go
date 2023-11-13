@@ -50,7 +50,7 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 	weaponId := uint64(g.snowflake.GenId())
 	dbWeapon := player.GetDbWeapon()
 	dbWeapon.AddWeapon(player, uint32(avatarDataConfig.InitialWeapon), weaponId)
-	weapon := dbWeapon.WeaponMap[weaponId]
+	weapon := dbWeapon.GetWeaponById(weaponId)
 	dbAvatar.WearWeapon(dbAvatar.MainCharAvatarId, weapon)
 	dbTeam := player.GetDbTeam()
 	dbTeam.GetActiveTeam().SetAvatarIdList([]uint32{dbAvatar.MainCharAvatarId})
@@ -94,11 +94,13 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	// 初始化
 	player.InitOnlineData()
 
-	if player.SceneId > 100 {
+	if player.GetSceneId() > 100 {
 		player.SceneId = 3
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
+	player.MpPos = new(model.Vector)
+	player.MpRot = new(model.Vector)
 
 	dbQuest := player.GetDbQuest()
 	for _, quest := range dbQuest.GetQuestMap() {
@@ -215,14 +217,14 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_PAIMON] = 1
 	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_VIRTUAL_SHOP] = 1
 
-	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.SceneId))
+	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.GetSceneId()))
 	if sceneLuaConfig != nil {
 		bornPos := sceneLuaConfig.SceneConfig.BornPos
 		bornRot := sceneLuaConfig.SceneConfig.BornRot
 		player.Pos = &model.Vector{X: float64(bornPos.X), Y: float64(bornPos.Y), Z: float64(bornPos.Z)}
 		player.Rot = &model.Vector{X: float64(bornRot.X), Y: float64(bornRot.Y), Z: float64(bornRot.Z)}
 	} else {
-		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("get scene lua config is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
@@ -249,7 +251,7 @@ func (g *Game) OnOffline(userId uint32, changeGsInfo *ChangeGsInfo) {
 
 	// 回写当前血量和元素能量属性
 	dbAvatar := player.GetDbAvatar()
-	for _, avatar := range dbAvatar.AvatarMap {
+	for _, avatar := range dbAvatar.GetAvatarMap() {
 		avatar.CurrHP = float64(avatar.FightPropMap[constant.FIGHT_PROP_CUR_HP])
 		avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
 		if avatarSkillDataConfig != nil {

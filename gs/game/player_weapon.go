@@ -158,9 +158,9 @@ func (g *Game) WeaponAwakenReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
 	// 获取持有该武器的角色
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
+	avatar := dbAvatar.GetAvatarById(weapon.AvatarId)
 	// 武器可能没被任何角色装备 仅在被装备时更新面板
-	if ok {
+	if avatar != nil {
 		weaponAwakenRsp.AvatarGuid = avatar.Guid
 		// 角色更新面板
 		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
@@ -262,9 +262,9 @@ func (g *Game) WeaponPromoteReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByWeapon(weapon))
 	// 获取持有该武器的角色
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
+	avatar := dbAvatar.GetAvatarById(weapon.AvatarId)
 	// 武器可能没被任何角色装备 仅在被装备时更新面板
-	if ok {
+	if avatar != nil {
 		// 角色更新面板
 		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	}
@@ -390,9 +390,9 @@ func (g *Game) WeaponUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 
 	// 获取持有该武器的角色
 	dbAvatar := player.GetDbAvatar()
-	avatar, ok := dbAvatar.AvatarMap[weapon.AvatarId]
+	avatar := dbAvatar.GetAvatarById(weapon.AvatarId)
 	// 武器可能没被任何角色装备 仅在被装备时更新面板
-	if ok {
+	if avatar != nil {
 		// 角色更新面板
 		g.UpdatePlayerAvatarFightProp(player.PlayerId, avatar.AvatarId)
 	}

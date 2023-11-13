@@ -1,7 +1,6 @@
 package game
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -30,7 +29,7 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if srcNtf != nil && copyFieldList != nil {
 		for _, fieldName := range copyFieldList {
 			reflection.CopyStructField(newNtf, srcNtf, fieldName)
@@ -115,7 +114,7 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	for _, entry := range ntf.InvokeList {
 		switch entry.ArgumentType {
 		case proto.CombatTypeArgument_COMBAT_EVT_BEING_HIT:
@@ -175,7 +174,15 @@ func (g *Game) CombatInvocationsNotify(player *model.Player, payloadMsg pb.Messa
 }
 
 func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *proto.EvtBeingHitInfo) {
-	world := scene.GetWorld()
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdEvtBeingHit, &PluginEventEvtBeingHit{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		HitInfo:     hitInfo,
+	}) {
+		return
+	}
+
 	attackResult := hitInfo.AttackResult
 	if attackResult == nil {
 		logger.Error("attackResult is nil")
@@ -192,26 +199,6 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 	switch defEntity.GetEntityType() {
 	case constant.ENTITY_TYPE_AVATAR:
 		g.SubPlayerAvatarHp(player.PlayerId, defEntity.GetAvatarEntity().GetAvatarId(), attackResult.Damage, false, proto.ChangHpReason_CHANGE_HP_SUB_MONSTER)
-		if WORLD_MANAGER.IsAiWorld(world) {
-			fightProp := defEntity.GetFightProp()
-			currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
-			if currHp > 0.0 {
-				return
-			}
-			defPlayer := USER_MANAGER.GetOnlineUser(defEntity.GetAvatarEntity().GetUid())
-			if defPlayer == nil {
-				return
-			}
-			atkEntity := scene.GetEntity(attackResult.AttackerId)
-			if atkEntity != nil && atkEntity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
-				atkPlayer := USER_MANAGER.GetOnlineUser(atkEntity.GetAvatarEntity().GetUid())
-				if atkPlayer == nil {
-					return
-				}
-				info := fmt.Sprintf("『%v』击败了『%v』。", atkPlayer.NickName, defPlayer.NickName)
-				g.PlayerChatReq(world.GetOwner(), &proto.PlayerChatReq{ChatInfo: &proto.ChatInfo{Content: &proto.ChatInfo_Text{Text: info}}})
-			}
-		}
 	case constant.ENTITY_TYPE_MONSTER:
 		fightProp := defEntity.GetFightProp()
 		currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
@@ -308,7 +295,7 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 			}
 			// 处理耐力消耗
 			g.ImmediateStamina(player, motionInfo.State)
-			// 坠落撞击死亡
+			// 坠落撞击扣血
 			if player.Speed == nil {
 				player.Speed = &model.Vector{X: float64(motionInfo.Speed.X), Y: float64(motionInfo.Speed.Y), Z: float64(motionInfo.Speed.Z)}
 			}
@@ -319,21 +306,21 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 				deltaSpeedMag := alg.Vector3Magnitude(deltaSpeed)
 				if deltaSpeedMag > 20.0 {
 					logger.Debug("player fall on ground, deltaSpeed: %+v, deltaSpeedMag: %v, uid: %v", deltaSpeed, deltaSpeedMag, player.PlayerId)
+					// 速度矢量20-30部分线性映射到最大生命值百分比扣血
 					rate := deltaSpeedMag - 20.0
 					if rate > 10.0 {
 						rate = 10.0
 					}
 					rate /= 10.0
-					fightProp := entity.GetFightProp()
-					currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
-					maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
-					damage := float32(0.0)
-					if motionInfo.State == proto.MotionState_MOTION_FALL_ON_GROUND {
-						damage = maxHp * rate
-					} else if motionInfo.State == proto.MotionState_MOTION_FIGHT {
-						damage = currHp * rate
+					// 下落攻击最大生命值百分比扣血上限为40
+					if motionInfo.State == proto.MotionState_MOTION_FIGHT {
+						if rate > 0.4 {
+							rate = 0.4
+						}
 					}
-					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), damage, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
+					fightProp := entity.GetFightProp()
+					maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]
+					g.SubPlayerAvatarHp(player.PlayerId, entity.GetAvatarEntity().GetAvatarId(), maxHp*rate, false, proto.ChangHpReason_CHANGE_HP_SUB_FALL)
 				}
 			}
 			player.Speed = &model.Vector{X: float64(motionInfo.Speed.X), Y: float64(motionInfo.Speed.Y), Z: float64(motionInfo.Speed.Z)}
@@ -357,9 +344,9 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		return
 	}
 	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
-	aoiManager, exist := sceneBlockAoiMap[player.SceneId]
+	aoiManager, exist := sceneBlockAoiMap[player.GetSceneId()]
 	if !exist {
-		logger.Error("get scene block aoi is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+		logger.Error("get scene block aoi is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
 	oldGid := aoiManager.GetGidByPos(float32(oldPos.X), 0.0, float32(oldPos.Z))
@@ -369,8 +356,8 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 		logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
 	}
 	// 加载和卸载的group
-	oldNeighborGroupMap := g.GetNeighborGroup(player.SceneId, oldPos)
-	newNeighborGroupMap := g.GetNeighborGroup(player.SceneId, newPos)
+	oldNeighborGroupMap := g.GetNeighborGroup(player.GetSceneId(), oldPos)
+	newNeighborGroupMap := g.GetNeighborGroup(player.GetSceneId(), newPos)
 	for groupId, groupConfig := range oldNeighborGroupMap {
 		_, exist = newNeighborGroupMap[groupId]
 		if exist {
@@ -736,7 +723,7 @@ func (g *Game) MassiveEntityElementOpBatchNotify(player *model.Player, payloadMs
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	ntf.OpIdx = scene.GetMeeoIndex()
 	scene.SetMeeoIndex(scene.GetMeeoIndex() + 1)
 	g.SendToSceneA(scene, cmd.MassiveEntityElementOpBatchNotify, player.ClientSeq, ntf, 0)
@@ -747,18 +734,29 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 	if player.SceneLoadState != model.SceneEnterDone {
 		return
 	}
+
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdEvtDoSkillSucc, &PluginEventEvtDoSkillSucc{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Ntf:         ntf,
+	}) {
+		return
+	}
+
 	// logger.Debug("EvtDoSkillSuccNotify: %+v", ntf)
 	// 处理技能开始的耐力消耗
 	g.SkillStartStamina(player, ntf.CasterId, ntf.SkillId)
+	// 触发任务
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_SKILL, "", int32(ntf.SkillId))
-
+	// 消耗元素能量
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
 	}
 	activeAvatarId := world.GetPlayerActiveAvatarId(player)
 	dbAvatar := player.GetDbAvatar()
-	avatar := dbAvatar.AvatarMap[activeAvatarId]
+	avatar := dbAvatar.GetAvatarById(activeAvatarId)
 	if avatar == nil {
 		return
 	}
@@ -768,48 +766,6 @@ func (g *Game) EvtDoSkillSuccNotify(player *model.Player, payloadMsg pb.Message)
 	}
 	if int32(ntf.SkillId) == avatarSkillDataConfig.AvatarSkillId {
 		g.CostPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 0, true)
-	}
-
-	if !WORLD_MANAGER.IsAiWorld(world) {
-		return
-	}
-	iPlugin, err := PLUGIN_MANAGER.GetPlugin(&PluginPubg{})
-	if err != nil {
-		logger.Error("get plugin pubg error: %v", err)
-		return
-	}
-	pluginPubg := iPlugin.(*PluginPubg)
-	if !pluginPubg.IsStartPubg() {
-		return
-	}
-	worldAvatar := world.GetWorldAvatarByEntityId(ntf.CasterId)
-	if worldAvatar == nil {
-		return
-	}
-	avatarDataConfig := gdconf.GetAvatarDataById(int32(worldAvatar.GetAvatarId()))
-	if avatarDataConfig == nil {
-		return
-	}
-	logger.Debug("avatar normal attack, avatarId: %v, weaponType: %v, uid: %v", avatarDataConfig.AvatarId, avatarDataConfig.WeaponType, player.PlayerId)
-	switch avatarDataConfig.WeaponType {
-	case constant.WEAPON_TYPE_SWORD_ONE_HAND, constant.WEAPON_TYPE_CLAYMORE, constant.WEAPON_TYPE_POLE, constant.WEAPON_TYPE_CATALYST:
-		scene := world.GetSceneById(player.SceneId)
-		avatarEntity := scene.GetEntity(worldAvatar.GetAvatarEntityId())
-		for _, entity := range scene.GetAllEntity() {
-			if entity.GetId() == avatarEntity.GetId() || entity.GetEntityType() != constant.ENTITY_TYPE_AVATAR {
-				continue
-			}
-			distance3D := math.Sqrt(
-				(avatarEntity.GetPos().X-entity.GetPos().X)*(avatarEntity.GetPos().X-entity.GetPos().X) +
-					(avatarEntity.GetPos().Y-entity.GetPos().Y)*(avatarEntity.GetPos().Y-entity.GetPos().Y) +
-					(avatarEntity.GetPos().Z-entity.GetPos().Z)*(avatarEntity.GetPos().Z-entity.GetPos().Z),
-			)
-			if distance3D > PUBG_NORMAL_ATTACK_DISTANCE {
-				continue
-			}
-			pluginPubg.PubgHit(scene, entity.GetId(), avatarEntity.GetId(), false)
-		}
-	default:
 	}
 }
 
@@ -823,7 +779,7 @@ func (g *Game) EvtAvatarEnterFocusNotify(player *model.Player, payloadMsg pb.Mes
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtAvatarEnterFocusNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -837,7 +793,7 @@ func (g *Game) EvtAvatarUpdateFocusNotify(player *model.Player, payloadMsg pb.Me
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtAvatarUpdateFocusNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -851,7 +807,7 @@ func (g *Game) EvtAvatarExitFocusNotify(player *model.Player, payloadMsg pb.Mess
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtAvatarExitFocusNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -865,7 +821,7 @@ func (g *Game) EvtEntityRenderersChangedNotify(player *model.Player, payloadMsg 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtEntityRenderersChangedNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -879,7 +835,7 @@ func (g *Game) EvtBulletDeactiveNotify(player *model.Player, payloadMsg pb.Messa
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtBulletDeactiveNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -893,15 +849,16 @@ func (g *Game) EvtBulletHitNotify(player *model.Player, payloadMsg pb.Message) {
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtBulletHitNotify, player.ClientSeq, ntf, 0)
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		if bulletPhysicsEngine.IsRigidBody(ntf.EntityId) {
-			bulletPhysicsEngine.DestroyRigidBody(ntf.EntityId)
-			_ = ntf.HitPoint
-		}
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdEvtBulletHit, &PluginEventEvtBulletHit{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Ntf:         ntf,
+	}) {
+		return
 	}
 }
 
@@ -915,7 +872,7 @@ func (g *Game) EvtBulletMoveNotify(player *model.Player, payloadMsg pb.Message) 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtBulletMoveNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -929,7 +886,7 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if ntf.InitPos == nil {
 		return
 	}
@@ -947,36 +904,13 @@ func (g *Game) EvtCreateGadgetNotify(player *model.Player, payloadMsg pb.Message
 	}
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{ntf.EntityId}, true, true)
 
-	if WORLD_MANAGER.IsAiWorld(world) {
-		gadgetDataConfig := gdconf.GetGadgetDataById(int32(ntf.ConfigId))
-		if gadgetDataConfig == nil {
-			logger.Error("gadget data config is nil, gadgetId: %v", ntf.ConfigId)
-			return
-		}
-		// 蓄力箭
-		if gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_ArrowAiming" &&
-			gadgetDataConfig.PrefabPath != "ART/Others/Bullet/Bullet_Venti_ArrowAiming" {
-			return
-		}
-		pitchAngleRaw := ntf.InitEulerAngles.X
-		pitchAngle := float32(0.0)
-		if pitchAngleRaw < 90.0 {
-			pitchAngle = -pitchAngleRaw
-		} else if pitchAngleRaw > 270.0 {
-			pitchAngle = 360.0 - pitchAngleRaw
-		} else {
-			logger.Error("invalid raw pitch angle: %v, uid: %v", pitchAngleRaw, player.PlayerId)
-			return
-		}
-		yawAngle := ntf.InitEulerAngles.Y
-		bulletPhysicsEngine := world.GetBulletPhysicsEngine()
-		bulletPhysicsEngine.CreateRigidBody(
-			ntf.EntityId,
-			world.GetPlayerActiveAvatarEntity(player).GetId(),
-			player.SceneId,
-			ntf.InitPos.X, ntf.InitPos.Y, ntf.InitPos.Z,
-			pitchAngle, yawAngle,
-		)
+	// 触发事件
+	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdEvtCreateGadget, &PluginEventEvtCreateGadget{
+		PluginEvent: NewPluginEvent(),
+		Player:      player,
+		Ntf:         ntf,
+	}) {
+		return
 	}
 }
 
@@ -990,7 +924,7 @@ func (g *Game) EvtDestroyGadgetNotify(player *model.Player, payloadMsg pb.Messag
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	scene.DestroyEntity(ntf.EntityId)
 	g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, []uint32{ntf.EntityId}, 0)
 }
@@ -1005,7 +939,7 @@ func (g *Game) EvtAiSyncSkillCdNotify(player *model.Player, payloadMsg pb.Messag
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtAiSyncSkillCdNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -1019,7 +953,7 @@ func (g *Game) EvtAiSyncCombatThreatInfoNotify(player *model.Player, payloadMsg 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	g.SendToSceneA(scene, cmd.EvtAiSyncCombatThreatInfoNotify, player.ClientSeq, ntf, 0)
 }
 
@@ -1060,7 +994,7 @@ func (g *Game) handleGadgetEntityBeHitLow(player *model.Player, entity *Entity, 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	if entity.GetEntityType() != constant.ENTITY_TYPE_GADGET {
 		return
 	}
@@ -1115,7 +1049,7 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	entity := scene.GetEntity(entityId)
 	if entity == nil {
 		return

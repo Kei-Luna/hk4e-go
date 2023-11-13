@@ -37,33 +37,37 @@ var TICK_MANAGER *TickManager = nil
 var COMMAND_MANAGER *CommandManager = nil
 var GCG_MANAGER *GCGManager = nil
 var PLUGIN_MANAGER *PluginManager = nil
-var MESSAGE_QUEUE *mq.MessageQueue
 
 var ONLINE_PLAYER_NUM int32 = 0 // 当前在线玩家数
 
 var SELF *model.Player
 
 type Game struct {
-	discovery      *rpc.DiscoveryClient // node节点服务器的natsrpc客户端
-	db             *dao.Dao
-	snowflake      *alg.SnowflakeWorker
-	gsId           uint32
-	gsAppid        string
-	gsAppVersion   string
-	ai             *model.Player // 本服的Ai玩家对象
-	isStop         bool
-	dispatchCancel bool
+	discoveryClient    *rpc.DiscoveryClient // node节点服务器的natsrpc客户端
+	db                 *dao.Dao             // 数据访问对象
+	messageQueue       *mq.MessageQueue
+	gsId               uint32               // 游戏服务器编号
+	gsAppid            string               // 游戏服务器appid
+	gsAppVersion       string               // 游戏服务器版本
+	snowflake          *alg.SnowflakeWorker // 雪花唯一id生成器
+	isStop             bool                 // 停服标志
+	dispatchCancel     bool                 // 取消调度标志
+	endlessLoopCounter map[int]uint64       // 死循环保护计数器
+	ai                 *model.Player        // 本服的Ai玩家对象
 }
 
-func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, gsAppVersion string, discovery *rpc.DiscoveryClient) (r *Game) {
+func NewGameCore(discoveryClient *rpc.DiscoveryClient, db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppid string, gsAppVersion string) (r *Game) {
 	r = new(Game)
-	r.discovery = discovery
+	r.discoveryClient = discoveryClient
 	r.db = db
-	MESSAGE_QUEUE = messageQueue
-	r.snowflake = alg.NewSnowflakeWorker(int64(gsId))
+	r.messageQueue = messageQueue
 	r.gsId = gsId
 	r.gsAppid = gsAppid
 	r.gsAppVersion = gsAppVersion
+	r.snowflake = alg.NewSnowflakeWorker(int64(gsId))
+	r.isStop = false
+	r.dispatchCancel = false
+	r.endlessLoopCounter = make(map[int]uint64)
 	GAME = r
 	LOCAL_EVENT_MANAGER = NewLocalEventManager()
 	ROUTE_MANAGER = NewRouteManager()
@@ -83,58 +87,8 @@ func NewGameCore(db *dao.Dao, messageQueue *mq.MessageQueue, gsId uint32, gsAppi
 	COMMAND_MANAGER.SetSystem(r.ai)
 	// 初始化插件 最后再调用以免插件需要访问其他模块导致出错
 	PLUGIN_MANAGER.InitPlugin()
-	r.run()
-	r.isStop = false
-	r.dispatchCancel = false
+	go r.gameMainLoopD()
 	return r
-}
-
-func (g *Game) GetGsId() uint32 {
-	return g.gsId
-}
-
-func (g *Game) GetGsAppid() string {
-	return g.gsAppid
-}
-
-// GetAi 获取本服的Ai玩家对象
-func (g *Game) GetAi() *model.Player {
-	return g.ai
-}
-
-func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
-	g.OnLogin(uid, 0, "", nil, new(proto.PlayerLoginReq), true)
-	robot := USER_MANAGER.GetOnlineUser(uid)
-	robot.DbState = model.DbNormal
-	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
-	robot.Signature = sign
-	world := WORLD_MANAGER.GetWorldById(robot.WorldId)
-	g.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
-		EnterSceneToken: world.GetEnterSceneToken(),
-	})
-	g.EntityForceSyncReq(robot, &proto.EntityForceSyncReq{
-		MotionInfo: &proto.MotionInfo{
-			Pos: &proto.Vector{X: 500.0, Y: 900.0, Z: -500.0},
-			Rot: new(proto.Vector),
-		},
-		EntityId: world.GetPlayerWorldAvatarEntityId(robot, 10000007),
-	})
-	robot.SetPos(&model.Vector{X: 500.0, Y: 900.0, Z: -500.0})
-	robot.WuDi = true
-	return robot
-}
-
-func (g *Game) run() {
-	go g.gameMainLoopD()
 }
 
 func (g *Game) gameMainLoopD() {
@@ -170,9 +124,8 @@ func (g *Game) gameMainLoop() {
 			logger.Error("stack: %v", logger.Stack())
 			if SELF != nil {
 				logger.Error("the motherfucker player uid: %v", SELF.PlayerId)
-				// info, _ := json.Marshal(SELF)
-				// logger.Error("the motherfucker player info: %v", string(info))
-				GAME.KickPlayer(SELF.PlayerId, kcp.EnetServerKick)
+				g.KickPlayer(SELF.PlayerId, kcp.EnetServerKick)
+				SELF = nil
 			}
 		}
 	}()
@@ -222,8 +175,9 @@ func (g *Game) gameMainLoop() {
 			maxRouteCost = 0
 			maxRouteCmdId = 0
 		}
+		g.endlessLoopCounter = make(map[int]uint64)
 		select {
-		case netMsg := <-MESSAGE_QUEUE.GetNetMsg():
+		case netMsg := <-g.messageQueue.GetNetMsg():
 			// 接收客户端消息
 			start := time.Now().UnixNano()
 			ROUTE_MANAGER.RouteHandle(netMsg)
@@ -254,6 +208,95 @@ func (g *Game) gameMainLoop() {
 			commandCost += end - start
 			logger.Info("run gm cmd cost: %v ns", end-start)
 		}
+	}
+}
+
+func (g *Game) GetGsId() uint32 {
+	return g.gsId
+}
+
+func (g *Game) GetGsAppid() string {
+	return g.gsAppid
+}
+
+// GetAi 获取本服的Ai玩家对象
+func (g *Game) GetAi() *model.Player {
+	return g.ai
+}
+
+func (g *Game) CreateRobot(uid uint32, name string, sign string) *model.Player {
+	g.OnLogin(uid, 0, "", nil, new(proto.PlayerLoginReq), true)
+	robot := USER_MANAGER.GetOnlineUser(uid)
+	robot.DbState = model.DbNormal
+	g.SetPlayerBornDataReq(robot, &proto.SetPlayerBornDataReq{AvatarId: 10000007, NickName: name})
+	robot.Signature = sign
+	world := WORLD_MANAGER.GetWorldById(robot.WorldId)
+	g.HostEnterMpWorld(robot)
+	g.EnterSceneReadyReq(robot, &proto.EnterSceneReadyReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.SceneInitFinishReq(robot, &proto.SceneInitFinishReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.EnterSceneDoneReq(robot, &proto.EnterSceneDoneReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	g.PostEnterSceneReq(robot, &proto.PostEnterSceneReq{
+		EnterSceneToken: world.GetEnterSceneToken(),
+	})
+	robot.WuDi = true
+	return robot
+}
+
+const (
+	EndlessLoopCheckTypeAcceptQuest = iota
+	EndlessLoopCheckTypeStartQuest
+	EndlessLoopCheckTypeExecQuest
+	EndlessLoopCheckTypeTriggerQuest
+	EndlessLoopCheckTypeUseItem
+	EndlessLoopCheckTypeCallLuaFunc
+)
+
+func (g *Game) EndlessLoopCheck(checkType int) {
+	g.endlessLoopCounter[checkType]++
+	checkCount := g.endlessLoopCounter[checkType]
+	EndlessLoopHandleFunc := func() {
+		logger.Error("!!! GAME MAIN LOOP ENDLESS LOOP !!!")
+		logger.Error("checkType: %v, checkCount: %v", checkType, checkCount)
+		logger.Error("stack: %v", logger.Stack())
+		if SELF != nil {
+			logger.Error("the motherfucker player uid: %v", SELF.PlayerId)
+			g.KickPlayer(SELF.PlayerId, kcp.EnetServerKick)
+			SELF = nil
+		}
+		panic("EndlessLoopCheck")
+	}
+	switch checkType {
+	case EndlessLoopCheckTypeAcceptQuest:
+		if checkCount > 100 {
+			EndlessLoopHandleFunc()
+		}
+	case EndlessLoopCheckTypeStartQuest:
+		if checkCount > 1000 {
+			EndlessLoopHandleFunc()
+		}
+	case EndlessLoopCheckTypeExecQuest:
+		if checkCount > 1000 {
+			EndlessLoopHandleFunc()
+		}
+	case EndlessLoopCheckTypeTriggerQuest:
+		if checkCount > 100 {
+			EndlessLoopHandleFunc()
+		}
+	case EndlessLoopCheckTypeUseItem:
+		if checkCount > 100 {
+			EndlessLoopHandleFunc()
+		}
+	case EndlessLoopCheckTypeCallLuaFunc:
+		if checkCount > 100 {
+			EndlessLoopHandleFunc()
+		}
+	default:
 	}
 }
 
@@ -289,7 +332,7 @@ func (g *Game) Close() {
 	userList := USER_MANAGER.GetAllOnlineUserList()
 	for _, player := range userList {
 		g.KickPlayer(player.PlayerId, kcp.EnetServerShutdown)
-		MESSAGE_QUEUE.SendToAll(&mq.NetMsg{
+		g.messageQueue.SendToAll(&mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerUserOnlineStateChangeNotify,
 			ServerMsg: &mq.ServerMsg{
@@ -333,7 +376,7 @@ func (g *Game) SendMsgToGate(cmdId uint16, userId uint32, clientSeq uint32, gate
 		ClientSeq:          clientSeq,
 		PayloadMessageData: payloadMessageData,
 	}
-	MESSAGE_QUEUE.SendToGate(gateAppId, &mq.NetMsg{
+	g.messageQueue.SendToGate(gateAppId, &mq.NetMsg{
 		MsgType: mq.MsgTypeGame,
 		EventId: mq.NormalMsg,
 		GameMsg: gameMsg,
@@ -371,7 +414,7 @@ func (g *Game) SendMsg(cmdId uint16, userId uint32, clientSeq uint32, payloadMsg
 		return
 	}
 	gameMsg.PayloadMessageData = payloadMessageData
-	MESSAGE_QUEUE.SendToGate(player.GateAppId, &mq.NetMsg{
+	g.messageQueue.SendToGate(player.GateAppId, &mq.NetMsg{
 		MsgType: mq.MsgTypeGame,
 		EventId: mq.NormalMsg,
 		GameMsg: gameMsg,
@@ -527,7 +570,7 @@ func (g *Game) KickPlayer(userId uint32, reason uint32) {
 	if player == nil {
 		return
 	}
-	MESSAGE_QUEUE.SendToGate(player.GateAppId, &mq.NetMsg{
+	g.messageQueue.SendToGate(player.GateAppId, &mq.NetMsg{
 		MsgType: mq.MsgTypeConnCtrl,
 		EventId: mq.KickPlayerNotify,
 		ConnCtrlMsg: &mq.ConnCtrlMsg{

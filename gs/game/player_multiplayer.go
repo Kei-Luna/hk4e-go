@@ -165,40 +165,6 @@ func (g *Game) PlayerConfirmMatchReq(player *model.Player, payloadMsg pb.Message
 
 /************************************************** 游戏功能 **************************************************/
 
-func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
-	hostWorld := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
-	if hostWorld == nil {
-		logger.Error("host world is nil, worldId: %v, uid: %v", hostPlayer.WorldId, player.PlayerId)
-		return
-	}
-	if hostPlayer.SceneLoadState == model.SceneEnterDone {
-		player.SceneJump = true
-		player.SceneId = hostPlayer.SceneId
-		player.SceneLoadState = model.SceneNone
-		player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_TEAM_JOIN)
-		player.SetPos(hostPlayer.GetPos())
-		player.SetRot(hostPlayer.GetRot())
-		g.WorldAddPlayer(hostWorld, player)
-
-		enterSceneToken := hostWorld.AddEnterSceneContext(&EnterSceneContext{
-			OldSceneId: 0,
-			Uid:        player.PlayerId,
-		})
-
-		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
-			player,
-			hostPlayer,
-			proto.EnterType_ENTER_OTHER,
-			hostPlayer.SceneId,
-			hostPlayer.GetPos(),
-			enterSceneToken,
-		)
-		g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, playerEnterSceneNotify)
-	} else {
-		hostWorld.AddWaitPlayer(player.PlayerId)
-	}
-}
-
 func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 	applyFailNotify := func(reason proto.PlayerApplyEnterMpResultNotify_Reason) {
 		playerApplyEnterMpResultNotify := &proto.PlayerApplyEnterMpResultNotify{
@@ -227,7 +193,7 @@ func (g *Game) PlayerApplyEnterWorld(player *model.Player, targetUid uint32) {
 			return
 		}
 		gsAppId := USER_MANAGER.GetRemoteUserGsAppId(targetUid)
-		MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+		g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerPlayerMpReq,
 			ServerMsg: &mq.ServerMsg{
@@ -311,7 +277,7 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 			return
 		}
 		gsAppId := USER_MANAGER.GetRemoteUserGsAppId(otherUid)
-		MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+		g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerPlayerMpReq,
 			ServerMsg: &mq.ServerMsg{
@@ -351,47 +317,6 @@ func (g *Game) PlayerDealEnterWorld(hostPlayer *model.Player, otherUid uint32, a
 	g.SendMsg(cmd.PlayerApplyEnterMpResultNotify, otherPlayer.PlayerId, otherPlayer.ClientSeq, playerApplyEnterMpResultNotify)
 }
 
-func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
-	world := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
-	if world == nil || world.IsMultiplayerWorld() {
-		return
-	}
-	world.ChangeToMultiplayer()
-
-	worldDataNotify := &proto.WorldDataNotify{
-		WorldPropMap: make(map[uint32]*proto.PropValue),
-	}
-	// 是否多人游戏
-	worldDataNotify.WorldPropMap[2] = g.PacketPropValue(2, object.ConvBoolToInt64(world.IsMultiplayerWorld()))
-	g.SendMsg(cmd.WorldDataNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, worldDataNotify)
-
-	hostPlayer.SceneJump = false
-	hostPlayer.SceneLoadState = model.SceneNone
-	hostPlayer.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_HOST_FROM_SINGLE_TO_MP)
-
-	pos := g.GetPlayerPos(hostPlayer)
-
-	enterSceneToken := world.AddEnterSceneContext(&EnterSceneContext{
-		OldSceneId:        hostPlayer.SceneId,
-		OldPos:            pos,
-		NewSceneId:        hostPlayer.SceneId,
-		NewPos:            hostPlayer.GetPos(),
-		NewRot:            hostPlayer.GetRot(),
-		OldDungeonPointId: 0,
-		Uid:               hostPlayer.PlayerId,
-	})
-
-	hostPlayerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
-		hostPlayer,
-		hostPlayer,
-		proto.EnterType_ENTER_GOTO,
-		hostPlayer.SceneId,
-		hostPlayer.GetPos(),
-		enterSceneToken,
-	)
-	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
-}
-
 func (g *Game) PlayerLeaveWorld(player *model.Player, force bool, reason proto.PlayerQuitFromMpNotify_QuitReason) bool {
 	if force {
 		g.SendMsg(cmd.PlayerQuitFromMpNotify, player.PlayerId, player.ClientSeq, &proto.PlayerQuitFromMpNotify{Reason: reason})
@@ -416,11 +341,100 @@ func (g *Game) PlayerLeaveWorld(player *model.Player, force bool, reason proto.P
 	return true
 }
 
+func (g *Game) JoinOtherWorld(player *model.Player, hostPlayer *model.Player) {
+	hostWorld := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
+	if hostWorld == nil {
+		logger.Error("host world is nil, worldId: %v, uid: %v", hostPlayer.WorldId, player.PlayerId)
+		return
+	}
+	if hostPlayer.SceneLoadState == model.SceneEnterDone {
+		player.SceneJump = true
+		player.SceneLoadState = model.SceneNone
+		player.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_TEAM_JOIN)
+		player.IsInMp = hostWorld.IsMultiplayerWorld()
+		player.SetSceneId(hostPlayer.GetSceneId())
+		if WORLD_MANAGER.IsAiWorld(hostWorld) {
+			player.SetPos(&model.Vector{X: 500.0, Y: 900.0, Z: -500.0})
+			player.SetRot(new(model.Vector))
+		} else {
+			player.SetPos(hostPlayer.GetPos())
+			player.SetRot(hostPlayer.GetRot())
+		}
+		g.WorldAddPlayer(hostWorld, player)
+
+		enterSceneToken := hostWorld.AddEnterSceneContext(&EnterSceneContext{
+			OldSceneId: 0,
+			Uid:        player.PlayerId,
+		})
+
+		playerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
+			player,
+			hostPlayer,
+			proto.EnterType_ENTER_OTHER,
+			hostPlayer.GetSceneId(),
+			hostPlayer.GetPos(),
+			enterSceneToken,
+		)
+		g.SendMsg(cmd.PlayerEnterSceneNotify, player.PlayerId, player.ClientSeq, playerEnterSceneNotify)
+	} else {
+		hostWorld.AddWaitPlayer(player.PlayerId)
+	}
+}
+
+func (g *Game) HostEnterMpWorld(hostPlayer *model.Player) {
+	world := WORLD_MANAGER.GetWorldById(hostPlayer.WorldId)
+	if world == nil || world.IsMultiplayerWorld() {
+		return
+	}
+
+	enterSceneId := hostPlayer.GetSceneId()
+	enterPos := hostPlayer.GetPos()
+	enterRot := hostPlayer.GetRot()
+	world.ChangeToMultiplayer()
+	hostPlayer.SetSceneId(enterSceneId)
+	hostPlayer.SetPos(enterPos)
+	hostPlayer.SetRot(enterRot)
+
+	worldDataNotify := &proto.WorldDataNotify{
+		WorldPropMap: make(map[uint32]*proto.PropValue),
+	}
+	// 是否多人游戏
+	worldDataNotify.WorldPropMap[2] = g.PacketPropValue(2, object.ConvBoolToInt64(world.IsMultiplayerWorld()))
+	g.SendMsg(cmd.WorldDataNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, worldDataNotify)
+
+	hostPlayer.SceneJump = false
+	hostPlayer.SceneLoadState = model.SceneNone
+	hostPlayer.SceneEnterReason = uint32(proto.EnterReason_ENTER_REASON_HOST_FROM_SINGLE_TO_MP)
+
+	currPos := g.GetPlayerPos(hostPlayer)
+
+	enterSceneToken := world.AddEnterSceneContext(&EnterSceneContext{
+		OldSceneId:        enterSceneId,
+		OldPos:            currPos,
+		NewSceneId:        enterSceneId,
+		NewPos:            enterPos,
+		NewRot:            enterRot,
+		OldDungeonPointId: 0,
+		Uid:               hostPlayer.PlayerId,
+	})
+
+	hostPlayerEnterSceneNotify := g.PacketPlayerEnterSceneNotifyMp(
+		hostPlayer,
+		hostPlayer,
+		proto.EnterType_ENTER_GOTO,
+		enterSceneId,
+		enterPos,
+		enterSceneToken,
+	)
+	g.SendMsg(cmd.PlayerEnterSceneNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, hostPlayerEnterSceneNotify)
+}
+
 func (g *Game) WorldAddPlayer(world *World, player *model.Player) {
 	if world.GetWorldPlayerNum() >= 4 && !WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
-	_, exist := world.GetAllPlayer()[player.PlayerId]
+	playerMap := world.GetAllPlayer()
+	_, exist := playerMap[player.PlayerId]
 	if exist {
 		return
 	}
@@ -452,7 +466,7 @@ func (g *Game) WorldRemovePlayer(world *World, player *model.Player) {
 			g.PlayerLeaveWorld(worldPlayer, true, proto.PlayerQuitFromMpNotify_KICK_BY_HOST_LOGOUT)
 		}
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 清除玩家的载具
 	for vehicleId, entityId := range player.VehicleInfo.CreateEntityIdMap {
@@ -544,7 +558,7 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 			Uid:              worldPlayer.PlayerId,
 			PeerId:           world.GetPlayerPeerId(worldPlayer),
 			Name:             worldPlayer.NickName,
-			SceneId:          worldPlayer.SceneId,
+			SceneId:          worldPlayer.GetSceneId(),
 			OnlinePlayerInfo: onlinePlayerInfo,
 		})
 	}
@@ -554,7 +568,7 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 	g.SendMsg(cmd.SceneTeamUpdateNotify, player.PlayerId, player.ClientSeq, sceneTeamUpdateNotify)
 
 	syncTeamEntityNotify := &proto.SyncTeamEntityNotify{
-		SceneId:            player.SceneId,
+		SceneId:            player.GetSceneId(),
 		TeamEntityInfoList: make([]*proto.TeamEntityInfo, 0),
 	}
 	if world.IsMultiplayerWorld() {
@@ -573,7 +587,7 @@ func (g *Game) UpdateWorldScenePlayerInfo(player *model.Player, world *World) {
 	g.SendMsg(cmd.SyncTeamEntityNotify, player.PlayerId, player.ClientSeq, syncTeamEntityNotify)
 
 	syncScenePlayTeamEntityNotify := &proto.SyncScenePlayTeamEntityNotify{
-		SceneId: player.SceneId,
+		SceneId: player.GetSceneId(),
 	}
 	g.SendMsg(cmd.SyncScenePlayTeamEntityNotify, player.PlayerId, player.ClientSeq, syncScenePlayTeamEntityNotify)
 }
@@ -584,7 +598,7 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 	switch playerMpInfo.OriginInfo.CmdName {
 	case "PlayerApplyEnterMpReq":
 		applyFailNotify := func(reason proto.PlayerApplyEnterMpResultNotify_Reason) {
-			MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+			g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 				MsgType: mq.MsgTypeServer,
 				EventId: mq.ServerPlayerMpRsp,
 				ServerMsg: &mq.ServerMsg{
@@ -652,7 +666,7 @@ func (g *Game) ServerPlayerMpReq(playerMpInfo *mq.PlayerMpInfo, gsAppId string) 
 		}
 		g.SendMsg(cmd.PlayerApplyEnterMpNotify, hostPlayer.PlayerId, hostPlayer.ClientSeq, playerApplyEnterMpNotify)
 
-		MESSAGE_QUEUE.SendToGs(gsAppId, &mq.NetMsg{
+		g.messageQueue.SendToGs(gsAppId, &mq.NetMsg{
 			MsgType: mq.MsgTypeServer,
 			EventId: mq.ServerPlayerMpRsp,
 			ServerMsg: &mq.ServerMsg{

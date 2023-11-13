@@ -138,7 +138,7 @@ func (t *TickManager) userTimerHandle(userId uint32, action int, data []any) {
 			logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, userId)
 			return
 		}
-		scene := world.GetSceneById(player.SceneId)
+		scene := world.GetSceneById(player.GetSceneId())
 		group := scene.GetGroupById(groupId)
 		if group == nil {
 			logger.Error("get group is nil, groupId: %v, uid: %v", groupId, userId)

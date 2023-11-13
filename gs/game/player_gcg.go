@@ -12,11 +12,6 @@ import (
 )
 
 func (g *Game) GCGLogin(player *model.Player) {
-	// player.SceneId = 1076
-	// player.Pos.X = 8.974
-	// player.Pos.Y = 0
-	// player.Pos.Z = 9.373
-
 	// GCG目前可能有点问题先不发送
 	// 以后再慢慢搞
 
@@ -34,7 +29,7 @@ func (g *Game) GCGLogin(player *model.Player) {
 
 // GCGTavernInit GCG酒馆初始化
 func (g *Game) GCGTavernInit(player *model.Player) {
-	if player.SceneId == 1076 {
+	if player.GetSceneId() == 1076 {
 		// GCG酒馆信息通知
 		g.SendMsg(cmd.GCGTCTavernInfoNotify, player.PlayerId, player.ClientSeq, g.PacketGCGTCTavernInfoNotify(player))
 		// GCG酒馆NPC信息通知
@@ -186,7 +181,7 @@ func (g *Game) GCGAskDuelReq(player *model.Player, payloadMsg pb.Message) {
 		// 如果为玩家则更改为玩家信息
 		if controller.controllerType == ControllerType_Player {
 			gcgControllerShowInfo.ProfilePicture.AvatarId = player.HeadImage
-			gcgControllerShowInfo.ProfilePicture.AvatarId = dbAvatar.AvatarMap[player.HeadImage].Costume
+			gcgControllerShowInfo.ProfilePicture.AvatarId = dbAvatar.GetAvatarById(player.HeadImage).Costume
 		}
 		gcgAskDuelRsp.Duel.ShowInfoList = append(gcgAskDuelRsp.Duel.ShowInfoList)
 	}
@@ -506,7 +501,7 @@ func (g *Game) PacketGCGGameBriefDataNotify(player *model.Player, businessType p
 		if controller.player != nil {
 			gcgPlayerBriefData.Uid = player.PlayerId
 			gcgPlayerBriefData.ProfilePicture.AvatarId = dbTeam.GetActiveAvatarId()
-			gcgPlayerBriefData.ProfilePicture.CostumeId = dbAvatar.AvatarMap[dbTeam.GetActiveAvatarId()].Costume
+			gcgPlayerBriefData.ProfilePicture.CostumeId = dbAvatar.GetAvatarById(dbTeam.GetActiveAvatarId()).Costume
 			gcgPlayerBriefData.NickName = player.NickName
 		}
 		gcgGameBriefDataNotify.GcgBriefData.PlayerBriefList = append(gcgGameBriefDataNotify.GcgBriefData.PlayerBriefList)

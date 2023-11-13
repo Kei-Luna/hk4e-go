@@ -88,8 +88,28 @@ func (g *Game) QuestDestroyNpcReq(player *model.Player, payloadMsg pb.Message) {
 
 /************************************************** 游戏功能 **************************************************/
 
-// AcceptQuest 接取当前条件下能接取到的全部任务
+const (
+	QuestExecTypeFinish = iota
+	QuestExecTypeFail
+	QuestExecTypeStart
+)
+
+// 通用参数匹配
+func matchParamEqual(param1 []int32, param2 []int32, num int) bool {
+	if len(param1) != num || len(param2) != num {
+		return false
+	}
+	for i := 0; i < num; i++ {
+		if param1[i] != param2[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// AcceptQuest 接取任务
 func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
+	g.EndlessLoopCheck(EndlessLoopCheckTypeAcceptQuest)
 	dbQuest := player.GetDbQuest()
 	addQuestIdList := make([]uint32, 0)
 	for _, questData := range gdconf.GetQuestDataMap() {
@@ -186,12 +206,13 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 	}
 }
 
-// StartQuest 开始一个任务
+// StartQuest 开始任务
 func (g *Game) StartQuest(player *model.Player, questId uint32, notifyClient bool) {
+	g.EndlessLoopCheck(EndlessLoopCheckTypeStartQuest)
 	dbQuest := player.GetDbQuest()
 	dbQuest.StartQuest(questId)
 
-	g.QuestExec(player, questId, QuestExecTypeStart)
+	g.ExecQuest(player, questId, QuestExecTypeStart)
 	g.QuestStartTriggerCheck(player, questId)
 
 	if notifyClient {
@@ -207,14 +228,9 @@ func (g *Game) StartQuest(player *model.Player, questId uint32, notifyClient boo
 	}
 }
 
-const (
-	QuestExecTypeFinish = iota
-	QuestExecTypeFail
-	QuestExecTypeStart
-)
-
-// QuestExec 任务执行触发操作
-func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int) {
+// ExecQuest 执行任务
+func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int) {
+	g.EndlessLoopCheck(EndlessLoopCheckTypeExecQuest)
 	questDataConfig := gdconf.GetQuestDataById(int32(questId))
 	if questDataConfig == nil {
 		return
@@ -340,9 +356,9 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 				logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
 				continue
 			}
-			scene := world.GetSceneById(player.SceneId)
+			scene := world.GetSceneById(player.GetSceneId())
 			if scene == nil {
-				logger.Error("scene is nil, sceneId: %v, uid: %v", player.SceneId, player.PlayerId)
+				logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 				continue
 			}
 			g.ChangeGameTime(scene, uint32(hour*60))
@@ -362,21 +378,9 @@ func (g *Game) QuestExec(player *model.Player, questId uint32, questExecType int
 	}
 }
 
-// 通用参数匹配
-func matchParamEqual(param1 []int32, param2 []int32, num int) bool {
-	if len(param1) != num || len(param2) != num {
-		return false
-	}
-	for i := 0; i < num; i++ {
-		if param1[i] != param2[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // TriggerQuest 触发任务
 func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam string, param ...int32) {
+	g.EndlessLoopCheck(EndlessLoopCheckTypeTriggerQuest)
 	dbQuest := player.GetDbQuest()
 	updateQuestIdList := make([]uint32, 0)
 	for _, quest := range dbQuest.GetQuestMap() {
@@ -480,53 +484,14 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 		g.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, &proto.QuestListUpdateNotify{
 			QuestList: questList,
 		})
-		parentQuestList := make([]*proto.ParentQuest, 0)
-		parentQuestMap := make(map[int32]bool)
-		for _, questId := range updateQuestIdList {
-			questDataConfig := gdconf.GetQuestDataById(int32(questId))
-			if questDataConfig == nil {
-				continue
-			}
-			_, exist := parentQuestMap[questDataConfig.ParentQuestId]
-			if exist {
-				continue
-			}
-			parentQuestMap[questDataConfig.ParentQuestId] = true
-			finishedParentQuest := true
-			subQuestDataMap := gdconf.GetQuestDataMapByParentQuestId(questDataConfig.ParentQuestId)
-			for _, subQuestData := range subQuestDataMap {
-				quest := dbQuest.GetQuestById(uint32(subQuestData.QuestId))
-				if quest == nil {
-					finishedParentQuest = false
-					break
-				}
-				if quest.State != constant.QUEST_STATE_FINISHED {
-					finishedParentQuest = false
-					break
-				}
-			}
-			if finishedParentQuest {
-				childQuestList := make([]*proto.ChildQuest, 0)
-				for _, subQuestData := range subQuestDataMap {
-					childQuestList = append(childQuestList, &proto.ChildQuest{
-						State:   constant.QUEST_STATE_FINISHED,
-						QuestId: uint32(subQuestData.QuestId),
-					})
-				}
-				parentQuestList = append(parentQuestList, &proto.ParentQuest{
-					ParentQuestId:    uint32(questDataConfig.ParentQuestId),
-					ParentQuestState: 1,
-					IsFinished:       true,
-					ChildQuestList:   childQuestList,
-					QuestVar:         make([]int32, 5),
-				})
-			}
-		}
+
+		parentQuestList := g.PacketParentQuestList(player, updateQuestIdList)
 		if len(parentQuestList) > 0 {
 			g.SendMsg(cmd.FinishedParentQuestUpdateNotify, player.PlayerId, player.ClientSeq, &proto.FinishedParentQuestUpdateNotify{
 				ParentQuestList: parentQuestList,
 			})
 		}
+
 		for _, questId := range updateQuestIdList {
 			quest := dbQuest.GetQuestById(questId)
 			questDataConfig := gdconf.GetQuestDataById(int32(quest.QuestId))
@@ -534,7 +499,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				continue
 			}
 			if quest.State == constant.QUEST_STATE_FINISHED {
-				g.QuestExec(player, quest.QuestId, QuestExecTypeFinish)
+				g.ExecQuest(player, quest.QuestId, QuestExecTypeFinish)
 				if len(questDataConfig.ItemIdList) != 0 {
 					for index, itemId := range questDataConfig.ItemIdList {
 						questItem := []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(questDataConfig.ItemCountList[index])}}
@@ -543,7 +508,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				}
 			}
 			if quest.State == constant.QUEST_STATE_FAILED {
-				g.QuestExec(player, quest.QuestId, QuestExecTypeFail)
+				g.ExecQuest(player, quest.QuestId, QuestExecTypeFail)
 			}
 		}
 		g.AcceptQuest(player, true)
@@ -595,21 +560,31 @@ func (g *Game) PacketQuestListNotify(player *model.Player) *proto.QuestListNotif
 
 // PacketFinishedParentQuestNotify 打包已完成父任务列表通知
 func (g *Game) PacketFinishedParentQuestNotify(player *model.Player) *proto.FinishedParentQuestNotify {
-	ntf := &proto.FinishedParentQuestNotify{
-		ParentQuestList: make([]*proto.ParentQuest, 0),
-	}
 	dbQuest := player.GetDbQuest()
-	parentQuestMap := make(map[int32]bool)
+	questIdList := make([]uint32, len(dbQuest.QuestMap))
 	for questId := range dbQuest.GetQuestMap() {
+		questIdList = append(questIdList, questId)
+	}
+	ntf := &proto.FinishedParentQuestNotify{
+		ParentQuestList: g.PacketParentQuestList(player, questIdList),
+	}
+	return ntf
+}
+
+func (g *Game) PacketParentQuestList(player *model.Player, questIdList []uint32) []*proto.ParentQuest {
+	dbQuest := player.GetDbQuest()
+	parentQuestIdMap := make(map[int32]bool)
+	parentQuestList := make([]*proto.ParentQuest, 0)
+	for questId := range questIdList {
 		questDataConfig := gdconf.GetQuestDataById(int32(questId))
 		if questDataConfig == nil {
 			continue
 		}
-		_, exist := parentQuestMap[questDataConfig.ParentQuestId]
+		_, exist := parentQuestIdMap[questDataConfig.ParentQuestId]
 		if exist {
 			continue
 		}
-		parentQuestMap[questDataConfig.ParentQuestId] = true
+		parentQuestIdMap[questDataConfig.ParentQuestId] = true
 		finishedParentQuest := true
 		subQuestDataMap := gdconf.GetQuestDataMapByParentQuestId(questDataConfig.ParentQuestId)
 		for _, subQuestData := range subQuestDataMap {
@@ -631,13 +606,14 @@ func (g *Game) PacketFinishedParentQuestNotify(player *model.Player) *proto.Fini
 					QuestId: uint32(subQuestData.QuestId),
 				})
 			}
-			ntf.ParentQuestList = append(ntf.ParentQuestList, &proto.ParentQuest{
+			parentQuestList = append(parentQuestList, &proto.ParentQuest{
 				ParentQuestId:    uint32(questDataConfig.ParentQuestId),
 				ParentQuestState: 1,
 				IsFinished:       true,
 				ChildQuestList:   childQuestList,
+				QuestVar:         make([]int32, 5),
 			})
 		}
 	}
-	return ntf
+	return parentQuestList
 }

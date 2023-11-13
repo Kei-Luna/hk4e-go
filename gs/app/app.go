@@ -84,7 +84,7 @@ func Run(ctx context.Context, configFile string) error {
 	messageQueue := mq.NewMessageQueue(api.GS, APPID, discoveryClient)
 	defer messageQueue.Close()
 
-	gameCore := game.NewGameCore(db, messageQueue, GSID, APPID, APPVERSION, discoveryClient)
+	gameCore := game.NewGameCore(discoveryClient, db, messageQueue, GSID, APPID, APPVERSION)
 	defer gameCore.Close()
 
 	// natsrpc server

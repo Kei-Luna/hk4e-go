@@ -13,12 +13,6 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-const (
-	MaxCallLuaFuncLoopCount = 10 // 调用LUA方法递归层数限制
-)
-
-var CallLuaFuncLoopCount = 0
-
 type LuaCtx struct {
 	uid            uint32
 	ownerUid       uint32
@@ -42,14 +36,7 @@ type LuaEvt struct {
 
 // CallLuaFunc 调用LUA方法
 func CallLuaFunc(luaState *lua.LState, luaFuncName string, luaCtx *LuaCtx, luaEvt *LuaEvt) bool {
-	if CallLuaFuncLoopCount > MaxCallLuaFuncLoopCount {
-		logger.Error("above max call lua func loop count, stack: %v", logger.Stack())
-		return false
-	}
-	CallLuaFuncLoopCount++
-	defer func() {
-		CallLuaFuncLoopCount--
-	}()
+	GAME.EndlessLoopCheck(EndlessLoopCheckTypeCallLuaFunc)
 	ctx := luaState.NewTable()
 	luaState.SetField(ctx, "uid", lua.LNumber(luaCtx.uid))
 	luaState.SetField(ctx, "owner_uid", lua.LNumber(luaCtx.ownerUid))
@@ -108,7 +95,7 @@ func GetContextGroup(player *model.Player, ctx *lua.LTable, luaState *lua.LState
 	if !ok {
 		return nil
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	group := scene.GetGroupById(uint32(groupId))
 	if group == nil {
 		return nil
@@ -124,7 +111,7 @@ func GetContextDbSceneGroup(player *model.Player, groupId uint32) *model.DbScene
 	}
 	owner := world.GetOwner()
 	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.SceneId)
+	dbScene := dbWorld.GetSceneById(player.GetSceneId())
 	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
 	return dbSceneGroup
 }
@@ -210,7 +197,7 @@ func PrintContextLog(luaState *lua.LState) int {
 
 func BeginCameraSceneLook(luaState *lua.LState) int {
 	// TODO 由于解锁风之翼任务相关原因暂时屏蔽
-	luaState.Push(lua.LNumber(-1))
+	luaState.Push(lua.LNumber(0))
 	return 1
 	ctx, ok := luaState.Get(1).(*lua.LTable)
 	if !ok {
@@ -312,7 +299,7 @@ func GetGadgetStateByConfigId(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	group := scene.GetGroupById(uint32(groupId))
 	if group == nil {
 		luaState.Push(lua.LNumber(-1))
@@ -484,7 +471,7 @@ func KillEntityByConfigId(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	group := scene.GetGroupById(uint32(groupId))
 	entity := group.GetEntityByConfigId(uint32(luaTableParam.ConfigId))
 	GAME.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
@@ -723,7 +710,7 @@ func GetRegionEntityCount(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	count := 0
 	for _, entity := range scene.GetAllEntity() {
 		contain := shape.Contain(&alg.Vector3{X: float32(entity.GetPos().X), Y: float32(entity.GetPos().Y), Z: float32(entity.GetPos().Z)})

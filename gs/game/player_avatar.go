@@ -248,7 +248,7 @@ func (g *Game) AvatarWearFlycloakReq(player *model.Player, payloadMsg pb.Message
 		g.SendError(cmd.AvatarWearFlycloakRsp, player, &proto.AvatarWearFlycloakRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 确保角色存在
 	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)
@@ -298,7 +298,7 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 		g.SendError(cmd.AvatarChangeCostumeRsp, player, &proto.AvatarChangeCostumeRsp{})
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 
 	// 确保角色存在
 	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)
@@ -377,8 +377,8 @@ func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
 	}
 	// 判断玩家是否已有该角色
 	dbAvatar := player.GetDbAvatar()
-	_, exist := dbAvatar.AvatarMap[avatarId]
-	if exist {
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar != nil {
 		return
 	}
 	dbAvatar.AddAvatar(player, avatarId)
@@ -397,7 +397,7 @@ func (g *Game) AddPlayerAvatar(userId uint32, avatarId uint32) {
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 
 	avatarAddNotify := &proto.AvatarAddNotify{
-		Avatar:   g.PacketAvatarInfo(dbAvatar.AvatarMap[avatarId]),
+		Avatar:   g.PacketAvatarInfo(dbAvatar.GetAvatarById(avatarId)),
 		IsInTeam: false,
 	}
 	g.SendMsg(cmd.AvatarAddNotify, userId, player.ClientSeq, avatarAddNotify)
@@ -514,9 +514,9 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[avatarId]
-	if !exist {
-		logger.Error("avatar not exist, avatarId: %v", avatar.AvatarId)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 
@@ -530,6 +530,7 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 	g.SendMsg(cmd.AvatarFightPropNotify, userId, player.ClientSeq, avatarFightPropNotify)
 }
 
+// ChangePlayerAvatarSkillDepot 改变角色技能库
 func (g *Game) ChangePlayerAvatarSkillDepot(userId uint32, avatarId uint32, changeSkillDepotId uint32, elementType int) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -562,8 +563,9 @@ func (g *Game) ChangePlayerAvatarSkillDepot(userId uint32, avatarId uint32, chan
 		}
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[avatarId]
-	if !exist {
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 
@@ -592,6 +594,7 @@ func (g *Game) ChangePlayerAvatarSkillDepot(userId uint32, avatarId uint32, chan
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
+// AddPlayerAvatarHp 角色加血
 func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, max bool, reason proto.ChangHpReason) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -602,7 +605,7 @@ func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
 	if entityId == 0 {
 		return
@@ -633,6 +636,7 @@ func (g *Game) AddPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	})
 }
 
+// SubPlayerAvatarHp 角色扣血
 func (g *Game) SubPlayerAvatarHp(userId uint32, avatarId uint32, value float32, max bool, reason proto.ChangHpReason) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -646,7 +650,7 @@ func (g *Game) SubPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	if world == nil {
 		return
 	}
-	scene := world.GetSceneById(player.SceneId)
+	scene := world.GetSceneById(player.GetSceneId())
 	entityId := world.GetPlayerWorldAvatarEntityId(player, avatarId)
 	if entityId == 0 {
 		return
@@ -700,6 +704,7 @@ func (g *Game) SubPlayerAvatarHp(userId uint32, avatarId uint32, value float32, 
 	}
 }
 
+// AddPlayerAvatarEnergy 角色恢复元素能量
 func (g *Game) AddPlayerAvatarEnergy(userId uint32, avatarId uint32, value float32, max bool) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -707,9 +712,9 @@ func (g *Game) AddPlayerAvatarEnergy(userId uint32, avatarId uint32, value float
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[avatarId]
-	if !exist {
-		logger.Error("avatar not exist, avatarId: %v", avatarId)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
@@ -729,6 +734,7 @@ func (g *Game) AddPlayerAvatarEnergy(userId uint32, avatarId uint32, value float
 	g.UpdatePlayerAvatarFightProp(player.PlayerId, avatarId)
 }
 
+// CostPlayerAvatarEnergy 角色消耗元素能量
 func (g *Game) CostPlayerAvatarEnergy(userId uint32, avatarId uint32, value float32, max bool) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -739,9 +745,9 @@ func (g *Game) CostPlayerAvatarEnergy(userId uint32, avatarId uint32, value floa
 		return
 	}
 	dbAvatar := player.GetDbAvatar()
-	avatar, exist := dbAvatar.AvatarMap[avatarId]
-	if !exist {
-		logger.Error("avatar not exist, avatarId: %v", avatarId)
+	avatar := dbAvatar.GetAvatarById(avatarId)
+	if avatar == nil {
+		logger.Error("get avatar is nil, avatarId: %v", avatarId)
 		return
 	}
 	avatarSkillDataConfig := gdconf.GetAvatarEnergySkillConfig(avatar.SkillDepotId)
@@ -763,7 +769,7 @@ func (g *Game) CostPlayerAvatarEnergy(userId uint32, avatarId uint32, value floa
 
 /************************************************** 打包封装 **************************************************/
 
-// PacketAvatarInfo 转换角色信息
+// PacketAvatarInfo 打包角色信息
 func (g *Game) PacketAvatarInfo(avatar *model.Avatar) *proto.AvatarInfo {
 	pbAvatar := &proto.AvatarInfo{
 		IsFocus:  false,
@@ -861,21 +867,21 @@ func (g *Game) PacketAvatarDataNotify(player *model.Player) *proto.AvatarDataNot
 	dbTeam := player.GetDbTeam()
 	avatarDataNotify := &proto.AvatarDataNotify{
 		CurAvatarTeamId:   uint32(dbTeam.GetActiveTeamId()),
-		ChooseAvatarGuid:  dbAvatar.AvatarMap[dbAvatar.MainCharAvatarId].Guid,
+		ChooseAvatarGuid:  dbAvatar.GetAvatarById(dbAvatar.MainCharAvatarId).Guid,
 		OwnedFlycloakList: dbAvatar.FlyCloakList,
 		// 角色衣装
 		OwnedCostumeList: dbAvatar.CostumeList,
 		AvatarList:       make([]*proto.AvatarInfo, 0),
 		AvatarTeamMap:    make(map[uint32]*proto.AvatarTeam),
 	}
-	for _, avatar := range dbAvatar.AvatarMap {
+	for _, avatar := range dbAvatar.GetAvatarMap() {
 		pbAvatar := g.PacketAvatarInfo(avatar)
 		avatarDataNotify.AvatarList = append(avatarDataNotify.AvatarList, pbAvatar)
 	}
 	for teamIndex, team := range dbTeam.TeamList {
 		var teamAvatarGuidList []uint64 = nil
 		for _, avatarId := range team.GetAvatarIdList() {
-			teamAvatarGuidList = append(teamAvatarGuidList, dbAvatar.AvatarMap[avatarId].Guid)
+			teamAvatarGuidList = append(teamAvatarGuidList, dbAvatar.GetAvatarById(avatarId).Guid)
 		}
 		avatarDataNotify.AvatarTeamMap[uint32(teamIndex)+1] = &proto.AvatarTeam{
 			AvatarGuidList: teamAvatarGuidList,
