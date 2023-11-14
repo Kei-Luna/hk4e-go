@@ -46,6 +46,7 @@ type Avatar struct {
 	CurrEnergy        float64              // 当前元素能量值
 	FetterList        []uint32             // 资料解锁条目
 	SkillLevelMap     map[uint32]uint32    // 技能等级数据
+	TalentIdList      []uint32             // 命座数据
 	SkillDepotId      uint32               // 技能库id
 	FlyCloak          uint32               // 当前风之翼
 	Costume           uint32               // 当前衣装
@@ -138,6 +139,7 @@ func (a *DbAvatar) AddAvatar(player *Player, avatarId uint32) {
 		CurrEnergy:        0,
 		FetterList:        make([]uint32, 0),
 		SkillLevelMap:     make(map[uint32]uint32),
+		TalentIdList:      make([]uint32, 0),
 		SkillDepotId:      0,
 		FlyCloak:          140001,
 		Costume:           0,

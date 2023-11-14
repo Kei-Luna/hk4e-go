@@ -99,7 +99,6 @@ func (r *DbReliquary) AddReliquary(player *Player, itemId uint32, reliquaryId ui
 		Guid:             0,
 	}
 	r.InitReliquary(player, reliquary)
-	r.ReliquaryMap[reliquaryId] = reliquary
 }
 
 func (r *DbReliquary) CostReliquary(player *Player, reliquaryId uint64) uint64 {

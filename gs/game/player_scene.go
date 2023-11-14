@@ -1770,12 +1770,14 @@ func (g *Game) PacketSceneAvatarInfo(scene *Scene, player *model.Player, avatarI
 			Level:       uint32(avatar.EquipWeapon.Level),
 			AbilityInfo: new(proto.AbilitySyncStateInfo),
 		},
-		ReliquaryList:     reliquaryList,
-		SkillLevelMap:     avatar.SkillLevelMap,
-		WearingFlycloakId: avatar.FlyCloak,
-		CostumeId:         avatar.Costume,
-		BornTime:          uint32(avatar.BornTime),
-		TeamResonanceList: make([]uint32, 0),
+		ReliquaryList:          reliquaryList,
+		SkillLevelMap:          avatar.SkillLevelMap,
+		TalentIdList:           avatar.TalentIdList,
+		InherentProudSkillList: gdconf.GetAvatarInherentProudSkillList(avatar.SkillDepotId, avatar.Promote),
+		WearingFlycloakId:      avatar.FlyCloak,
+		CostumeId:              avatar.Costume,
+		BornTime:               uint32(avatar.BornTime),
+		TeamResonanceList:      make([]uint32, 0),
 	}
 	// for id := range player.TeamConfig.TeamResonances {
 	//	sceneAvatarInfo.TeamResonanceList = append(sceneAvatarInfo.TeamResonanceList, uint32(id))

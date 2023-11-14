@@ -107,13 +107,14 @@ type PlayerMpInfo struct {
 }
 
 type ChatMsgInfo struct {
-	Time    uint32
-	ToUid   uint32
-	Uid     uint32
-	IsRead  bool
-	MsgType uint8
-	Text    string
-	Icon    uint32
+	Time     uint32
+	ToUid    uint32
+	Uid      uint32
+	IsRead   bool
+	MsgType  uint8
+	Text     string
+	Icon     uint32
+	IsDelete bool
 }
 
 type AddFriendInfo struct {

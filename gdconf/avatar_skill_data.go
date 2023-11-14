@@ -6,11 +6,12 @@ import (
 
 // AvatarSkillData 角色技能配置表
 type AvatarSkillData struct {
-	AvatarSkillId int32  `csv:"ID"`
-	AbilityName   string `csv:"Ability名称,omitempty"`
-	CostStamina   int32  `csv:"消耗体力,omitempty"`
-	CostElemType  int32  `csv:"消耗能量类型,omitempty"`
-	CostElemVal   int32  `csv:"消耗能量值,omitempty"`
+	AvatarSkillId       int32  `csv:"ID"`
+	AbilityName         string `csv:"Ability名称,omitempty"`
+	CostStamina         int32  `csv:"消耗体力,omitempty"`
+	CostElemType        int32  `csv:"消耗能量类型,omitempty"`
+	CostElemVal         int32  `csv:"消耗能量值,omitempty"`
+	UpgradeSkillGroupId int32  `csv:"升级技能组ID,omitempty"`
 }
 
 func (g *GameDataConfig) loadAvatarSkillData() {

@@ -807,6 +807,9 @@ func (w *World) AddChat(chatInfo *proto.ChatInfo) {
 		w.chatMsgList = w.chatMsgList[1:]
 	}
 	w.chatMsgList = append(w.chatMsgList, chatInfo)
+	chatMsg := GAME.ConvChatInfoToChatMsg(chatInfo)
+	chatMsg.IsDelete = true
+	go USER_MANAGER.SaveUserChatMsgToDbSync(chatMsg)
 }
 
 func (w *World) GetChatList() []*proto.ChatInfo {

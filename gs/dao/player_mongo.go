@@ -263,7 +263,12 @@ func (d *Dao) QueryChatMsgListByUid(uid uint32) ([]*model.ChatMsg, error) {
 	result := make([]*model.ChatMsg, 0)
 	find, err := db.Find(
 		context.TODO(),
-		bson.D{{"$or", []bson.D{{{"to_uid", uid}}, {{"uid", uid}}}}},
+		bson.D{
+			{"$and", []bson.D{
+				{{"$or", []bson.D{{{"to_uid", uid}}, {{"uid", uid}}}}},
+				{{"is_delete", false}},
+			}},
+		},
 		options.Find().SetLimit(MaxQueryChatMsgLen),
 		options.Find().SetSort(bson.M{"time": 1}),
 	)
@@ -281,7 +286,7 @@ func (d *Dao) QueryChatMsgListByUid(uid uint32) ([]*model.ChatMsg, error) {
 	return result, nil
 }
 
-func (d *Dao) ReadAndUpdateChatMsgByUid(uid uint32, targetUid uint32) error {
+func (d *Dao) ReadUpdateChatMsgByUid(uid uint32, targetUid uint32) error {
 	db := d.db.Collection("chat_msg")
 	_, err := db.UpdateMany(
 		context.TODO(),
@@ -295,6 +300,19 @@ func (d *Dao) ReadAndUpdateChatMsgByUid(uid uint32, targetUid uint32) error {
 		context.TODO(),
 		bson.D{{"uid", uid}, {"to_uid", targetUid}},
 		bson.D{{"$set", bson.D{{"is_read", true}}}},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *Dao) DeleteAllUpdateChatMsgByUid(uid uint32) error {
+	db := d.db.Collection("chat_msg")
+	_, err := db.UpdateMany(
+		context.TODO(),
+		bson.D{{"$or", []bson.D{{{"to_uid", uid}}, {{"uid", uid}}}}},
+		bson.D{{"$set", bson.D{{"is_delete", true}}}},
 	)
 	if err != nil {
 		return err

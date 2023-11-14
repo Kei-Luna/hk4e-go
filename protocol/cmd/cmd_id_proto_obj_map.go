@@ -303,7 +303,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(AvatarAddNotify, func() any { return new(proto.AvatarAddNotify) })                           // 角色新增通知
 	c.regMsg(AvatarLifeStateChangeNotify, func() any { return new(proto.AvatarLifeStateChangeNotify) })   // 角色存活状态改变通知
 	c.regMsg(AvatarUpgradeReq, func() any { return new(proto.AvatarUpgradeReq) })                         // 角色升级请求
-	c.regMsg(AvatarUpgradeRsp, func() any { return new(proto.AvatarUpgradeRsp) })                         // 角色升级通知
+	c.regMsg(AvatarUpgradeRsp, func() any { return new(proto.AvatarUpgradeRsp) })                         // 角色升级响应
 	c.regMsg(AvatarPropNotify, func() any { return new(proto.AvatarPropNotify) })                         // 角色属性表更新通知
 	c.regMsg(AvatarPromoteReq, func() any { return new(proto.AvatarPromoteReq) })                         // 角色突破请求
 	c.regMsg(AvatarPromoteRsp, func() any { return new(proto.AvatarPromoteRsp) })                         // 角色突破响应
@@ -318,6 +318,12 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(AvatarFlycloakChangeNotify, func() any { return new(proto.AvatarFlycloakChangeNotify) })     // 角色换风之翼通知
 	c.regMsg(AvatarGainFlycloakNotify, func() any { return new(proto.AvatarGainFlycloakNotify) })         // 角色获得风之翼通知
 	c.regMsg(AvatarSkillDepotChangeNotify, func() any { return new(proto.AvatarSkillDepotChangeNotify) }) // 角色技能库切换通知 主角切元素
+	c.regMsg(AvatarSkillUpgradeReq, func() any { return new(proto.AvatarSkillUpgradeReq) })               // 角色技能升级请求
+	c.regMsg(AvatarSkillUpgradeRsp, func() any { return new(proto.AvatarSkillUpgradeRsp) })               // 角色技能升级响应
+	c.regMsg(AvatarSkillChangeNotify, func() any { return new(proto.AvatarSkillChangeNotify) })           // 角色技能更新通知
+	c.regMsg(UnlockAvatarTalentReq, func() any { return new(proto.UnlockAvatarTalentReq) })               // 角色命座解锁请求
+	c.regMsg(UnlockAvatarTalentRsp, func() any { return new(proto.UnlockAvatarTalentRsp) })               // 角色命座解锁通知
+	c.regMsg(AvatarUnlockTalentNotify, func() any { return new(proto.AvatarUnlockTalentNotify) })         // 角色命座解锁通知
 
 	// 背包与道具
 	c.regMsg(PlayerStoreNotify, func() any { return new(proto.PlayerStoreNotify) })           // 玩家背包数据通知

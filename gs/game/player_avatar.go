@@ -331,7 +331,7 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 	// 角色更换时装通知
 	ntf := new(proto.AvatarChangeCostumeNotify)
 	// 要更换时装的角色实体不存在代表更换的是仓库内的角色
-	if scene.GetWorld().GetPlayerWorldAvatar(player, avatar.AvatarId) == nil {
+	if world.GetPlayerWorldAvatar(player, avatar.AvatarId) == nil {
 		ntf.EntityInfo = &proto.SceneEntityInfo{
 			Entity: &proto.SceneEntityInfo_Avatar{
 				Avatar: g.PacketSceneAvatarInfo(scene, player, avatar.AvatarId),
@@ -347,6 +347,116 @@ func (g *Game) AvatarChangeCostumeReq(player *model.Player, payloadMsg pb.Messag
 		CostumeId:  req.CostumeId,
 	}
 	g.SendMsg(cmd.AvatarChangeCostumeRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+// AvatarSkillUpgradeReq 角色技能升级请求
+func (g *Game) AvatarSkillUpgradeReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.AvatarSkillUpgradeReq)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)
+	if !ok {
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+	skillLevel, exist := avatar.SkillLevelMap[req.AvatarSkillId]
+	if !exist {
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+	avatarSkillDataConfig := gdconf.GetAvatarSkillDataById(int32(req.AvatarSkillId))
+	if avatarSkillDataConfig == nil {
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+	proudSkillDataConfig := gdconf.GetProudSkillDataByGroupIdAndLevel(avatarSkillDataConfig.UpgradeSkillGroupId, int32(skillLevel))
+	if proudSkillDataConfig == nil {
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+
+	// 消耗物品列表
+	costItemList := make([]*ChangeItem, 0)
+	for _, costItem := range proudSkillDataConfig.CostItemList {
+		costItemList = append(costItemList, &ChangeItem{
+			ItemId:      uint32(costItem.ItemId),
+			ChangeCount: uint32(costItem.ItemCount),
+		})
+	}
+	costItemList = append(costItemList, &ChangeItem{
+		ItemId:      constant.ITEM_ID_SCOIN,
+		ChangeCount: uint32(proudSkillDataConfig.CostSCoin),
+	})
+	ok = g.CostPlayerItem(player.PlayerId, costItemList)
+	if !ok {
+		g.SendError(cmd.AvatarSkillUpgradeRsp, player, &proto.AvatarSkillUpgradeRsp{})
+		return
+	}
+
+	skillLevel++
+	avatar.SkillLevelMap[req.AvatarSkillId] = skillLevel
+
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatar.AvatarId)
+	ntf := &proto.AvatarSkillChangeNotify{
+		CurLevel:      skillLevel,
+		AvatarGuid:    req.AvatarGuid,
+		EntityId:      entityId,
+		SkillDepotId:  avatar.SkillDepotId,
+		OldLevel:      req.OldLevel,
+		AvatarSkillId: req.AvatarSkillId,
+	}
+	g.SendMsg(cmd.AvatarSkillChangeNotify, player.PlayerId, player.ClientSeq, ntf)
+
+	rsp := &proto.AvatarSkillUpgradeRsp{
+		AvatarGuid:    req.AvatarGuid,
+		CurLevel:      skillLevel,
+		AvatarSkillId: req.AvatarSkillId,
+		OldLevel:      req.OldLevel,
+	}
+	g.SendMsg(cmd.AvatarSkillUpgradeRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+// UnlockAvatarTalentReq 角色命座解锁请求
+func (g *Game) UnlockAvatarTalentReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.UnlockAvatarTalentReq)
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", player.WorldId, player.PlayerId)
+		g.SendError(cmd.UnlockAvatarTalentRsp, player, &proto.UnlockAvatarTalentRsp{})
+		return
+	}
+	avatar, ok := player.GameObjectGuidMap[req.AvatarGuid].(*model.Avatar)
+	if !ok {
+		g.SendError(cmd.UnlockAvatarTalentRsp, player, &proto.UnlockAvatarTalentRsp{})
+		return
+	}
+
+	ok = g.CostPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: avatar.AvatarId - 10000000 + 1100, ChangeCount: 1}})
+	if !ok {
+		g.SendError(cmd.UnlockAvatarTalentRsp, player, &proto.UnlockAvatarTalentRsp{})
+		return
+	}
+
+	avatar.TalentIdList = append(avatar.TalentIdList, req.TalentId)
+
+	entityId := world.GetPlayerWorldAvatarEntityId(player, avatar.AvatarId)
+	ntf := &proto.AvatarUnlockTalentNotify{
+		EntityId:     entityId,
+		AvatarGuid:   req.AvatarGuid,
+		TalentId:     req.TalentId,
+		SkillDepotId: avatar.SkillDepotId,
+	}
+	g.SendMsg(cmd.AvatarUnlockTalentNotify, player.PlayerId, player.ClientSeq, ntf)
+
+	rsp := &proto.UnlockAvatarTalentRsp{
+		TalentId:   req.TalentId,
+		AvatarGuid: req.AvatarGuid,
+	}
+	g.SendMsg(cmd.UnlockAvatarTalentRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 /************************************************** 游戏功能 **************************************************/
@@ -509,10 +619,12 @@ func (g *Game) UpdatePlayerAvatarFightProp(userId uint32, avatarId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil || WORLD_MANAGER.IsAiWorld(world) {
 		return
 	}
+
 	dbAvatar := player.GetDbAvatar()
 	avatar := dbAvatar.GetAvatarById(avatarId)
 	if avatar == nil {
@@ -813,6 +925,8 @@ func (g *Game) PacketAvatarInfo(avatar *model.Avatar) *proto.AvatarInfo {
 			RewardedFetterLevelList: []uint32{10},
 		},
 		SkillLevelMap:            avatar.SkillLevelMap,
+		TalentIdList:             avatar.TalentIdList,
+		InherentProudSkillList:   gdconf.GetAvatarInherentProudSkillList(avatar.SkillDepotId, avatar.Promote),
 		AvatarType:               1,
 		WearingFlycloakId:        avatar.FlyCloak,
 		CostumeId:                avatar.Costume,

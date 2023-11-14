@@ -19,4 +19,5 @@ type ChatMsg struct {
 	MsgType  uint8              `bson:"msg_type"`
 	Text     string             `bson:"text"`
 	Icon     uint32             `bson:"icon"`
+	IsDelete bool               `bson:"is_delete"`
 }

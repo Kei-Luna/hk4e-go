@@ -12,12 +12,22 @@ import (
 
 // AvatarSkillDepotData 角色技能库配置表
 type AvatarSkillDepotData struct {
-	AvatarSkillDepotId                int32  `csv:"ID"`
-	EnergySkill                       int32  `csv:"充能技能,omitempty"`
-	Skill1                            int32  `csv:"技能1,omitempty"`
-	Skill2                            int32  `csv:"技能2,omitempty"`
-	Skill3                            int32  `csv:"技能3,omitempty"`
-	Skill4                            int32  `csv:"技能4,omitempty"`
+	AvatarSkillDepotId int32 `csv:"ID"`
+	// 元素爆发
+	EnergySkill int32 `csv:"充能技能,omitempty"`
+	// 其他战斗天赋
+	Skill1 int32 `csv:"技能1,omitempty"`
+	Skill2 int32 `csv:"技能2,omitempty"`
+	Skill3 int32 `csv:"技能3,omitempty"`
+	Skill4 int32 `csv:"技能4,omitempty"`
+	// 命座
+	Talent1 int32 `csv:"天赋1,omitempty"`
+	Talent2 int32 `csv:"天赋2,omitempty"`
+	Talent3 int32 `csv:"天赋3,omitempty"`
+	Talent4 int32 `csv:"天赋4,omitempty"`
+	Talent5 int32 `csv:"天赋5,omitempty"`
+	Talent6 int32 `csv:"天赋6,omitempty"`
+	// 固有天赋
 	ProudSkill1GroupId                int32  `csv:"固有得意技组1ID,omitempty"`
 	ProudSkill1NeedAvatarPromoteLevel int32  `csv:"固有得意技组1激活所需角色突破等级,omitempty"`
 	ProudSkill2GroupId                int32  `csv:"固有得意技组2ID,omitempty"`
@@ -30,8 +40,9 @@ type AvatarSkillDepotData struct {
 	ProudSkill5NeedAvatarPromoteLevel int32  `csv:"固有得意技组5激活所需角色突破等级,omitempty"`
 	SkillDepotAbilityGroup            string `csv:"AbilityGroup,omitempty"`
 
-	Skills                  []int32
-	InherentProudSkillOpens []*InherentProudSkillOpens
+	Skills                  []int32                    // 其他战斗天赋
+	Talents                 []int32                    // 命座
+	InherentProudSkillOpens []*InherentProudSkillOpens // 固有天赋
 	AbilityHashCodeList     []int32
 }
 
@@ -72,6 +83,25 @@ func (g *GameDataConfig) loadAvatarSkillDepotData() {
 		}
 		if avatarSkillDepotData.Skill4 != 0 {
 			avatarSkillDepotData.Skills = append(avatarSkillDepotData.Skills, avatarSkillDepotData.Skill4)
+		}
+		avatarSkillDepotData.Talents = make([]int32, 0)
+		if avatarSkillDepotData.Talent1 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent1)
+		}
+		if avatarSkillDepotData.Talent2 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent2)
+		}
+		if avatarSkillDepotData.Talent3 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent3)
+		}
+		if avatarSkillDepotData.Talent4 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent4)
+		}
+		if avatarSkillDepotData.Talent5 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent5)
+		}
+		if avatarSkillDepotData.Talent6 != 0 {
+			avatarSkillDepotData.Talents = append(avatarSkillDepotData.Talents, avatarSkillDepotData.Talent6)
 		}
 		avatarSkillDepotData.InherentProudSkillOpens = make([]*InherentProudSkillOpens, 0)
 		if avatarSkillDepotData.ProudSkill1GroupId != 0 {
@@ -138,4 +168,21 @@ func GetAvatarEnergySkillConfig(skillDepotId uint32) *AvatarSkillData {
 		return nil
 	}
 	return avatarSkillDataConfig
+}
+
+func GetAvatarInherentProudSkillList(skillDepotId uint32, promote uint8) []uint32 {
+	// 角色技能库配置
+	avatarSkillDepotDataConfig, exist := CONF.AvatarSkillDepotDataMap[int32(skillDepotId)]
+	if !exist {
+		return nil
+	}
+	inherentProudSkillList := make([]uint32, 0)
+	for _, inherentProudSkillOpen := range avatarSkillDepotDataConfig.InherentProudSkillOpens {
+		if inherentProudSkillOpen.NeedAvatarPromoteLevel >= int32(promote) {
+			inherentProudSkill := uint32(0)
+			inherentProudSkill = uint32(inherentProudSkillOpen.ProudSkillGroupId)*100 + 1
+			inherentProudSkillList = append(inherentProudSkillList, inherentProudSkill)
+		}
+	}
+	return inherentProudSkillList
 }

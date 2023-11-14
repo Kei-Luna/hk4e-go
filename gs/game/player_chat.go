@@ -129,7 +129,7 @@ func (g *Game) ReadPrivateChatReq(player *model.Player, payloadMsg pb.Message) {
 	player.ChatMsgMap[targetUid] = msgList
 
 	// 更新db
-	go USER_MANAGER.ReadAndUpdateUserChatMsgToDbSync(player.PlayerId, targetUid)
+	go USER_MANAGER.ReadUserChatMsgToDbSync(player.PlayerId, targetUid)
 
 	g.SendMsg(cmd.ReadPrivateChatRsp, player.PlayerId, player.ClientSeq, new(proto.ReadPrivateChatRsp))
 }
@@ -188,6 +188,7 @@ func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content a
 		ToUid:    targetUid,
 		Uid:      player.PlayerId,
 		IsRead:   false,
+		IsDelete: false,
 	}
 	// 根据传入的值判断消息类型
 	switch content.(type) {
@@ -238,13 +239,14 @@ func (g *Game) SendPrivateChat(player *model.Player, targetUid uint32, content a
 				EventId: mq.ServerChatMsgNotify,
 				ServerMsg: &mq.ServerMsg{
 					ChatMsgInfo: &mq.ChatMsgInfo{
-						Time:    chatMsg.Time,
-						ToUid:   chatMsg.ToUid,
-						Uid:     chatMsg.Uid,
-						IsRead:  chatMsg.IsRead,
-						MsgType: chatMsg.MsgType,
-						Text:    chatMsg.Text,
-						Icon:    chatMsg.Icon,
+						Time:     chatMsg.Time,
+						ToUid:    chatMsg.ToUid,
+						Uid:      chatMsg.Uid,
+						IsRead:   chatMsg.IsRead,
+						MsgType:  chatMsg.MsgType,
+						Text:     chatMsg.Text,
+						Icon:     chatMsg.Icon,
+						IsDelete: chatMsg.IsDelete,
 					},
 				},
 			})
@@ -282,6 +284,7 @@ func (g *Game) ConvChatInfoToChatMsg(chatInfo *proto.ChatInfo) (chatMsg *model.C
 		MsgType:  0,
 		Text:     "",
 		Icon:     0,
+		IsDelete: false,
 	}
 	switch chatInfo.Content.(type) {
 	case *proto.ChatInfo_Text:
@@ -329,13 +332,14 @@ func (g *Game) ServerChatMsgNotify(chatMsgInfo *mq.ChatMsgInfo) {
 		return
 	}
 	chatMsg := &model.ChatMsg{
-		Time:    chatMsgInfo.Time,
-		ToUid:   chatMsgInfo.ToUid,
-		Uid:     chatMsgInfo.Uid,
-		IsRead:  chatMsgInfo.IsRead,
-		MsgType: chatMsgInfo.MsgType,
-		Text:    chatMsgInfo.Text,
-		Icon:    chatMsgInfo.Icon,
+		Time:     chatMsgInfo.Time,
+		ToUid:    chatMsgInfo.ToUid,
+		Uid:      chatMsgInfo.Uid,
+		IsRead:   chatMsgInfo.IsRead,
+		MsgType:  chatMsgInfo.MsgType,
+		Text:     chatMsgInfo.Text,
+		Icon:     chatMsgInfo.Icon,
+		IsDelete: chatMsgInfo.IsDelete,
 	}
 	// 消息加入目标玩家的队列
 	msgList, exist := targetPlayer.ChatMsgMap[chatMsgInfo.Uid]

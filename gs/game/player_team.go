@@ -179,7 +179,13 @@ func (g *Game) ChangeMpTeamAvatarReq(player *model.Player, payloadMsg pb.Message
 		return
 	}
 	scene := world.GetSceneById(player.GetSceneId())
-	if WORLD_MANAGER.IsAiWorld(world) || !world.IsMultiplayerWorld() || len(avatarIdList) == 0 || len(avatarIdList) > 4 {
+
+	if WORLD_MANAGER.IsAiWorld(world) {
+		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
+		return
+	}
+
+	if !world.IsMultiplayerWorld() || len(avatarIdList) == 0 || len(avatarIdList) > 4 {
 		g.SendError(cmd.ChangeMpTeamAvatarRsp, player, &proto.ChangeMpTeamAvatarRsp{})
 		return
 	}

@@ -95,7 +95,6 @@ func (w *DbWeapon) AddWeapon(player *Player, itemId uint32, weaponId uint64) {
 		weapon.AffixIdList = append(weapon.AffixIdList, uint32(skillAffix))
 	}
 	w.InitWeapon(player, weapon)
-	w.WeaponMap[weaponId] = weapon
 }
 
 func (w *DbWeapon) CostWeapon(player *Player, weaponId uint64) uint64 {

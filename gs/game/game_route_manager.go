@@ -133,6 +133,8 @@ func (r *RouteManager) initRoute() {
 		cmd.QuestCreateEntityReq:              GAME.QuestCreateEntityReq,
 		cmd.QuestDestroyEntityReq:             GAME.QuestDestroyEntityReq,
 		cmd.QuestDestroyNpcReq:                GAME.QuestDestroyNpcReq,
+		cmd.AvatarSkillUpgradeReq:             GAME.AvatarSkillUpgradeReq,
+		cmd.UnlockAvatarTalentReq:             GAME.UnlockAvatarTalentReq,
 	}
 }
 

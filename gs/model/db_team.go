@@ -40,10 +40,10 @@ func (p *Player) GetDbTeam() *DbTeam {
 	}
 	if p.DbTeam.TeamList == nil {
 		p.DbTeam.TeamList = []*Team{
-			{Name: "冒险", AvatarIdList: make([]uint32, 4)},
-			{Name: "委托", AvatarIdList: make([]uint32, 4)},
-			{Name: "秘境", AvatarIdList: make([]uint32, 4)},
-			{Name: "联机", AvatarIdList: make([]uint32, 4)},
+			{Name: "", AvatarIdList: make([]uint32, 4)},
+			{Name: "", AvatarIdList: make([]uint32, 4)},
+			{Name: "", AvatarIdList: make([]uint32, 4)},
+			{Name: "", AvatarIdList: make([]uint32, 4)},
 		}
 	}
 	if p.DbTeam.CurrTeamIndex == 0 {

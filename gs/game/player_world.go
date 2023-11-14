@@ -429,7 +429,7 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		logger.Debug("[GadgetInteractReq] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, entity.GetId(), player.PlayerId)
 		switch gadgetDataConfig.Type {
-		case constant.GADGET_TYPE_GADGET:
+		case constant.GADGET_TYPE_GADGET, constant.GADGET_TYPE_EQUIP:
 			// 掉落物捡起
 			interactType = proto.InteractType_INTERACT_PICK_ITEM
 			gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
@@ -471,6 +471,8 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 		default:
 			logger.Error("not support gadget type: %v, uid: %v", gadgetDataConfig.Type, player.PlayerId)
 		}
+	case constant.ENTITY_TYPE_MONSTER:
+		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
 	default:
 		logger.Error("not support entity type: %v, uid: %v", entity.GetEntityType(), player.PlayerId)
 	}
@@ -488,9 +490,14 @@ func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.M
 	req := payloadMsg.(*proto.EnterTransPointRegionNotify)
 	_ = req
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil || WORLD_MANAGER.IsAiWorld(world) {
+	if world == nil {
 		return
 	}
+
+	if WORLD_MANAGER.IsAiWorld(world) {
+		return
+	}
+
 	dbAvatar := player.GetDbAvatar()
 	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
 		avatar := dbAvatar.GetAvatarById(worldAvatar.GetAvatarId())

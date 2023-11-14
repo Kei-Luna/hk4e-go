@@ -205,6 +205,7 @@ func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *Change
 		return
 	}
 	if player.OfflineClear {
+		go u.DeleteUserAllChatMsgToDbSync(player.PlayerId)
 		newPlayer := GAME.CreatePlayer(player.PlayerId)
 		newPlayer.DbState = player.DbState
 		player = newPlayer
@@ -762,10 +763,18 @@ func (u *UserManager) SaveUserChatMsgToDbSync(chatMsg *model.ChatMsg) {
 	}
 }
 
-func (u *UserManager) ReadAndUpdateUserChatMsgToDbSync(uid uint32, targetUid uint32) {
-	err := u.db.ReadAndUpdateChatMsgByUid(uid, targetUid)
+func (u *UserManager) ReadUserChatMsgToDbSync(uid uint32, targetUid uint32) {
+	err := u.db.ReadUpdateChatMsgByUid(uid, targetUid)
 	if err != nil {
 		logger.Error("read chat msg error: %v", err)
+		return
+	}
+}
+
+func (u *UserManager) DeleteUserAllChatMsgToDbSync(uid uint32) {
+	err := u.db.DeleteAllUpdateChatMsgByUid(uid)
+	if err != nil {
+		logger.Error("delete chat msg error: %v", err)
 		return
 	}
 }
