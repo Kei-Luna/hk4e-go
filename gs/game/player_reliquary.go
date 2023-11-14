@@ -8,9 +8,77 @@ import (
 	"hk4e/pkg/random"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
+
+	pb "google.golang.org/protobuf/proto"
 )
 
 /************************************************** 接口请求 **************************************************/
+
+func (g *Game) ReliquaryUpgradeReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.ReliquaryUpgradeReq)
+	reliquary, ok := player.GameObjectGuidMap[req.TargetReliquaryGuid].(*model.Reliquary)
+	if !ok {
+		g.SendError(cmd.ReliquaryUpgradeRsp, player, &proto.ReliquaryUpgradeRsp{})
+		return
+	}
+	if len(req.ItemParamList) != 0 {
+		itemList := make([]*ChangeItem, 0)
+		for _, itemParam := range req.ItemParamList {
+			itemList = append(itemList, &ChangeItem{
+				ItemId:      itemParam.ItemId,
+				ChangeCount: itemParam.Count,
+			})
+		}
+		ok := g.CostPlayerItem(player.PlayerId, itemList)
+		if !ok {
+			g.SendError(cmd.ReliquaryUpgradeRsp, player, &proto.ReliquaryUpgradeRsp{})
+			return
+		}
+	}
+	if len(req.FoodReliquaryGuidList) != 0 {
+		reliquaryIdList := make([]uint64, 0)
+		for _, foodReliquaryGuid := range req.FoodReliquaryGuidList {
+			foodReliquary, ok := player.GameObjectGuidMap[foodReliquaryGuid].(*model.Reliquary)
+			if !ok {
+				g.SendError(cmd.ReliquaryUpgradeRsp, player, &proto.ReliquaryUpgradeRsp{})
+				return
+			}
+			reliquaryIdList = append(reliquaryIdList, foodReliquary.ReliquaryId)
+		}
+		g.CostPlayerReliquary(player.PlayerId, reliquaryIdList)
+	}
+
+	oldLevel := reliquary.Level
+	oldAppendPropList := make([]uint32, 0)
+	for _, appendPropId := range reliquary.AppendPropIdList {
+		oldAppendPropList = append(oldAppendPropList, appendPropId)
+	}
+
+	// TODO 暂时先瞎鸡巴强化
+	reliquary.Level += 1
+	reliquary.Exp += 100
+	if reliquary.Level%5 == 0 {
+		g.AppendReliquaryProp(reliquary, 1)
+	}
+
+	g.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, g.PacketStoreItemChangeNotifyByReliquary(reliquary))
+
+	rsp := &proto.ReliquaryUpgradeRsp{
+		OldLevel:            uint32(oldLevel),
+		CurLevel:            uint32(reliquary.Level),
+		TargetReliquaryGuid: req.TargetReliquaryGuid,
+		CurAppendPropList:   reliquary.AppendPropIdList,
+		PowerUpRate:         5,
+		OldAppendPropList:   oldAppendPropList,
+	}
+	g.SendMsg(cmd.ReliquaryUpgradeRsp, player.PlayerId, player.ClientSeq, rsp)
+}
+
+func (g *Game) ReliquaryPromoteReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.ReliquaryPromoteReq)
+	logger.Debug("ReliquaryPromoteReq: %+v", req)
+	g.SendMsg(cmd.ReliquaryPromoteRsp, player.PlayerId, player.ClientSeq, new(proto.ReliquaryPromoteRsp))
+}
 
 /************************************************** 游戏功能 **************************************************/
 
@@ -176,7 +244,7 @@ func (g *Game) CostPlayerReliquary(userId uint32, reliquaryIdList []uint64) {
 			logger.Error("reliquary cost error, reliquaryId: %v", reliquaryId)
 			return
 		}
-		storeItemDelNotify.GuidList = append(storeItemDelNotify.GuidList, reliquaryId)
+		storeItemDelNotify.GuidList = append(storeItemDelNotify.GuidList, reliquaryGuid)
 	}
 	g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, storeItemDelNotify)
 }

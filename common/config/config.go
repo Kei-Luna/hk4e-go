@@ -39,22 +39,23 @@ type Redis struct {
 
 // Hk4e 原神服务器
 type Hk4e struct {
-	KcpAddr                string `toml:"kcp_addr"`                  // kcp地址 该地址只用来注册到节点服务器 填网关的外网地址 网关本地监听为0.0.0.0
-	KcpPort                int32  `toml:"kcp_port"`                  // kcp端口号
-	TcpModeEnable          bool   `toml:"tcp_mode_enable"`           // 是否开启tcp模式 需要hook客户端网络库才能支持 共用kcp端口号
-	GameDataConfigPath     string `toml:"game_data_config_path"`     // 配置表路径
-	ClientProtoProxyEnable bool   `toml:"client_proto_proxy_enable"` // 是否开启客户端协议代理功能
-	ForwardModeEnable      bool   `toml:"forward_mode_enable"`       // 是否开启网关到机器人的转发功能
-	Version                string `toml:"version"`                   // 支持的客户端协议版本号 三位数字 多个以逗号分隔 如300,310,315,320
-	GateTcpMqAddr          string `toml:"gate_tcp_mq_addr"`          // 访问网关tcp直连消息队列的地址 填网关的内网地址
-	GateTcpMqPort          int32  `toml:"gate_tcp_mq_port"`          // tcp消息队列端口号
-	LoginSdkUrl            string `toml:"login_sdk_url"`             // 网关登录验证token的sdk服务器地址 目前填dispatch的内网地址
-	LoginSdkAccountKey     string `toml:"login_sdk_account_key"`     // sdk服务器账号验证的签名密钥
-	LoadSceneLuaConfig     bool   `toml:"load_scene_lua_config"`     // 是否加载场景详情LUA配置数据
-	DispatchUrl            string `toml:"dispatch_url"`              // 二级dispatch地址 将域名改为dispatch的外网地址
-	ForwardRegionUrl       string `toml:"forward_region_url"`        // 转发的一级dispatch地址
-	ForwardDispatchUrl     string `toml:"forward_dispatch_url"`      // 转发的二级dispatch地址
-	GmAuthKey              string `toml:"gm_auth_key"`               // gm认证密钥
+	KcpAddr                 string `toml:"kcp_addr"`                   // kcp地址 该地址只用来注册到节点服务器 填网关的外网地址 网关本地监听为0.0.0.0
+	KcpPort                 int32  `toml:"kcp_port"`                   // kcp端口号
+	TcpModeEnable           bool   `toml:"tcp_mode_enable"`            // 是否开启tcp模式 需要hook客户端网络库才能支持 共用kcp端口号
+	GameDataConfigPath      string `toml:"game_data_config_path"`      // 配置表路径
+	ClientProtoProxyEnable  bool   `toml:"client_proto_proxy_enable"`  // 是否开启客户端协议代理功能
+	ForwardModeEnable       bool   `toml:"forward_mode_enable"`        // 是否开启网关到机器人的转发功能
+	Version                 string `toml:"version"`                    // 支持的客户端协议版本号 三位数字 多个以逗号分隔 如300,310,315,320
+	GateTcpMqAddr           string `toml:"gate_tcp_mq_addr"`           // 访问网关tcp直连消息队列的地址 填网关的内网地址
+	GateTcpMqPort           int32  `toml:"gate_tcp_mq_port"`           // tcp消息队列端口号
+	LoginSdkUrl             string `toml:"login_sdk_url"`              // 网关登录验证token的sdk服务器地址 目前填dispatch的内网地址
+	LoginSdkAccountKey      string `toml:"login_sdk_account_key"`      // sdk服务器账号验证的签名密钥
+	LoadSceneLuaConfig      bool   `toml:"load_scene_lua_config"`      // 是否加载场景详情LUA配置数据
+	DispatchUrl             string `toml:"dispatch_url"`               // 二级dispatch地址 将域名改为dispatch的外网地址
+	ForwardRegionUrl        string `toml:"forward_region_url"`         // 转发的一级dispatch地址
+	ForwardDispatchUrl      string `toml:"forward_dispatch_url"`       // 转发的二级dispatch地址
+	GmAuthKey               string `toml:"gm_auth_key"`                // gm认证密钥
+	RegisterAllProtoMessage bool   `toml:"register_all_proto_message"` // 注册全部pb消息
 }
 
 // Hk4eRobot 原神机器人
@@ -78,7 +79,6 @@ type Hk4eRobot struct {
 	ClientMoveRangeExt           int32  `toml:"client_move_range_ext"`           // 客户端模拟移动区域半径
 	ForwardChecksum              string `toml:"forward_checksum"`                // 转发模式强制指定校验和
 	ForwardChecksumClientVersion string `toml:"forward_checksum_client_version"` // 转发模式强制指定校验和客户端版本
-	RegisterAllProtoMessage      bool   `toml:"register_all_proto_message"`      // 注册全部pb消息
 }
 
 // MQ 消息队列

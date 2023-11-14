@@ -14,14 +14,15 @@ import (
 
 // Scene 场景数据结构
 type Scene struct {
-	id         uint32
-	world      *World
-	playerMap  map[uint32]*model.Player
-	entityMap  map[uint32]*Entity // 场景中全部的实体
-	groupMap   map[uint32]*Group  // 场景中按group->suite分类的实体
-	gameTime   uint32             // 游戏内提瓦特大陆的时间
-	createTime int64              // 场景创建时间
-	meeoIndex  uint32             // 客户端风元素染色同步协议的计数器
+	id          uint32
+	world       *World
+	playerMap   map[uint32]*model.Player
+	entityMap   map[uint32]*Entity // 场景中全部的实体
+	groupMap    map[uint32]*Group  // 场景中按group->suite分类的实体
+	gameTime    uint32             // 游戏内提瓦特大陆的时间
+	createTime  int64              // 场景创建时间
+	meeoIndex   uint32             // 客户端风元素染色同步协议的计数器
+	monsterWudi bool               // 是否开启场景内怪物无敌
 }
 
 func (s *Scene) GetId() uint32 {
@@ -58,6 +59,14 @@ func (s *Scene) GetMeeoIndex() uint32 {
 
 func (s *Scene) SetMeeoIndex(meeoIndex uint32) {
 	s.meeoIndex = meeoIndex
+}
+
+func (s *Scene) GetMonsterWudi() bool {
+	return s.monsterWudi
+}
+
+func (s *Scene) SetMonsterWudi(monsterWudi bool) {
+	s.monsterWudi = monsterWudi
 }
 
 func (s *Scene) ChangeGameTime(time uint32) {

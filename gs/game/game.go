@@ -285,11 +285,11 @@ func (g *Game) EndlessLoopCheck(checkType int) {
 			EndlessLoopHandleFunc()
 		}
 	case EndlessLoopCheckTypeTriggerQuest:
-		if checkCount > 100 {
+		if checkCount > 10000 {
 			EndlessLoopHandleFunc()
 		}
 	case EndlessLoopCheckTypeUseItem:
-		if checkCount > 100 {
+		if checkCount > 1000 {
 			EndlessLoopHandleFunc()
 		}
 	case EndlessLoopCheckTypeCallLuaFunc:

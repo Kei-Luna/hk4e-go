@@ -30,7 +30,7 @@ func NewCmdProtoMap() (r *CmdProtoMap) {
 	r.cmdNameCmdIdMap = make(map[string]uint16)
 	r.cmdIdProtoObjCacheMap = make(map[uint16]*sync.Pool)
 	r.cmdIdProtoObjFastNewMap = make(map[uint16]func() any)
-	if config.GetConfig().Hk4e.ForwardModeEnable || config.GetConfig().Hk4eRobot.RegisterAllProtoMessage {
+	if config.GetConfig().Hk4e.ForwardModeEnable || config.GetConfig().Hk4e.RegisterAllProtoMessage {
 		r.registerAllMessage()
 	} else {
 		r.registerMessage()
@@ -350,6 +350,10 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(SetEquipLockStateRsp, func() any { return new(proto.SetEquipLockStateRsp) })                       // 设置装备上锁状态响应
 	c.regMsg(TakeoffEquipReq, func() any { return new(proto.TakeoffEquipReq) })                                 // 装备卸下请求
 	c.regMsg(TakeoffEquipRsp, func() any { return new(proto.TakeoffEquipRsp) })                                 // 装备卸下响应
+	c.regMsg(ReliquaryUpgradeReq, func() any { return new(proto.ReliquaryUpgradeReq) })                         // 圣遗物升级请求
+	c.regMsg(ReliquaryUpgradeRsp, func() any { return new(proto.ReliquaryUpgradeRsp) })                         // 圣遗物升级响应
+	c.regMsg(ReliquaryPromoteReq, func() any { return new(proto.ReliquaryPromoteReq) })                         // 圣遗物突破请求
+	c.regMsg(ReliquaryPromoteRsp, func() any { return new(proto.ReliquaryPromoteRsp) })                         // 圣遗物突破响应
 
 	// 商店
 	c.regMsg(GetShopmallDataReq, func() any { return new(proto.GetShopmallDataReq) })       // 商店信息请求

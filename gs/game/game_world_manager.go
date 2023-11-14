@@ -65,6 +65,7 @@ func (w *WorldManager) CreateWorld(owner *model.Player) *World {
 		multiplayerTeam:      CreateMultiplayerTeam(),
 		peerList:             make([]*model.Player, 0),
 		aiWorldAoi:           nil,
+		bulletPhysicsEngine:  nil,
 	}
 	world.mpLevelEntityId = world.GetNextWorldEntityId(constant.ENTITY_TYPE_MP_LEVEL)
 	w.worldMap[worldId] = world

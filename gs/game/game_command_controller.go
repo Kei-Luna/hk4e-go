@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"hk4e/common/constant"
 	"hk4e/gdconf"
 	"hk4e/pkg/logger"
 )
@@ -31,7 +32,6 @@ func (c *CommandManager) InitController() {
 		c.NewEquipCommandController(),
 		c.NewItemCommandController(),
 		c.NewAvatarCommandController(),
-		c.NewGiveCommandController(),
 		c.NewKillCommandController(),
 		c.NewMonsterCommandController(),
 		c.NewGadgetCommandController(),
@@ -265,11 +265,11 @@ func (c *CommandManager) JumpCommand(content *CommandContent) bool {
 
 func (c *CommandManager) NewEquipCommandController() *CommandController {
 	return &CommandController{
-		Name:        "武器",
-		AliasList:   []string{"equip", "weapon"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>武器</color>",
+		Name:        "装备",
+		AliasList:   []string{"equip"},
+		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>装备</color>",
 		UsageList: []string{
-			"{alias} add <武器ID/all> [武器等级] [突破等级] 添加武器",
+			"{alias} add <武器ID/圣遗物ID/all> [等级] [突破] [精炼] 添加武器/圣遗物",
 		},
 		Perm: CommandPermNormal,
 		Func: c.EquipCommand,
@@ -277,10 +277,11 @@ func (c *CommandManager) NewEquipCommandController() *CommandController {
 }
 
 func (c *CommandManager) EquipCommand(content *CommandContent) bool {
-	var mode string     // 模式
-	var param1 string   // 参数1
-	var level uint8 = 1 // 武器等级
-	var promote uint8   // 突破等级
+	var mode string      // 模式
+	var param1 string    // 参数1
+	var level uint8 = 1  // 等级
+	var promote uint8    // 突破
+	var refinement uint8 // 精炼
 
 	return content.Dynamic("string", func(param any) bool {
 		// 模式
@@ -291,30 +292,44 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 		param1 = param.(string)
 		return true
 	}).Option("uint8", func(param any) bool {
-		// 武器等级
+		// 等级
 		level = param.(uint8)
 		return true
 	}).Option("uint8", func(param any) bool {
-		// 突破等级
+		// 突破
 		promote = param.(uint8)
+		return true
+	}).Option("uint8", func(param any) bool {
+		// 精炼
+		refinement = param.(uint8)
 		return true
 	}).Execute(func() bool {
 		switch mode {
 		case "add":
-			// 添加武器
-			// 判断是否要添加全部武器
 			if param1 == "all" {
-				c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, 1, level, promote, 0)
-				content.SendSuccMessage(content.Executor, "已给予所有武器，指定UID：%v，武器等级：%v，突破等级：%v。", content.AssignPlayer.PlayerId, level, promote)
+				c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, 1, level, promote, refinement)
+				c.gmCmd.GMAddAllReliquary(content.AssignPlayer.PlayerId, 1)
+				content.SendSuccMessage(content.Executor, "已添加所有武器圣遗物，指定UID：%v，等级：%v，突破：%v，精炼：%v。", content.AssignPlayer.PlayerId, level, promote, refinement)
 				return true
 			}
-			// 物品id
 			itemId, err := strconv.ParseUint(param1, 10, 32)
 			if err != nil {
 				return false
 			}
-			c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, level, promote, 0)
-			content.SendSuccMessage(content.Executor, "已给予武器，指定UID：%v，武器ID：%v，武器等级：%v，突破等级：%v。", content.AssignPlayer.PlayerId, itemId, level, promote)
+			itemDataConfig := gdconf.GetItemDataById(int32(itemId))
+			if itemDataConfig == nil {
+				return false
+			}
+			switch itemDataConfig.Type {
+			case constant.ITEM_TYPE_WEAPON:
+				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, level, promote, refinement)
+				content.SendSuccMessage(content.Executor, "已添加武器，指定UID：%v，武器ID：%v，等级：%v，突破：%v，精炼：%v。", content.AssignPlayer.PlayerId, itemId, level, promote, refinement)
+			case constant.ITEM_TYPE_RELIQUARY:
+				c.gmCmd.GMAddReliquary(content.AssignPlayer.PlayerId, uint32(itemId), 1)
+				content.SendSuccMessage(content.Executor, "已添加圣遗物，指定UID：%v，圣遗物ID：%v。", content.AssignPlayer.PlayerId, itemId)
+			default:
+				return false
+			}
 		default:
 			return false
 		}
@@ -322,7 +337,7 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 	})
 }
 
-// 管理物品命令
+// 管理道具命令
 
 func (c *CommandManager) NewItemCommandController() *CommandController {
 	return &CommandController{
@@ -331,7 +346,7 @@ func (c *CommandManager) NewItemCommandController() *CommandController {
 		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>道具</color>",
 		UsageList: []string{
 			"{alias} add <道具ID/all> [数量] 添加道具",
-			"{alias} clear 清除全部道具",
+			"{alias} clear <道具ID/all> [数量] 清除道具",
 		},
 		Perm: CommandPermNormal,
 		Func: c.ItemCommand,
@@ -358,23 +373,41 @@ func (c *CommandManager) ItemCommand(content *CommandContent) bool {
 	}).Execute(func() bool {
 		switch mode {
 		case "add":
-			// 添加物品
-			// 判断是否要添加全部物品
 			if param1 == "all" {
-				c.gmCmd.GMAddAllItem(content.AssignPlayer.PlayerId, count)
-				content.SendSuccMessage(content.Executor, "已给予所有物品，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
+				c.gmCmd.GMAddAllItem(content.AssignPlayer.PlayerId)
+				content.SendSuccMessage(content.Executor, "已添加所有道具，指定UID：%v。", content.AssignPlayer.PlayerId)
 				return true
 			}
-			// 物品id
 			itemId, err := strconv.ParseUint(param1, 10, 32)
 			if err != nil {
 				return false
 			}
+			itemDataConfig := gdconf.GetItemDataById(int32(itemId))
+			if itemDataConfig == nil {
+				return false
+			}
+			if itemDataConfig.Type == constant.ITEM_TYPE_WEAPON {
+				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, 1, 0, 0)
+				return true
+			}
+			if itemDataConfig.Type == constant.ITEM_TYPE_RELIQUARY {
+				c.gmCmd.GMAddReliquary(content.AssignPlayer.PlayerId, uint32(itemId), 1)
+				return true
+			}
 			c.gmCmd.GMAddItem(content.AssignPlayer.PlayerId, uint32(itemId), count)
-			content.SendSuccMessage(content.Executor, "已给予物品，指定UID：%v，物品ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
+			content.SendSuccMessage(content.Executor, "已添加道具，指定UID：%v，道具ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
 		case "clear":
-			c.gmCmd.GMClearItem(content.AssignPlayer.PlayerId)
-			content.SendSuccMessage(content.Executor, "已清除全部物品，指定UID：%v。", content.AssignPlayer.PlayerId)
+			if param1 == "all" {
+				c.gmCmd.GMClearItem(content.AssignPlayer.PlayerId)
+				content.SendSuccMessage(content.Executor, "已清除全部道具，指定UID：%v。", content.AssignPlayer.PlayerId)
+				return true
+			}
+			itemId, err := strconv.ParseUint(param1, 10, 32)
+			if err != nil {
+				return false
+			}
+			c.gmCmd.GMCostItem(content.AssignPlayer.PlayerId, uint32(itemId), count)
+			content.SendSuccMessage(content.Executor, "已清除道具，指定UID：%v，道具ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
 		default:
 			return false
 		}
@@ -416,7 +449,7 @@ func (c *CommandManager) AvatarCommand(content *CommandContent) bool {
 			// 判断是否要添加全部角色
 			if param1 == "all" {
 				c.gmCmd.GMAddAllAvatar(content.AssignPlayer.PlayerId, 1, 0)
-				content.SendSuccMessage(content.Executor, "已给予所有角色，指定UID：%v。", content.AssignPlayer.PlayerId)
+				content.SendSuccMessage(content.Executor, "已添加所有角色，指定UID：%v。", content.AssignPlayer.PlayerId)
 				return true
 			}
 			// 角色id
@@ -425,141 +458,7 @@ func (c *CommandManager) AvatarCommand(content *CommandContent) bool {
 				return false
 			}
 			c.gmCmd.GMAddAvatar(content.AssignPlayer.PlayerId, uint32(avatarId), 1, 0)
-			content.SendSuccMessage(content.Executor, "已给予角色，指定UID：%v，角色ID：%v。", content.AssignPlayer.PlayerId, avatarId)
-		default:
-			return false
-		}
-		return true
-	})
-}
-
-// 给予命令
-
-func (c *CommandManager) NewGiveCommandController() *CommandController {
-	return &CommandController{
-		Name:        "物品",
-		AliasList:   []string{"give"},
-		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>物品</color>",
-		UsageList: []string{
-			"模式：ID / item (所有物品) / weapon (所有武器) / reliquary (所有圣遗物) / avatar (所有角色) / costume (所有时装) / flycloak (所有风之翼) / all (全部)\n不要加上括号内的中文！！",
-			"{alias} <模式> [数量] 给予指定物品",
-			"数量仅物品、武器、圣遗物可用",
-		},
-		Perm: CommandPermNormal,
-		Func: c.GiveCommand,
-	}
-}
-
-func (c *CommandManager) GiveCommand(content *CommandContent) bool {
-	// 给予物品
-	var mode string      // 给予的模式
-	var itemId uint32    // 物品id
-	var count uint32 = 1 // 数量
-
-	return content.Dynamic("string", func(param any) bool {
-		value := param.(string)
-		// 给予的物品
-		switch value {
-		case "item", "weapon", "reliquary", "avatar", "costume", "flycloak", "all":
-			// 所有武器 所有圣遗物 所有角色 所有时装 所有风之翼 一切
-			mode = value
-		default:
-			id, err := strconv.ParseUint(value, 10, 32)
-			if err != nil {
-				return false
-			}
-			mode = "id"
-			itemId = uint32(id)
-		}
-		return true
-	}).Option("uint32", func(param any) bool {
-		value := param.(uint32)
-		// 参数1
-		count = value
-		return true
-	}).Execute(func() bool {
-		switch mode {
-		case "id":
-			// 判断是否为物品
-			_, ok := GAME.GetAllItemDataConfig()[int32(itemId)]
-			if ok {
-				// 给予玩家物品
-				c.gmCmd.GMAddItem(content.AssignPlayer.PlayerId, itemId, count)
-				content.SendSuccMessage(content.Executor, "已给予物品，指定UID：%v，ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
-				return true
-			}
-			// 判断是否为武器
-			_, ok = GAME.GetAllWeaponDataConfig()[int32(itemId)]
-			if ok {
-				// 给予玩家武器
-				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, itemId, count, 1, 0, 0)
-				content.SendSuccMessage(content.Executor, "已给予武器，指定UID：%v，ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
-				return true
-			}
-			// 判断是否为圣遗物
-			_, ok = GAME.GetAllReliquaryDataConfig()[int32(itemId)]
-			if ok {
-				// 给予玩家圣遗物
-				c.gmCmd.GMAddReliquary(content.AssignPlayer.PlayerId, itemId, count)
-				content.SendSuccMessage(content.Executor, "已给予圣遗物，指定UID：%v，ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
-				return true
-			}
-			// 判断是否为角色
-			_, ok = GAME.GetAllAvatarDataConfig()[int32(itemId)]
-			if ok {
-				// 给予玩家角色
-				c.gmCmd.GMAddAvatar(content.AssignPlayer.PlayerId, itemId, 1, 0)
-				content.SendSuccMessage(content.Executor, "已给予角色，指定UID：%v，ID：%v。", content.AssignPlayer.PlayerId, itemId)
-				return true
-			}
-			// 判断是否为时装
-			if gdconf.GetAvatarCostumeDataById(int32(itemId)) != nil {
-				// 给予玩家时装
-				c.gmCmd.GMAddCostume(content.AssignPlayer.PlayerId, itemId)
-				content.SendSuccMessage(content.Executor, "已给予时装，指定UID：%v，ID：%v。", content.AssignPlayer.PlayerId, itemId)
-				return true
-			}
-			// 判断是否为风之翼
-			if gdconf.GetAvatarFlycloakDataById(int32(itemId)) != nil {
-				// 给予玩家风之翼
-				c.gmCmd.GMAddFlycloak(content.AssignPlayer.PlayerId, itemId)
-				content.SendSuccMessage(content.Executor, "已给予风之翼，指定UID：%v，ID：%v。", content.AssignPlayer.PlayerId, itemId)
-				return true
-			}
-			// 都执行到这里那肯定是都不匹配
-			content.SetElse(func() {
-				// 物品id不存在
-				content.SendFailMessage(content.Executor, "不存在的物品，ID：%v。", itemId)
-			})
-			return false
-		case "item":
-			// 给予玩家所有物品
-			c.gmCmd.GMAddAllItem(content.AssignPlayer.PlayerId, count)
-			content.SendSuccMessage(content.Executor, "已给予所有物品，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
-		case "weapon":
-			// 给予玩家所有武器
-			c.gmCmd.GMAddAllWeapon(content.AssignPlayer.PlayerId, count, 1, 0, 0)
-			content.SendSuccMessage(content.Executor, "已给予所有武器，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
-		case "reliquary":
-			// 给予玩家所有圣遗物
-			c.gmCmd.GMAddAllReliquary(content.AssignPlayer.PlayerId, count)
-			content.SendSuccMessage(content.Executor, "已给予所有圣遗物，指定UID：%v，数量：%v。", content.AssignPlayer.PlayerId, count)
-		case "avatar":
-			// 给予玩家所有角色
-			c.gmCmd.GMAddAllAvatar(content.AssignPlayer.PlayerId, 1, 0)
-			content.SendSuccMessage(content.Executor, "已给予所有角色，指定UID：%v。", content.AssignPlayer.PlayerId)
-		case "costume":
-			// 给予玩家所有时装
-			c.gmCmd.GMAddAllCostume(content.AssignPlayer.PlayerId)
-			content.SendSuccMessage(content.Executor, "已给予所有时装，指定UID：%v。", content.AssignPlayer.PlayerId)
-		case "flycloak":
-			// 给予玩家所有风之翼
-			c.gmCmd.GMAddAllFlycloak(content.AssignPlayer.PlayerId)
-			content.SendSuccMessage(content.Executor, "已给予所有风之翼，指定UID：%v。", content.AssignPlayer.PlayerId)
-		case "all":
-			// 给予玩家所有内容
-			c.gmCmd.GMAddAll(content.AssignPlayer.PlayerId)
-			content.SendSuccMessage(content.Executor, "已给予所有内容，指定UID：%v。", content.AssignPlayer.PlayerId)
+			content.SendSuccMessage(content.Executor, "已添加角色，指定UID：%v，角色ID：%v。", content.AssignPlayer.PlayerId, avatarId)
 		default:
 			return false
 		}
@@ -964,6 +863,7 @@ func (c *CommandManager) NewWudiCommandController() *CommandController {
 		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>无敌</color>",
 		UsageList: []string{
 			"{alias} global avatar <on/off> 开关玩家无敌",
+			"{alias} global monster <on/off> 开关怪物无敌",
 		},
 		Perm: CommandPermNormal,
 		Func: c.WudiCommand,
@@ -1000,6 +900,19 @@ func (c *CommandManager) WudiCommand(content *CommandContent) bool {
 				case "off":
 					c.gmCmd.GMSetPlayerWuDi(content.AssignPlayer.PlayerId, false)
 					content.SendSuccMessage(content.Executor, "已关闭玩家无敌，指定UID：%v。", content.AssignPlayer.PlayerId)
+					return true
+				default:
+					return false
+				}
+			case "monster":
+				switch param1 {
+				case "on":
+					c.gmCmd.GMSetMonsterWudi(content.AssignPlayer.PlayerId, true)
+					content.SendSuccMessage(content.Executor, "已开启怪物无敌，指定UID：%v。", content.AssignPlayer.PlayerId)
+					return true
+				case "off":
+					c.gmCmd.GMSetMonsterWudi(content.AssignPlayer.PlayerId, false)
+					content.SendSuccMessage(content.Executor, "已关闭怪物无敌，指定UID：%v。", content.AssignPlayer.PlayerId)
 					return true
 				default:
 					return false

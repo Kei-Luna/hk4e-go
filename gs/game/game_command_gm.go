@@ -40,21 +40,21 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId uint32, posX, posY, posZ float6
 	)
 }
 
-// GMAddItem 给予玩家物品
+// GMAddItem 添加玩家道具
 func (g *GMCmd) GMAddItem(userId, itemId, itemCount uint32) {
-	GAME.AddPlayerItem(userId, []*ChangeItem{
-		{
-			ItemId:      itemId,
-			ChangeCount: itemCount,
-		},
-	}, true, 0)
+	GAME.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId, ChangeCount: itemCount}}, true, 0)
 }
 
-// GMAddWeapon 给予玩家武器
+// GMCostItem 消耗玩家道具
+func (g *GMCmd) GMCostItem(userId, itemId, itemCount uint32) {
+	GAME.CostPlayerItem(userId, []*ChangeItem{{ItemId: itemId, ChangeCount: itemCount}})
+}
+
+// GMAddWeapon 添加玩家武器
 func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, promote, refinement uint8) {
 	// 武器数量
 	for i := uint32(0); i < itemCount; i++ {
-		// 给予武器
+		// 添加武器
 		weaponId := GAME.AddPlayerWeapon(userId, itemId)
 		// 获取玩家
 		player := USER_MANAGER.GetOnlineUser(userId)
@@ -75,21 +75,21 @@ func (g *GMCmd) GMAddWeapon(userId, itemId, itemCount uint32, level, promote, re
 		weapon.Exp = 0
 		// 设置武器精炼
 		weapon.Refinement = refinement
-		// 更新武器的物品数据
+		// 道具背包更新
 		GAME.SendMsg(cmd.StoreItemChangeNotify, player.PlayerId, player.ClientSeq, GAME.PacketStoreItemChangeNotifyByWeapon(weapon))
 	}
 }
 
-// GMAddReliquary 给予玩家圣遗物
+// GMAddReliquary 添加玩家圣遗物
 func (g *GMCmd) GMAddReliquary(userId, itemId, itemCount uint32) {
 	// 圣遗物数量
 	for i := uint32(0); i < itemCount; i++ {
-		// 给予圣遗物
+		// 添加圣遗物
 		GAME.AddPlayerReliquary(userId, itemId)
 	}
 }
 
-// GMAddAvatar 给予玩家角色
+// GMAddAvatar 添加玩家角色
 func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level, promote uint8) {
 	// 添加角色
 	GAME.AddPlayerAvatar(userId, avatarId)
@@ -115,39 +115,39 @@ func (g *GMCmd) GMAddAvatar(userId, avatarId uint32, level, promote uint8) {
 	GAME.SendMsg(cmd.AvatarPropNotify, player.PlayerId, player.ClientSeq, GAME.PacketAvatarPropNotify(avatar))
 }
 
-// GMAddCostume 给予玩家时装
+// GMAddCostume 添加玩家时装
 func (g *GMCmd) GMAddCostume(userId, costumeId uint32) {
 	// 添加时装
 	GAME.AddPlayerCostume(userId, costumeId)
 }
 
-// GMAddFlycloak 给予玩家风之翼
+// GMAddFlycloak 添加玩家风之翼
 func (g *GMCmd) GMAddFlycloak(userId, flycloakId uint32) {
 	// 添加风之翼
 	GAME.AddPlayerFlycloak(userId, flycloakId)
 }
 
-// GMAddAllItem 给予玩家所有物品
-func (g *GMCmd) GMAddAllItem(userId, itemCount uint32) {
+// GMAddAllItem 添加玩家所有道具
+func (g *GMCmd) GMAddAllItem(userId uint32) {
 	GAME.LogoutPlayer(userId)
 	itemList := make([]*ChangeItem, 0)
 	for itemId := range GAME.GetAllItemDataConfig() {
 		itemList = append(itemList, &ChangeItem{
 			ItemId:      uint32(itemId),
-			ChangeCount: itemCount,
+			ChangeCount: 1,
 		})
 	}
 	GAME.AddPlayerItem(userId, itemList, false, 0)
 }
 
-// GMAddAllWeapon 给予玩家所有武器
+// GMAddAllWeapon 添加玩家所有武器
 func (g *GMCmd) GMAddAllWeapon(userId, itemCount uint32, level, promote, refinement uint8) {
 	for itemId := range GAME.GetAllWeaponDataConfig() {
 		g.GMAddWeapon(userId, uint32(itemId), itemCount, level, promote, refinement)
 	}
 }
 
-// GMAddAllReliquary 给予玩家所有圣遗物
+// GMAddAllReliquary 添加玩家所有圣遗物
 func (g *GMCmd) GMAddAllReliquary(userId, itemCount uint32) {
 	GAME.LogoutPlayer(userId)
 	for itemId := range GAME.GetAllReliquaryDataConfig() {
@@ -155,41 +155,41 @@ func (g *GMCmd) GMAddAllReliquary(userId, itemCount uint32) {
 	}
 }
 
-// GMAddAllAvatar 给予玩家所有角色
+// GMAddAllAvatar 添加玩家所有角色
 func (g *GMCmd) GMAddAllAvatar(userId uint32, level, promote uint8) {
 	for avatarId := range GAME.GetAllAvatarDataConfig() {
 		g.GMAddAvatar(userId, uint32(avatarId), level, promote)
 	}
 }
 
-// GMAddAllCostume 给予玩家所有时装
+// GMAddAllCostume 添加玩家所有时装
 func (g *GMCmd) GMAddAllCostume(userId uint32) {
 	for costumeId := range gdconf.GetAvatarCostumeDataMap() {
 		g.GMAddCostume(userId, uint32(costumeId))
 	}
 }
 
-// GMAddAllFlycloak 给予玩家所有风之翼
+// GMAddAllFlycloak 添加玩家所有风之翼
 func (g *GMCmd) GMAddAllFlycloak(userId uint32) {
 	for flycloakId := range gdconf.GetAvatarFlycloakDataMap() {
 		g.GMAddFlycloak(userId, uint32(flycloakId))
 	}
 }
 
-// GMAddAll 给予玩家所有内容
+// GMAddAll 添加玩家所有内容
 func (g *GMCmd) GMAddAll(userId uint32) {
 	GAME.LogoutPlayer(userId)
-	// 给予玩家所有物品
-	g.GMAddAllItem(userId, 9999)
-	// 给予玩家所有武器
+	// 添加玩家所有道具
+	g.GMAddAllItem(userId)
+	// 添加玩家所有武器
 	g.GMAddAllWeapon(userId, 1, 90, 6, 4)
-	// 给予玩家所有圣遗物
+	// 添加玩家所有圣遗物
 	g.GMAddAllReliquary(userId, 5)
-	// 给予玩家所有角色
+	// 添加玩家所有角色
 	g.GMAddAllAvatar(userId, 90, 6)
-	// 给予玩家所有时装
+	// 添加玩家所有时装
 	g.GMAddAllCostume(userId)
-	// 给予玩家所有风之翼
+	// 添加玩家所有风之翼
 	g.GMAddAllFlycloak(userId)
 }
 
@@ -536,6 +536,21 @@ func (g *GMCmd) GMSetPlayerWuDi(userId uint32, open bool) {
 		return
 	}
 	player.WuDi = open
+}
+
+// GMSetMonsterWudi 开启关闭场景内怪物无敌
+func (g *GMCmd) GMSetMonsterWudi(userId uint32, open bool) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.GetSceneId())
+	scene.SetMonsterWudi(open)
 }
 
 // GMSetPlayerEnergyInf 开启关闭玩家角色无限能量

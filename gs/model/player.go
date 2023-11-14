@@ -36,9 +36,9 @@ type Player struct {
 	TotalOnlineTime uint32             // 累计在线时长
 	PropMap         map[uint32]uint32  // 玩家属性表
 	OpenStateMap    map[uint32]uint32  // 功能开放状态
-	SceneId         uint32             // 场景
-	Pos             *Vector            // 坐标
-	Rot             *Vector            // 朝向
+	SceneId         uint32             // 存档场景
+	Pos             *Vector            // 存档坐标 非实时
+	Rot             *Vector            // 存档朝向 非实时
 	CmdPerm         uint8              // 玩家命令权限等级
 	DbSocial        *DbSocial          // 社交
 	DbItem          *DbItem            // 道具
@@ -93,6 +93,8 @@ type Player struct {
 	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 在线同步到redis 不保存到db
 }
 
+// 存档场景
+
 func (p *Player) GetSceneId() uint32 {
 	if p.IsInMp {
 		return p.MpSceneId
@@ -108,6 +110,8 @@ func (p *Player) SetSceneId(sceneId uint32) {
 		p.SceneId = sceneId
 	}
 }
+
+// 存档坐标
 
 func (p *Player) GetPos() *Vector {
 	if p.IsInMp {
@@ -128,6 +132,8 @@ func (p *Player) SetPos(pos *Vector) {
 		p.Pos.Z = pos.Z
 	}
 }
+
+// 存档朝向
 
 func (p *Player) GetRot() *Vector {
 	if p.IsInMp {

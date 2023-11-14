@@ -531,7 +531,6 @@ func (g *Game) AddPlayerFlycloak(userId uint32, flyCloakId uint32) {
 	dbAvatar := player.GetDbAvatar()
 	for _, flycloak := range dbAvatar.FlyCloakList {
 		if flycloak == flyCloakId {
-			logger.Error("player has flycloak, flycloakId: %v", flyCloakId)
 			return
 		}
 	}
@@ -554,7 +553,6 @@ func (g *Game) AddPlayerCostume(userId uint32, costumeId uint32) {
 	dbAvatar := player.GetDbAvatar()
 	for _, costume := range dbAvatar.CostumeList {
 		if costume == costumeId {
-			logger.Error("player has costume, costumeId: %v", costumeId)
 			return
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
+	"hk4e/pkg/object"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 
@@ -112,6 +113,8 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 				continue
 			}
 			g.AddPlayerCostume(userId, uint32(costumeId))
+		default:
+			logger.Error("use option not support, useOption: %v, uid: %v", itemUse.UseOption, userId)
 		}
 	}
 }
@@ -178,7 +181,13 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		if itemDataConfig == nil {
 			continue
 		}
-		if itemDataConfig.AutoUse == 1 {
+		if itemDataConfig.Type == constant.ITEM_TYPE_WEAPON {
+			continue
+		}
+		if itemDataConfig.Type == constant.ITEM_TYPE_RELIQUARY {
+			continue
+		}
+		if object.ConvInt64ToBool(int64(itemDataConfig.AutoUse)) {
 			continue
 		}
 		prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
@@ -238,7 +247,7 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		if itemDataConfig == nil {
 			continue
 		}
-		if itemDataConfig.AutoUse == 1 {
+		if object.ConvInt64ToBool(int64(itemDataConfig.AutoUse)) {
 			for count := uint32(0); count < addCount; count++ {
 				g.UseItem(userId, itemId)
 			}
@@ -273,6 +282,8 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 		count := g.GetPlayerItemCount(player.PlayerId, itemId)
 		if count < costCount {
 			return false
+		} else if count == costCount {
+			delNtf.GuidList = append(delNtf.GuidList, dbItem.GetItemGuid(itemId))
 		}
 		prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
 		if exist {
@@ -290,32 +301,24 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 			dbItem.CostItem(player, itemId, costCount)
 		}
 		count = g.GetPlayerItemCount(player.PlayerId, itemId)
-		if count > 0 {
-			pbItem := &proto.Item{
-				ItemId: itemId,
-				Guid:   dbItem.GetItemGuid(itemId),
-				Detail: &proto.Item_Material{
-					Material: &proto.Material{
-						Count: count,
-					},
+		pbItem := &proto.Item{
+			ItemId: itemId,
+			Guid:   dbItem.GetItemGuid(itemId),
+			Detail: &proto.Item_Material{
+				Material: &proto.Material{
+					Count: count,
 				},
-			}
-			changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
-		} else if count == 0 {
-			delNtf.GuidList = append(delNtf.GuidList, dbItem.GetItemGuid(itemId))
+			},
 		}
+		changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
 	}
-
 	if len(propList) > 0 {
 		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, g.PacketPlayerPropNotify(player, propList...))
 	}
-	if len(changeNtf.ItemList) > 0 {
-		g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
-	}
+	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
 	if len(delNtf.GuidList) > 0 {
 		g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, delNtf)
 	}
-
 	return true
 }
 

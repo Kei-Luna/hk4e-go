@@ -200,6 +200,9 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 	case constant.ENTITY_TYPE_AVATAR:
 		g.SubPlayerAvatarHp(player.PlayerId, defEntity.GetAvatarEntity().GetAvatarId(), attackResult.Damage, false, proto.ChangHpReason_CHANGE_HP_SUB_MONSTER)
 	case constant.ENTITY_TYPE_MONSTER:
+		if scene.GetMonsterWudi() {
+			return
+		}
 		fightProp := defEntity.GetFightProp()
 		currHp := fightProp[constant.FIGHT_PROP_CUR_HP]
 		maxHp := fightProp[constant.FIGHT_PROP_MAX_HP]

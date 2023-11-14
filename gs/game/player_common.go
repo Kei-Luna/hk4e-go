@@ -22,7 +22,7 @@ func (g *Game) PingReq(player *model.Player, payloadMsg pb.Message) {
 	now := uint32(time.Now().Unix())
 	// 客户端与服务器时间相差太过严重
 	if math.Abs(float64(now-player.ClientTime)) > 600.0 {
-		logger.Debug("abs of client time and server time above 600s, uid: %v", player.PlayerId)
+		logger.Debug("abs of client time and server time above 600s, clientTime: %v, uid: %v", player.ClientTime, player.PlayerId)
 	}
 	player.LastKeepaliveTime = now
 
@@ -353,6 +353,7 @@ func (g *Game) PacketPropValue(key uint32, value any) *proto.PropValue {
 	return propValue
 }
 
+// GetPlayerPos 获取玩家实时位置
 func (g *Game) GetPlayerPos(player *model.Player) *model.Vector {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
@@ -365,6 +366,7 @@ func (g *Game) GetPlayerPos(player *model.Player) *model.Vector {
 	return entity.GetPos()
 }
 
+// GetPlayerRot 获取玩家实时朝向
 func (g *Game) GetPlayerRot(player *model.Player) *model.Vector {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
