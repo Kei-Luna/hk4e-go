@@ -429,7 +429,7 @@ func (g *GMCmd) GMClearPlayer(userId uint32) {
 	GAME.LogoutPlayer(userId)
 }
 
-// GMClearItem 清除道具
+// GMClearItem 清除全部道具
 func (g *GMCmd) GMClearItem(userId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -440,7 +440,18 @@ func (g *GMCmd) GMClearItem(userId uint32) {
 	GAME.LogoutPlayer(userId)
 }
 
-// GMClearQuest 清除任务
+// GMClearReliquary 清除全部圣遗物
+func (g *GMCmd) GMClearReliquary(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	player.DbReliquary = nil
+	GAME.LogoutPlayer(userId)
+}
+
+// GMClearQuest 清除全部任务
 func (g *GMCmd) GMClearQuest(userId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {

@@ -71,16 +71,8 @@ func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, sess
 		if session.connState != ConnActive {
 			return
 		}
-		// 返回数据到客户端
-		rsp := new(proto.PlayerForceExitRsp)
-		msg := &ProtoMsg{
-			SessionId:      protoMsg.SessionId,
-			CmdId:          cmd.PlayerForceExitRsp,
-			HeadMessage:    k.getHeadMsg(protoMsg.HeadMessage.ClientSequenceId),
-			PayloadMessage: rsp,
-		}
-		session.sendChan <- msg
-		k.forceCloseKcpConn(protoMsg.SessionId, kcp.EnetClientClose)
+		// 关闭连接
+		k.closeKcpConnBySessionId(protoMsg.SessionId, kcp.EnetClientClose)
 	case cmd.PlayerLoginReq:
 		// GS登录包
 		if session.connState != ConnWaitLogin {
@@ -103,7 +95,7 @@ func (k *KcpConnManager) forwardClientMsgToServerHandle(protoMsg *ProtoMsg, sess
 		})
 	default:
 		if session.connState != ConnActive {
-			logger.Error("conn not active so drop packet, cmdId: %v, userId: %v, sessionId: %v",
+			logger.Error("conn not active so drop packet, cmdId: %v, uid: %v, sessionId: %v",
 				protoMsg.CmdId, session.userId, protoMsg.SessionId)
 			return
 		}
@@ -204,7 +196,7 @@ func (k *KcpConnManager) gameMsgHandle(
 		// 分发到每个连接具体的发送协程
 		sessionId, exist := userIdSessionIdMap[gameMsg.UserId]
 		if !exist {
-			logger.Error("can not find sessionId by userId: %v, cmdId: %v", gameMsg.UserId, gameMsg.CmdId)
+			logger.Error("can not find sessionId by uid: %v, cmdId: %v", gameMsg.UserId, gameMsg.CmdId)
 			return
 		}
 		protoMsg := &ProtoMsg{
@@ -219,11 +211,6 @@ func (k *KcpConnManager) gameMsgHandle(
 			return
 		}
 		if session.connState == ConnClose {
-			return
-		}
-		if len(session.sendChan) == SessionSendChanLen {
-			logger.Error("session send chan is full, sessionId: %v", protoMsg.SessionId)
-			k.forceCloseKcpConn(sessionId, kcp.EnetWaitSndMax)
 			return
 		}
 		if protoMsg.CmdId == cmd.PlayerLoginRsp {
@@ -243,6 +230,11 @@ func (k *KcpConnManager) gameMsgHandle(
 				})
 			}
 		}
+		if len(session.sendChan) == SessionSendChanLen {
+			logger.Error("session send chan is full, sessionId: %v", protoMsg.SessionId)
+			k.closeKcpConnBySessionId(sessionId, kcp.EnetWaitSndMax)
+			return
+		}
 		session.sendChan <- protoMsg
 	}
 }
@@ -256,10 +248,10 @@ func (k *KcpConnManager) connCtrlMsgHandle(
 	case mq.KickPlayerNotify:
 		sessionId, exist := userIdSessionIdMap[connCtrlMsg.KickUserId]
 		if !exist {
-			logger.Error("can not find sessionId by userId")
+			logger.Error("can not find sessionId by uid: %v", connCtrlMsg.KickUserId)
 			return
 		}
-		k.forceCloseKcpConn(sessionId, connCtrlMsg.KickReason)
+		k.closeKcpConnBySessionId(sessionId, connCtrlMsg.KickReason)
 	}
 }
 
@@ -273,7 +265,7 @@ func (k *KcpConnManager) serverMsgHandle(
 	case mq.ServerUserGsChangeNotify:
 		sessionId, exist := userIdSessionIdMap[serverMsg.UserId]
 		if !exist {
-			logger.Error("can not find sessionId by userId")
+			logger.Error("can not find sessionId by uid: %v", serverMsg.UserId)
 			return
 		}
 		session := sessionMap[sessionId]
@@ -562,7 +554,7 @@ func (k *KcpConnManager) doGateLogin(req *proto.GetPlayerTokenReq, session *Sess
 		oldSession := k.GetSessionByUserId(uid)
 		if oldSession != nil {
 			// 本地顶号
-			k.forceCloseKcpConn(oldSession.sessionId, kcp.EnetServerRelogin)
+			k.closeKcpConnBySessionId(oldSession.sessionId, kcp.EnetServerRelogin)
 		} else {
 			// 远程顶号
 			connCtrlMsg := new(mq.ConnCtrlMsg)

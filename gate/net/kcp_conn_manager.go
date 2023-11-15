@@ -561,18 +561,18 @@ func (k *KcpConnManager) closeAllKcpConn() {
 	logger.Info("all conn has been force close")
 }
 
-// 强制关闭指定连接
-func (k *KcpConnManager) forceCloseKcpConn(sessionId uint32, reason uint32) {
+// 关闭指定连接
+func (k *KcpConnManager) closeKcpConnBySessionId(sessionId uint32, reason uint32) {
 	session := k.GetSession(sessionId)
 	if session == nil {
 		logger.Error("session not exist, sessionId: %v", sessionId)
 		return
 	}
 	k.closeKcpConn(session, reason)
-	logger.Info("conn has been force close, sessionId: %v", sessionId)
+	logger.Info("conn has been close, sessionId: %v", sessionId)
 }
 
-// 关闭指定连接
+// 关闭连接
 func (k *KcpConnManager) closeKcpConn(session *Session, enetType uint32) {
 	if session.connState == ConnClose {
 		return
@@ -608,7 +608,7 @@ func (k *KcpConnManager) closeKcpConn(session *Session, enetType uint32) {
 			EventId:     mq.UserOfflineNotify,
 			ConnCtrlMsg: connCtrlMsg,
 		})
-		logger.Info("send to gs user offline, SessionId: %v, UserId: %v", session.sessionId, connCtrlMsg.UserId)
+		logger.Info("send to gs user offline, sessionId: %v, uid: %v", session.sessionId, connCtrlMsg.UserId)
 		k.destroySessionChan <- session
 	} else {
 		k.messageQueue.SendToRobot(session.robotServerAppId, &mq.NetMsg{

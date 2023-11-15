@@ -57,7 +57,7 @@ func (g *Game) ReliquaryUpgradeReq(player *model.Player, payloadMsg pb.Message) 
 	// TODO 暂时先瞎鸡巴强化
 	reliquary.Level += 1
 	reliquary.Exp += 100
-	if reliquary.Level%5 == 0 {
+	if reliquary.Level == 5 || reliquary.Level == 9 || reliquary.Level == 13 || reliquary.Level == 17 || reliquary.Level == 21 {
 		g.AppendReliquaryProp(reliquary, 1)
 	}
 

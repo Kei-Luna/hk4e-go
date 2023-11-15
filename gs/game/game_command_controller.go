@@ -261,7 +261,7 @@ func (c *CommandManager) JumpCommand(content *CommandContent) bool {
 	})
 }
 
-// 管理武器命令
+// 管理装备命令
 
 func (c *CommandManager) NewEquipCommandController() *CommandController {
 	return &CommandController{
@@ -270,6 +270,7 @@ func (c *CommandManager) NewEquipCommandController() *CommandController {
 		Description: "<color=#FFFFCC>{alias}</color> <color=#FFCC99>装备</color>",
 		UsageList: []string{
 			"{alias} add <武器ID/圣遗物ID/all> [等级] [突破] [精炼] 添加武器/圣遗物",
+			"{alias} clear reliquary 清除全部圣遗物",
 		},
 		Perm: CommandPermNormal,
 		Func: c.EquipCommand,
@@ -327,6 +328,14 @@ func (c *CommandManager) EquipCommand(content *CommandContent) bool {
 			case constant.ITEM_TYPE_RELIQUARY:
 				c.gmCmd.GMAddReliquary(content.AssignPlayer.PlayerId, uint32(itemId), 1)
 				content.SendSuccMessage(content.Executor, "已添加圣遗物，指定UID：%v，圣遗物ID：%v。", content.AssignPlayer.PlayerId, itemId)
+			default:
+				return false
+			}
+		case "clear":
+			switch param1 {
+			case "reliquary":
+				c.gmCmd.GMClearReliquary(content.AssignPlayer.PlayerId)
+				content.SendSuccMessage(content.Executor, "已清除全部圣遗物，指定UID：%v。", content.AssignPlayer.PlayerId)
 			default:
 				return false
 			}

@@ -89,7 +89,7 @@ func (r *DbReliquary) AddReliquary(player *Player, itemId uint32, reliquaryId ui
 	reliquary := &Reliquary{
 		ReliquaryId:      reliquaryId,
 		ItemId:           itemId,
-		Level:            0,
+		Level:            1,
 		Exp:              0,
 		Promote:          0,
 		Lock:             false,

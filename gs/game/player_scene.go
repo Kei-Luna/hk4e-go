@@ -1176,6 +1176,7 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 		pos = g.GetPlayerPos(player)
 		pos.X += random.GetRandomFloat64(1.0, 10.0)
 		pos.Y += 1.0
+		pos.Y = 0.0
 		pos.Z += random.GetRandomFloat64(1.0, 10.0)
 	}
 	rot := new(model.Vector)
@@ -1216,6 +1217,7 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 		pos = g.GetPlayerPos(player)
 		pos.X += random.GetRandomFloat64(1.0, 10.0)
 		pos.Y += 1.0
+		pos.Y = 0.0
 		pos.Z += random.GetRandomFloat64(1.0, 10.0)
 	}
 	rot := new(model.Vector)
