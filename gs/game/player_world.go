@@ -429,28 +429,17 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		logger.Debug("[GadgetInteractReq] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, entity.GetId(), player.PlayerId)
 		switch gadgetDataConfig.Type {
-		case constant.GADGET_TYPE_GADGET, constant.GADGET_TYPE_EQUIP:
+		case constant.GADGET_TYPE_GADGET, constant.GADGET_TYPE_EQUIP, constant.GADGET_TYPE_ENERGY_BALL:
 			// 掉落物捡起
 			interactType = proto.InteractType_INTERACT_PICK_ITEM
 			gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-				ItemId:      gadgetNormalEntity.GetItemId(),
-				ChangeCount: 1,
-			}}, true, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: gadgetNormalEntity.GetItemId(), ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
-		case constant.GADGET_TYPE_ENERGY_BALL:
-			// TODO 元素能量球吸收
-			interactType = proto.InteractType_INTERACT_PICK_ITEM
-			activeAvatarId := world.GetPlayerActiveAvatarId(player)
-			g.AddPlayerAvatarEnergy(player.PlayerId, activeAvatarId, 10.0, false)
 		case constant.GADGET_TYPE_GATHER_OBJECT:
 			// 采集物摘取
 			interactType = proto.InteractType_INTERACT_GATHER
 			gadgetNormalEntity := gadgetEntity.GetGadgetNormalEntity()
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-				ItemId:      gadgetNormalEntity.GetItemId(),
-				ChangeCount: 1,
-			}}, true, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: gadgetNormalEntity.GetItemId(), ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_GATHER)
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
 		case constant.GADGET_TYPE_CHEST:
 			// 宝箱开启
@@ -472,6 +461,7 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 			logger.Error("not support gadget type: %v, uid: %v", gadgetDataConfig.Type, player.PlayerId)
 		}
 	case constant.ENTITY_TYPE_MONSTER:
+		// TODO 环境动物掉落道具
 		g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
 	default:
 		logger.Error("not support entity type: %v, uid: %v", entity.GetEntityType(), player.PlayerId)
@@ -607,7 +597,7 @@ func (g *Game) monsterDrop(player *model.Player, monsterDropType int, hpDropId i
 		if itemDataConfig.GadgetId != 0 {
 			g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
 		} else {
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, true, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
 		}
 	}
 }
@@ -648,7 +638,7 @@ func (g *Game) chestDrop(player *model.Player, entity *Entity) {
 		if itemDataConfig.GadgetId != 0 {
 			g.CreateDropGadget(player, entity.GetPos(), uint32(itemDataConfig.GadgetId), itemId, count)
 		} else {
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, true, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: count}}, proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
 		}
 	}
 }
@@ -704,7 +694,10 @@ func (g *Game) doRandDropOnce(dropDataConfig *gdconf.DropData) map[int32]int32 {
 		for _, subDrop := range dropDataConfig.SubDropList {
 			sumWeight += subDrop.Weight
 			if sumWeight > randNum {
-				dropMap[subDrop.Id] = random.GetRandomInt32(subDrop.CountRange[0], subDrop.CountRange[1])
+				count := random.GetRandomInt32(subDrop.CountRange[0], subDrop.CountRange[1])
+				if count > 0 {
+					dropMap[subDrop.Id] = count
+				}
 				break
 			}
 		}
@@ -713,7 +706,10 @@ func (g *Game) doRandDropOnce(dropDataConfig *gdconf.DropData) map[int32]int32 {
 		randNum := random.GetRandomInt32(0, gdconf.RandomTypeIndepWeight-1)
 		for _, subDrop := range dropDataConfig.SubDropList {
 			if subDrop.Weight > randNum {
-				dropMap[subDrop.Id] += random.GetRandomInt32(subDrop.CountRange[0], subDrop.CountRange[1])
+				count := random.GetRandomInt32(subDrop.CountRange[0], subDrop.CountRange[1])
+				if count > 0 {
+					dropMap[subDrop.Id] += count
+				}
 			}
 		}
 	}

@@ -64,6 +64,7 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 	for _, itemUse := range itemDataConfig.ItemUseList {
 		switch itemUse.UseOption {
 		case constant.ITEM_USE_GAIN_AVATAR:
+			// 获得角色
 			if len(itemUse.UseParam) != 1 {
 				continue
 			}
@@ -76,9 +77,10 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 			if avatar == nil {
 				g.AddPlayerAvatar(userId, uint32(avatarId))
 			} else {
-				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, true, 0)
+				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_ADD_AVATAR)
 			}
 		case constant.ITEM_USE_RELIVE_AVATAR:
+			// 复活角色
 			if len(targetParam) != 1 {
 				continue
 			}
@@ -91,6 +93,7 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 		case constant.ITEM_USE_ADD_SERVER_BUFF:
 			// 草泥马回血要走ability
 		case constant.ITEM_USE_GAIN_FLYCLOAK:
+			// 获得风之翼
 			if len(itemUse.UseParam) != 1 {
 				continue
 			}
@@ -100,11 +103,13 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 			}
 			g.AddPlayerFlycloak(userId, uint32(flyCloakId))
 		case constant.ITEM_USE_GAIN_NAME_CARD:
+			// 获得名片
 			if len(itemUse.UseParam) != 0 {
 				continue
 			}
 			g.AddPlayerNameCard(userId, itemId)
 		case constant.ITEM_USE_GAIN_COSTUME:
+			// 获得衣装
 			if len(itemUse.UseParam) != 1 {
 				continue
 			}
@@ -113,30 +118,73 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 				continue
 			}
 			g.AddPlayerCostume(userId, uint32(costumeId))
+		case constant.ITEM_USE_ADD_ELEM_ENERGY:
+			// 添加元素能量
+			if len(itemUse.UseParam) != 3 {
+				continue
+			}
+			elementType, err := strconv.Atoi(itemUse.UseParam[0])
+			if err != nil {
+				continue
+			}
+			sameEnergy, err := strconv.Atoi(itemUse.UseParam[1])
+			if err != nil {
+				continue
+			}
+			otherEnergy, err := strconv.Atoi(itemUse.UseParam[2])
+			if err != nil {
+				continue
+			}
+			world := WORLD_MANAGER.GetWorldById(player.WorldId)
+			if world == nil {
+				continue
+			}
+			dbAvatar := player.GetDbAvatar()
+			activeAvatarId := world.GetPlayerActiveAvatarId(player)
+			for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+				addEnergy := float32(0.0)
+				if dbAvatar.GetAvatarElementType(worldAvatar.GetAvatarId()) == elementType {
+					addEnergy = float32(sameEnergy)
+				} else {
+					addEnergy = float32(otherEnergy)
+				}
+				if worldAvatar.GetAvatarId() != activeAvatarId {
+					addEnergy *= 0.6
+				}
+				g.AddPlayerAvatarEnergy(player.PlayerId, worldAvatar.GetAvatarId(), addEnergy, false)
+			}
+		case constant.ITEM_USE_ADD_ALL_ENERGY:
+			// 添加全体元素能量
+			if len(itemUse.UseParam) != 1 {
+				continue
+			}
+			addEnergy, err := strconv.Atoi(itemUse.UseParam[0])
+			if err != nil {
+				continue
+			}
+			world := WORLD_MANAGER.GetWorldById(player.WorldId)
+			if world == nil {
+				continue
+			}
+			for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
+				g.AddPlayerAvatarEnergy(player.PlayerId, worldAvatar.GetAvatarId(), float32(addEnergy), false)
+			}
 		default:
 			logger.Error("use option not support, useOption: %v, uid: %v", itemUse.UseOption, userId)
 		}
 	}
 }
 
-type ChangeItem struct {
-	ItemId      uint32
-	ChangeCount uint32
-}
-
 // GetAllItemDataConfig 获取所有物品数据配置表
 func (g *Game) GetAllItemDataConfig() map[int32]*gdconf.ItemData {
 	allItemDataConfig := make(map[int32]*gdconf.ItemData)
-	for itemId, itemData := range gdconf.GetItemDataMap() {
-		if itemData.Type == constant.ITEM_TYPE_WEAPON {
-			// 排除武器
+	for itemId, itemDataConfig := range gdconf.GetItemDataMap() {
+		if itemDataConfig.Type != constant.ITEM_TYPE_VIRTUAL &&
+			itemDataConfig.Type != constant.ITEM_TYPE_MATERIAL &&
+			itemDataConfig.Type != constant.ITEM_TYPE_FURNITURE {
 			continue
 		}
-		if itemData.Type == constant.ITEM_TYPE_RELIQUARY {
-			// 排除圣遗物
-			continue
-		}
-		allItemDataConfig[itemId] = itemData
+		allItemDataConfig[itemId] = itemDataConfig
 	}
 	return allItemDataConfig
 }
@@ -159,8 +207,13 @@ func (g *Game) GetPlayerItemCount(userId uint32, itemId uint32) uint32 {
 	}
 }
 
+type ChangeItem struct {
+	ItemId      uint32
+	ChangeCount uint32
+}
+
 // AddPlayerItem 添加玩家物品
-func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool, hintReason uint16) bool {
+func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, hintReason proto.ActionReasonType) bool {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
@@ -176,70 +229,65 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		StoreType: proto.StoreType_STORE_PACK,
 		ItemList:  make([]*proto.Item, 0),
 	}
+	addHintNtf := &proto.ItemAddHintNotify{
+		Reason:   uint32(hintReason),
+		ItemList: make([]*proto.ItemHint, 0),
+	}
 	for itemId, addCount := range itemMap {
 		itemDataConfig := gdconf.GetItemDataById(int32(itemId))
 		if itemDataConfig == nil {
 			continue
 		}
-		if itemDataConfig.Type == constant.ITEM_TYPE_WEAPON {
-			continue
-		}
-		if itemDataConfig.Type == constant.ITEM_TYPE_RELIQUARY {
-			continue
-		}
-		if object.ConvInt64ToBool(int64(itemDataConfig.AutoUse)) {
-			continue
-		}
-		prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
-		if exist {
-			// 物品为虚拟物品 角色属性物品数量增加
-			player.PropMap[prop] += addCount
-			propList = append(propList, prop)
-			// 特殊属性变化处理函数
-			switch itemId {
-			case constant.ITEM_ID_PLAYER_EXP:
-				// 冒险阅历
-				g.HandlePlayerExpAdd(userId)
-			}
-		} else {
-			// 物品为普通物品 直接进背包
-			// 校验背包物品容量 目前物品包括材料和家具
-			if dbItem.GetItemMapLen() > constant.STORE_PACK_LIMIT_MATERIAL+constant.STORE_PACK_LIMIT_FURNITURE {
-				return false
-			}
-			dbItem.AddItem(player, itemId, addCount)
-		}
-		pbItem := &proto.Item{
+		pbItemHint := &proto.ItemHint{
 			ItemId: itemId,
+			Count:  addCount,
 			Guid:   dbItem.GetItemGuid(itemId),
-			Detail: &proto.Item_Material{
-				Material: &proto.Material{
-					Count: dbItem.GetItemCount(itemId),
-				},
-			},
 		}
-		changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
+		addHintNtf.ItemList = append(addHintNtf.ItemList, pbItemHint)
+		switch itemDataConfig.Type {
+		case constant.ITEM_TYPE_WEAPON:
+			g.AddPlayerWeapon(player.PlayerId, itemId)
+		case constant.ITEM_TYPE_RELIQUARY:
+			g.AddPlayerReliquary(player.PlayerId, itemId)
+		case constant.ITEM_TYPE_VIRTUAL, constant.ITEM_TYPE_MATERIAL, constant.ITEM_TYPE_FURNITURE:
+			if object.ConvInt64ToBool(int64(itemDataConfig.AutoUse)) {
+				continue
+			}
+			prop, exist := constant.VIRTUAL_ITEM_PROP[itemId]
+			if exist {
+				// 物品为虚拟物品 角色属性物品数量增加
+				player.PropMap[prop] += addCount
+				propList = append(propList, prop)
+			} else {
+				// 物品为普通物品 直接进背包
+				// 校验背包物品容量 目前物品包括材料和家具
+				if dbItem.GetItemMapLen() > constant.STORE_PACK_LIMIT_MATERIAL+constant.STORE_PACK_LIMIT_FURNITURE {
+					return false
+				}
+				dbItem.AddItem(player, itemId, addCount)
+			}
+			pbItem := &proto.Item{
+				ItemId: itemId,
+				Guid:   dbItem.GetItemGuid(itemId),
+				Detail: &proto.Item_Material{
+					Material: &proto.Material{
+						Count: dbItem.GetItemCount(itemId),
+					},
+				},
+			}
+			changeNtf.ItemList = append(changeNtf.ItemList, pbItem)
+		}
 	}
 	if len(propList) > 0 {
 		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, g.PacketPlayerPropNotify(player, propList...))
 	}
-	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
-	if isHint {
-		if hintReason == 0 {
-			hintReason = uint16(proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
+	if len(changeNtf.ItemList) > 0 {
+		g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
+	}
+	if len(addHintNtf.ItemList) > 0 {
+		if hintReason != proto.ActionReasonType_ACTION_REASON_NONE {
+			g.SendMsg(cmd.ItemAddHintNotify, userId, player.ClientSeq, addHintNtf)
 		}
-		itemAddHintNotify := &proto.ItemAddHintNotify{
-			Reason:   uint32(hintReason),
-			ItemList: make([]*proto.ItemHint, 0),
-		}
-		for _, changeItem := range itemList {
-			itemAddHintNotify.ItemList = append(itemAddHintNotify.ItemList, &proto.ItemHint{
-				ItemId: changeItem.ItemId,
-				Count:  changeItem.ChangeCount,
-				IsNew:  false,
-			})
-		}
-		g.SendMsg(cmd.ItemAddHintNotify, userId, player.ClientSeq, itemAddHintNotify)
 	}
 	for itemId, addCount := range itemMap {
 		g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_OBTAIN_ITEM, "", int32(itemId))
@@ -250,6 +298,20 @@ func (g *Game) AddPlayerItem(userId uint32, itemList []*ChangeItem, isHint bool,
 		if object.ConvInt64ToBool(int64(itemDataConfig.AutoUse)) {
 			for count := uint32(0); count < addCount; count++ {
 				g.UseItem(userId, itemId)
+			}
+		}
+		// 特殊属性变化处理函数
+		switch itemId {
+		case constant.ITEM_ID_PLAYER_EXP:
+			// 冒险阅历
+			g.HandlePlayerExpAdd(userId)
+		case constant.ITEM_ID_AVATAR_EXP:
+			// 角色经验
+			world := WORLD_MANAGER.GetWorldById(player.WorldId)
+			if world != nil {
+				activeAvatarId := world.GetPlayerActiveAvatarId(player)
+				dbAvatar := player.GetDbAvatar()
+				g.UpgradePlayerAvatar(player, dbAvatar.GetAvatarById(activeAvatarId), addCount)
 			}
 		}
 	}
@@ -290,12 +352,6 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 			// 物品为虚拟物品 角色属性物品数量减少
 			player.PropMap[prop] -= costCount
 			propList = append(propList, prop)
-			// 特殊属性变化处理函数
-			switch itemId {
-			case constant.ITEM_ID_PLAYER_EXP:
-				// 冒险阅历应该也没人会去扣吧?
-				g.HandlePlayerExpAdd(userId)
-			}
 		} else {
 			// 物品为普通物品 直接扣除
 			dbItem.CostItem(player, itemId, costCount)
@@ -315,7 +371,9 @@ func (g *Game) CostPlayerItem(userId uint32, itemList []*ChangeItem) bool {
 	if len(propList) > 0 {
 		g.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, g.PacketPlayerPropNotify(player, propList...))
 	}
-	g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
+	if len(changeNtf.ItemList) > 0 {
+		g.SendMsg(cmd.StoreItemChangeNotify, userId, player.ClientSeq, changeNtf)
+	}
 	if len(delNtf.GuidList) > 0 {
 		g.SendMsg(cmd.StoreItemDelNotify, userId, player.ClientSeq, delNtf)
 	}

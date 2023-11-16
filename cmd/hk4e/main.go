@@ -28,6 +28,8 @@ func main() {
 		GSCmd(),
 		MultiCmd(),
 		GMCmd(),
+		RobotCmd(),
+		NatsCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

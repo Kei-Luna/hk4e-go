@@ -11,30 +11,12 @@ var CONF *Config = nil
 // Config 配置
 type Config struct {
 	HttpPort  int32     `toml:"http_port"`
+	Hk4e      Hk4e      `toml:"hk4e"`
+	Hk4eRobot Hk4eRobot `toml:"hk4e_robot"`
 	Logger    Logger    `toml:"logger"`
 	Database  Database  `toml:"database"`
 	Redis     Redis     `toml:"redis"`
-	Hk4e      Hk4e      `toml:"hk4e"`
-	Hk4eRobot Hk4eRobot `toml:"hk4e_robot"`
 	MQ        MQ        `toml:"mq"`
-}
-
-// Logger 日志
-type Logger struct {
-	Level   string `toml:"level"`
-	Mode    string `toml:"mode"`
-	Track   bool   `toml:"track"`
-	MaxSize int32  `toml:"max_size"`
-}
-
-// Database 数据库配置
-type Database struct {
-	Url string `toml:"url"`
-}
-
-type Redis struct {
-	Addr     string `toml:"addr"`
-	Password string `toml:"password"`
 }
 
 // Hk4e 原神服务器
@@ -79,6 +61,25 @@ type Hk4eRobot struct {
 	ClientMoveRangeExt           int32  `toml:"client_move_range_ext"`           // 客户端模拟移动区域半径
 	ForwardChecksum              string `toml:"forward_checksum"`                // 转发模式强制指定校验和
 	ForwardChecksumClientVersion string `toml:"forward_checksum_client_version"` // 转发模式强制指定校验和客户端版本
+}
+
+// Logger 日志
+type Logger struct {
+	Level   string `toml:"level"`
+	Mode    string `toml:"mode"`
+	Track   bool   `toml:"track"`
+	MaxSize int32  `toml:"max_size"`
+}
+
+// Database 数据库
+type Database struct {
+	Url string `toml:"url"`
+}
+
+// Redis 缓存
+type Redis struct {
+	Addr     string `toml:"addr"`
+	Password string `toml:"password"`
 }
 
 // MQ 消息队列

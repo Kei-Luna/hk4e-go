@@ -266,45 +266,28 @@ func (g *Game) DoGachaReq(player *model.Player, payloadMsg pb.Message) {
 			} else {
 				constellationItemId := itemId + 100
 				if g.GetPlayerItemCount(player.PlayerId, constellationItemId) < 6 {
-					g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: constellationItemId, ChangeCount: 1}}, false, 0)
+					g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: constellationItemId, ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_GACHA)
 				}
 			}
 		} else if itemId > 10000 && itemId < 20000 {
 			g.AddPlayerWeapon(player.PlayerId, itemId)
 		} else {
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: 1}}, false, 0)
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: itemId, ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_GACHA)
 		}
 		// 计算星尘星辉
 		xc := uint32(random.GetRandomInt32(0, 10))
 		xh := uint32(random.GetRandomInt32(0, 10))
 		gachaItem := new(proto.GachaItem)
-		gachaItem.GachaItem = &proto.ItemParam{
-			ItemId: itemId,
-			Count:  1,
-		}
+		gachaItem.GachaItem = &proto.ItemParam{ItemId: itemId, Count: 1}
 		// 星尘
 		if xc != 0 {
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-				ItemId:      222,
-				ChangeCount: xc,
-			}}, false, 0)
-			gachaItem.TokenItemList = []*proto.ItemParam{{
-				ItemId: 222,
-				Count:  xc,
-			}}
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: 222, ChangeCount: xc}}, proto.ActionReasonType_ACTION_REASON_GACHA)
+			gachaItem.TokenItemList = []*proto.ItemParam{{ItemId: 222, Count: xc}}
 		}
 		// 星辉
 		if xh != 0 {
-			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-				ItemId:      221,
-				ChangeCount: xh,
-			}}, false, 0)
-			gachaItem.TransferItems = []*proto.GachaTransferItem{{
-				Item: &proto.ItemParam{
-					ItemId: 221,
-					Count:  xh,
-				},
-			}}
+			g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: 221, ChangeCount: xh}}, proto.ActionReasonType_ACTION_REASON_GACHA)
+			gachaItem.TransferItems = []*proto.GachaTransferItem{{Item: &proto.ItemParam{ItemId: 221, Count: xh}}}
 		}
 		doGachaRsp.GachaItemList = append(doGachaRsp.GachaItemList, gachaItem)
 	}

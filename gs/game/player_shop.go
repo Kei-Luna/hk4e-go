@@ -84,10 +84,7 @@ func (g *Game) BuyGoodsReq(player *model.Player, payloadMsg pb.Message) {
 		return
 	}
 
-	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-		ItemId:      buyItemId,
-		ChangeCount: buyItemCount,
-	}}, true, uint16(proto.ActionReasonType_ACTION_REASON_SHOP))
+	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: buyItemId, ChangeCount: buyItemCount}}, proto.ActionReasonType_ACTION_REASON_SHOP)
 	req.Goods.BoughtNum = g.GetPlayerItemCount(player.PlayerId, buyItemId)
 
 	buyGoodsRsp := &proto.BuyGoodsRsp{
@@ -113,10 +110,7 @@ func (g *Game) McoinExchangeHcoinReq(player *model.Player, payloadMsg pb.Message
 		return
 	}
 
-	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{
-		ItemId:      201,
-		ChangeCount: count,
-	}}, false, 0)
+	g.AddPlayerItem(player.PlayerId, []*ChangeItem{{ItemId: 201, ChangeCount: count}}, proto.ActionReasonType_ACTION_REASON_SHOP)
 
 	mcoinExchangeHcoinRsp := &proto.McoinExchangeHcoinRsp{
 		Hcoin:     req.Hcoin,

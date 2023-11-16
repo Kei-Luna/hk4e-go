@@ -42,7 +42,7 @@ func (g *GMCmd) GMTeleportPlayer(userId, sceneId uint32, posX, posY, posZ float6
 
 // GMAddItem 添加玩家道具
 func (g *GMCmd) GMAddItem(userId, itemId, itemCount uint32) {
-	GAME.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId, ChangeCount: itemCount}}, true, 0)
+	GAME.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId, ChangeCount: itemCount}}, proto.ActionReasonType_ACTION_REASON_GM)
 }
 
 // GMCostItem 消耗玩家道具
@@ -137,7 +137,7 @@ func (g *GMCmd) GMAddAllItem(userId uint32) {
 			ChangeCount: 1,
 		})
 	}
-	GAME.AddPlayerItem(userId, itemList, false, 0)
+	GAME.AddPlayerItem(userId, itemList, proto.ActionReasonType_ACTION_REASON_GM)
 }
 
 // GMAddAllWeapon 添加玩家所有武器

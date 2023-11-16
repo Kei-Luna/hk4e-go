@@ -438,7 +438,7 @@ func (g *Game) SendError(cmdId uint16, player *model.Player, rsp pb.Message, ret
 	if !ok {
 		return
 	}
-	logger.Debug("send common error: %v", rsp)
+	logger.Error("send common error, rsp: %v, err: %v, uid: %v", rsp.ProtoReflect().Descriptor().FullName(), retCode[0].String(), player.PlayerId)
 	g.SendMsg(cmdId, player.PlayerId, player.ClientSeq, rsp)
 }
 

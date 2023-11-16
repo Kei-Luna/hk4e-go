@@ -406,7 +406,7 @@ func (g *Game) WeaponUpgradeReq(player *model.Player, payloadMsg pb.Message) {
 		})
 	}
 	// 给予玩家返回的矿石
-	g.AddPlayerItem(player.PlayerId, addItemList, false, 0)
+	g.AddPlayerItem(player.PlayerId, addItemList, proto.ActionReasonType_ACTION_REASON_WEAPON_UPGRADE)
 
 	weaponUpgradeRsp := &proto.WeaponUpgradeRsp{
 		CurLevel:         uint32(weapon.Level),

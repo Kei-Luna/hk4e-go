@@ -395,14 +395,6 @@ func (c *CommandManager) ItemCommand(content *CommandContent) bool {
 			if itemDataConfig == nil {
 				return false
 			}
-			if itemDataConfig.Type == constant.ITEM_TYPE_WEAPON {
-				c.gmCmd.GMAddWeapon(content.AssignPlayer.PlayerId, uint32(itemId), 1, 1, 0, 0)
-				return true
-			}
-			if itemDataConfig.Type == constant.ITEM_TYPE_RELIQUARY {
-				c.gmCmd.GMAddReliquary(content.AssignPlayer.PlayerId, uint32(itemId), 1)
-				return true
-			}
 			c.gmCmd.GMAddItem(content.AssignPlayer.PlayerId, uint32(itemId), count)
 			content.SendSuccMessage(content.Executor, "已添加道具，指定UID：%v，道具ID：%v，数量：%v。", content.AssignPlayer.PlayerId, itemId, count)
 		case "clear":

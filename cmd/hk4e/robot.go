@@ -1,18 +1,19 @@
 package main
 
 import (
+	"github.com/spf13/cobra"
+
 	"context"
 
-	"hk4e/node/app"
-
-	"github.com/spf13/cobra"
+	"hk4e/robot/app"
 )
 
-func NodeCmd() *cobra.Command {
+func RobotCmd() *cobra.Command {
 	var configFile string
+	app.APPVERSION = VERSION
 	c := &cobra.Command{
-		Use:   "node",
-		Short: "node server",
+		Use:   "robot",
+		Short: "robot server",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return app.Run(context.Background(), configFile)
 		},

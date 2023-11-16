@@ -228,7 +228,7 @@ func (g *Game) AvatarPromoteGetRewardReq(player *model.Player, payloadMsg pb.Mes
 			ChangeCount: count,
 		})
 	}
-	g.AddPlayerItem(player.PlayerId, rewardItemList, false, 0)
+	g.AddPlayerItem(player.PlayerId, rewardItemList, proto.ActionReasonType_ACTION_REASON_AVATAR_PROMOTE)
 
 	avatarPromoteGetRewardRsp := &proto.AvatarPromoteGetRewardRsp{
 		RewardId:     uint32(rewardConfig.RewardId),

@@ -13,6 +13,8 @@ const (
 	ITEM_ID_WEAPON_UPGRADE_MAGIC  = 104013 // 精锻用魔矿
 	ITEM_ID_WEAPON_UPGRADE_GOOD   = 104012 // 精锻用良矿
 	ITEM_ID_WEAPON_UPGRADE_MOTLEY = 104011 // 精锻用杂矿
+
+	ITEM_ID_AVATAR_EXP = 101 // 角色经验
 )
 
 // 虚拟物品对应玩家的属性

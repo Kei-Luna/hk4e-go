@@ -235,7 +235,7 @@ func (g *Game) handleEvtBeingHit(player *model.Player, scene *Scene, hitInfo *pr
 		gadgetEntity := defEntity.GetGadgetEntity()
 		gadgetDataConfig := gdconf.GetGadgetDataById(int32(gadgetEntity.GetGadgetId()))
 		if gadgetDataConfig == nil {
-			logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
+			// logger.Error("get gadget data config is nil, gadgetId: %v", gadgetEntity.GetGadgetId())
 			return
 		}
 		logger.Debug("[EvtBeingHit] GadgetData: %+v, EntityId: %v, uid: %v", gadgetDataConfig, defEntity.GetId(), player.PlayerId)
@@ -1083,7 +1083,7 @@ func (g *Game) handleGadgetEntityAbilityLow(player *model.Player, entityId uint3
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
 		} else if strings.Contains(gadgetDataConfig.ServerLuaScript, "SubfieldDrop_Ore") {
 			g.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_GM)
-			g.CreateDropGadget(player, entity.GetPos(), 70900001, 233, 1)
+			g.CreateDropGadget(player, entity.GetPos(), 70600031, 104011, 1)
 		}
 	}
 }

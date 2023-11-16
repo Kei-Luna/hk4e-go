@@ -174,13 +174,15 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 		}
 		if canAccept {
 			if questData.QuestId == 35304 {
+				// TODO 任务异常的权柄释放元素爆发时没有能量
 				world := WORLD_MANAGER.GetWorldById(player.WorldId)
 				if world != nil {
 					g.AddPlayerAvatarEnergy(player.PlayerId, world.GetPlayerActiveAvatarId(player), 0.0, true)
 				}
 			}
 			if questData.QuestId == 35721 {
-				// TODO 由于第一次风龙任务进入秘境客户端会无限重连相关原因暂时屏蔽
+				// TODO 由于风龙任务进入秘境客户端会无限重连相关原因暂时屏蔽
+				// 直接福瑞
 				COMMAND_MANAGER.gmCmd.GMFreeMode(player.PlayerId)
 				continue
 			}
@@ -503,7 +505,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				if len(questDataConfig.ItemIdList) != 0 {
 					for index, itemId := range questDataConfig.ItemIdList {
 						questItem := []*ChangeItem{{ItemId: uint32(itemId), ChangeCount: uint32(questDataConfig.ItemCountList[index])}}
-						g.AddPlayerItem(player.PlayerId, questItem, true, 0)
+						g.AddPlayerItem(player.PlayerId, questItem, proto.ActionReasonType_ACTION_REASON_QUEST_ITEM)
 					}
 				}
 			}

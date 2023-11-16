@@ -1174,9 +1174,8 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 	}
 	if pos == nil {
 		pos = g.GetPlayerPos(player)
-		pos.X += random.GetRandomFloat64(1.0, 10.0)
-		pos.Y = 0.0
-		pos.Z += random.GetRandomFloat64(1.0, 10.0)
+		pos.X += random.GetRandomFloat64(-5.0, 5.0)
+		pos.Z += random.GetRandomFloat64(-5.0, 5.0)
 	}
 	rot := new(model.Vector)
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
@@ -1214,8 +1213,8 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 	scene := world.GetSceneById(player.GetSceneId())
 	if pos == nil {
 		pos = g.GetPlayerPos(player)
-		pos.X += random.GetRandomFloat64(1.0, 10.0)
-		pos.Z += random.GetRandomFloat64(1.0, 10.0)
+		pos.X += random.GetRandomFloat64(-5.0, 5.0)
+		pos.Z += random.GetRandomFloat64(-5.0, 5.0)
 	}
 	rot := new(model.Vector)
 	rot.Y = random.GetRandomFloat64(0.0, 360.0)
@@ -1322,7 +1321,7 @@ func (g *Game) GetWeatherAreaClimate(weatherAreaId uint32) uint32 {
 	// 获取天气数据配置表
 	weatherConfig := gdconf.GetWeatherDataById(int32(weatherAreaId))
 	if weatherConfig == nil {
-		logger.Error("weather data config not exist, weatherId: %v", weatherAreaId)
+		// logger.Error("weather data config not exist, weatherId: %v", weatherAreaId)
 		return 0
 	}
 	// 如果指定了则使用指定的天气

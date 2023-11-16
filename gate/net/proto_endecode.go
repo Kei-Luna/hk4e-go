@@ -104,14 +104,14 @@ func ProtoDecode(kcpMsg *KcpMsg,
 			msg.PayloadMessage = protoMessage.message
 			protoMsgList = append(protoMsgList, msg)
 		}
-		for _, msg := range protoMsgList {
-			cmdName := "???"
-			if msg.PayloadMessage != nil {
-				cmdName = string(msg.PayloadMessage.ProtoReflect().Descriptor().FullName())
-			}
-			logger.Debug("[RECV UNION CMD] cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
-				msg.CmdId, cmdName, msg.SessionId, msg.HeadMessage)
-		}
+		// for _, msg := range protoMsgList {
+		// 	cmdName := "???"
+		// 	if msg.PayloadMessage != nil {
+		// 		cmdName = string(msg.PayloadMessage.ProtoReflect().Descriptor().FullName())
+		// 	}
+		// 	logger.Debug("[RECV UNION CMD] cmdId: %v, cmdName: %v, sessionId: %v, headMsg: %v",
+		// 		msg.CmdId, cmdName, msg.SessionId, msg.HeadMessage)
+		// }
 	} else {
 		protoMsg.PayloadMessage = protoMessageList[0].message
 		protoMsgList = append(protoMsgList, protoMsg)

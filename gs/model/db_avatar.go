@@ -228,3 +228,16 @@ func (a *DbAvatar) TakeOffWeapon(avatarId uint32, weapon *Weapon) {
 	weapon.AvatarId = 0
 	delete(avatar.EquipGuidMap, weapon.Guid)
 }
+
+func (a *DbAvatar) GetAvatarElementType(avatarId uint32) int {
+	avatar := a.AvatarMap[avatarId]
+	skillDepotDataConfig := gdconf.GetAvatarSkillDepotDataById(int32(avatar.SkillDepotId))
+	if skillDepotDataConfig == nil {
+		return 0
+	}
+	avatarSkillDataConfig := gdconf.GetAvatarSkillDataById(skillDepotDataConfig.EnergySkill)
+	if avatarSkillDataConfig == nil {
+		return 0
+	}
+	return int(avatarSkillDataConfig.CostElemType)
+}
