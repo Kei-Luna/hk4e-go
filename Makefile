@@ -67,7 +67,7 @@ docker_build:
 .PHONY: dev_tool
 dev_tool:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1
-	go install github.com/byebyebruce/natsrpc/cmd/protoc-gen-natsrpc@develop
+	go install github.com/byebyebruce/natsrpc/cmd/protoc-gen-natsrpc@v0.5.5
 
 # 生成natsrpc协议代码
 .PHONY: gen_natsrpc
