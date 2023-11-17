@@ -164,6 +164,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(EntityForceSyncRsp, func() any { return new(proto.EntityForceSyncRsp) })                         // 场景实体强制同步响应
 	c.regMsg(EnterTransPointRegionNotify, func() any { return new(proto.EnterTransPointRegionNotify) })       // 进入传送点区域通知 七天神像区域
 	c.regMsg(ExitTransPointRegionNotify, func() any { return new(proto.ExitTransPointRegionNotify) })         // 离开传送点区域通知
+	c.regMsg(SceneAreaUnlockNotify, func() any { return new(proto.SceneAreaUnlockNotify) })                   // 场景区域解锁通知
 
 	// 战斗与同步
 	c.regMsg(AvatarFightPropNotify, func() any { return new(proto.AvatarFightPropNotify) })                         // 角色战斗属性通知
@@ -324,6 +325,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(UnlockAvatarTalentReq, func() any { return new(proto.UnlockAvatarTalentReq) })               // 角色命座解锁请求
 	c.regMsg(UnlockAvatarTalentRsp, func() any { return new(proto.UnlockAvatarTalentRsp) })               // 角色命座解锁通知
 	c.regMsg(AvatarUnlockTalentNotify, func() any { return new(proto.AvatarUnlockTalentNotify) })         // 角色命座解锁通知
+	c.regMsg(AddNoGachaAvatarCardNotify, func() any { return new(proto.AddNoGachaAvatarCardNotify) })     // 获得非抽卡角色通知
 
 	// 背包与道具
 	c.regMsg(PlayerStoreNotify, func() any { return new(proto.PlayerStoreNotify) })           // 玩家背包数据通知
@@ -411,6 +413,7 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(QuestDestroyEntityRsp, func() any { return new(proto.QuestDestroyEntityRsp) })                             // 任务销毁实体响应
 	c.regMsg(QuestDestroyNpcReq, func() any { return new(proto.QuestDestroyNpcReq) })                                   // 任务销毁npc请求
 	c.regMsg(QuestDestroyNpcRsp, func() any { return new(proto.QuestDestroyNpcRsp) })                                   // 任务销毁npc响应
+	c.regMsg(ChapterStateNotify, func() any { return new(proto.ChapterStateNotify) })                                   // 任务章节状态通知
 
 	// TODO 家园
 	c.regMsg(GetPlayerHomeCompInfoReq, func() any { return new(proto.GetPlayerHomeCompInfoReq) })

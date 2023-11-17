@@ -426,15 +426,10 @@ func (g *Game) SendError(cmdId uint16, player *model.Player, rsp pb.Message, ret
 	if rsp == nil {
 		return
 	}
-	ret := int32(proto.Retcode_RET_FAIL)
 	if len(retCode) == 0 {
-		ret = int32(proto.Retcode_RET_SVR_ERROR)
-	} else if len(retCode) == 1 {
-		ret = int32(retCode[0])
-	} else {
-		return
+		retCode = []proto.Retcode{proto.Retcode_RET_SVR_ERROR}
 	}
-	ok := reflection.SetStructFieldValue(rsp, "Retcode", ret)
+	ok := reflection.SetStructFieldValue(rsp, "Retcode", int32(retCode[0]))
 	if !ok {
 		return
 	}

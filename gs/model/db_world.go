@@ -14,6 +14,7 @@ type DbScene struct {
 	SceneId        uint32
 	UnlockPointMap map[uint32]bool
 	UnHidePointMap map[uint32]bool
+	UnlockAreaMap  map[uint32]bool
 	SceneGroupMap  map[uint32]*DbSceneGroup
 }
 
@@ -58,12 +59,14 @@ func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
 	if scene.SceneId == 0 {
 		scene.SceneId = sceneId
 	}
-
 	if scene.UnlockPointMap == nil {
 		scene.UnlockPointMap = make(map[uint32]bool)
 	}
 	if scene.UnHidePointMap == nil {
 		scene.UnHidePointMap = make(map[uint32]bool)
+	}
+	if scene.UnlockAreaMap == nil {
+		scene.UnlockAreaMap = make(map[uint32]bool)
 	}
 	if scene.SceneGroupMap == nil {
 		scene.SceneGroupMap = make(map[uint32]*DbSceneGroup)
@@ -101,6 +104,33 @@ func (s *DbScene) UnlockPoint(pointId uint32) {
 
 func (s *DbScene) CheckPointUnlock(pointId uint32) bool {
 	_, exist := s.UnlockPointMap[pointId]
+	return exist
+}
+
+func (s *DbScene) GetUnlockAreaList() []uint32 {
+	unlockAreaList := make([]uint32, 0, len(s.UnlockAreaMap))
+	for areaId := range s.UnlockAreaMap {
+		unlockAreaList = append(unlockAreaList, areaId)
+	}
+	return unlockAreaList
+}
+
+func (s *DbScene) UnlockArea(areaId uint32) {
+	exist := false
+	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {
+		if uint32(worldAreaData.SceneId) == s.SceneId && uint32(worldAreaData.AreaId1) == areaId {
+			exist = true
+			break
+		}
+	}
+	if !exist {
+		return
+	}
+	s.UnlockAreaMap[areaId] = true
+}
+
+func (s *DbScene) CheckAreaUnlock(areaId uint32) bool {
+	_, exist := s.UnlockAreaMap[areaId]
 	return exist
 }
 

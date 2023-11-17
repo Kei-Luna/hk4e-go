@@ -77,7 +77,7 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 			if avatar == nil {
 				g.AddPlayerAvatar(userId, uint32(avatarId))
 			} else {
-				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_ADD_AVATAR)
+				g.AddPlayerItem(userId, []*ChangeItem{{ItemId: itemId + 100, ChangeCount: 1}}, proto.ActionReasonType_ACTION_REASON_SUBFIELD_DROP)
 			}
 		case constant.ITEM_USE_RELIVE_AVATAR:
 			// 复活角色
@@ -170,7 +170,7 @@ func (g *Game) UseItem(userId uint32, itemId uint32, targetParam ...uint64) {
 				g.AddPlayerAvatarEnergy(player.PlayerId, worldAvatar.GetAvatarId(), float32(addEnergy), false)
 			}
 		default:
-			logger.Error("use option not support, useOption: %v, uid: %v", itemUse.UseOption, userId)
+			// logger.Error("use option not support, useOption: %v, uid: %v", itemUse.UseOption, userId)
 		}
 	}
 }

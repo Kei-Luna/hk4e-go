@@ -60,11 +60,11 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 		0,
 	)
 
-	sceneTransToPointRsp := &proto.SceneTransToPointRsp{
+	rsp := &proto.SceneTransToPointRsp{
 		PointId: req.PointId,
 		SceneId: req.SceneId,
 	}
-	g.SendMsg(cmd.SceneTransToPointRsp, player.PlayerId, player.ClientSeq, sceneTransToPointRsp)
+	g.SendMsg(cmd.SceneTransToPointRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // UnlockTransPointReq 解锁传送点请求
@@ -108,25 +108,14 @@ func (g *Game) GetScenePointReq(player *model.Player, payloadMsg pb.Message) {
 		g.SendError(cmd.GetScenePointRsp, player, &proto.GetScenePointRsp{})
 		return
 	}
-	// 区域 暂时解锁全部区域
-	areaIdMap := make(map[uint32]bool)
-	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {
-		if uint32(worldAreaData.SceneId) == req.SceneId {
-			areaIdMap[uint32(worldAreaData.AreaId1)] = true
-		}
-	}
-	areaIdMap[1] = true
-	unlockAreaList := make([]uint32, 0)
-	for areaId := range areaIdMap {
-		unlockAreaList = append(unlockAreaList, areaId)
-	}
-	getScenePointRsp := &proto.GetScenePointRsp{
+
+	rsp := &proto.GetScenePointRsp{
 		SceneId:           req.SceneId,
-		UnlockAreaList:    unlockAreaList,
+		UnlockAreaList:    dbScene.GetUnlockAreaList(),
 		UnlockedPointList: dbScene.GetUnlockPointList(),
 		UnhidePointList:   dbScene.GetUnHidePointList(),
 	}
-	g.SendMsg(cmd.GetScenePointRsp, player.PlayerId, player.ClientSeq, getScenePointRsp)
+	g.SendMsg(cmd.GetScenePointRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // MarkMapReq 地图标点请求
@@ -222,24 +211,38 @@ func (g *Game) MarkMapReq(player *model.Player, payloadMsg pb.Message) {
 func (g *Game) GetSceneAreaReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.GetSceneAreaReq)
 
-	getSceneAreaRsp := &proto.GetSceneAreaRsp{
-		SceneId: req.SceneId,
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		logger.Error("get world is nil, worldId: %v, uid: %v", world.GetId(), player.PlayerId)
+		g.SendError(cmd.GetSceneAreaRsp, player, &proto.GetSceneAreaRsp{})
+		return
 	}
-	// 区域 暂时解锁全部区域
-	areaIdMap := make(map[uint32]bool)
-	for _, worldAreaData := range gdconf.GetWorldAreaDataMap() {
-		if uint32(worldAreaData.SceneId) == req.SceneId {
-			areaIdMap[uint32(worldAreaData.AreaId1)] = true
-		}
+	owner := world.GetOwner()
+	if owner == nil {
+		logger.Error("get owner is nil, worldId: %v", world.GetId())
+		g.SendError(cmd.GetSceneAreaRsp, player, &proto.GetSceneAreaRsp{})
+		return
 	}
-	areaIdMap[1] = true
-	areaList := make([]uint32, 0)
-	for areaId := range areaIdMap {
-		areaList = append(areaList, areaId)
+	dbWorld := owner.GetDbWorld()
+	if dbWorld == nil {
+		logger.Error("get dbWorld is nil, uid: %v", player.PlayerId)
+		g.SendError(cmd.GetSceneAreaRsp, player, &proto.GetSceneAreaRsp{})
+		return
 	}
-	getSceneAreaRsp.AreaIdList = areaList
+	dbScene := dbWorld.GetSceneById(req.SceneId)
+	if dbScene == nil {
+		logger.Error("get dbScene is nil, sceneId: %v, uid: %v", req.SceneId, player.PlayerId)
+		g.SendError(cmd.GetSceneAreaRsp, player, &proto.GetSceneAreaRsp{})
+		return
+	}
+
+	rsp := &proto.GetSceneAreaRsp{
+		SceneId:      req.SceneId,
+		AreaIdList:   dbScene.GetUnlockAreaList(),
+		CityInfoList: nil,
+	}
 	if req.SceneId == 3 {
-		getSceneAreaRsp.CityInfoList = []*proto.CityInfo{
+		rsp.CityInfoList = []*proto.CityInfo{
 			{CityId: 1, Level: 10},
 			{CityId: 2, Level: 10},
 			{CityId: 3, Level: 10},
@@ -247,7 +250,7 @@ func (g *Game) GetSceneAreaReq(player *model.Player, payloadMsg pb.Message) {
 			{CityId: 5, Level: 10},
 		}
 	}
-	g.SendMsg(cmd.GetSceneAreaRsp, player.PlayerId, player.ClientSeq, getSceneAreaRsp)
+	g.SendMsg(cmd.GetSceneAreaRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // EnterWorldAreaReq 进入世界区域请求
@@ -257,11 +260,11 @@ func (g *Game) EnterWorldAreaReq(player *model.Player, payloadMsg pb.Message) {
 
 	logger.Debug("EnterWorldAreaReq: %v", req)
 
-	enterWorldAreaRsp := &proto.EnterWorldAreaRsp{
+	rsp := &proto.EnterWorldAreaRsp{
 		AreaType: req.AreaType,
 		AreaId:   req.AreaId,
 	}
-	g.SendMsg(cmd.EnterWorldAreaRsp, player.PlayerId, player.ClientSeq, enterWorldAreaRsp)
+	g.SendMsg(cmd.EnterWorldAreaRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // ChangeGameTimeReq 修改游戏时间请求
@@ -288,10 +291,10 @@ func (g *Game) ChangeGameTimeReq(player *model.Player, payloadMsg pb.Message) {
 		g.SetPlayerWeather(player, player.WeatherInfo.WeatherAreaId, climateType)
 	}
 
-	changeGameTimeRsp := &proto.ChangeGameTimeRsp{
+	rsp := &proto.ChangeGameTimeRsp{
 		CurGameTime: scene.GetGameTime(),
 	}
-	g.SendMsg(cmd.ChangeGameTimeRsp, player.PlayerId, player.ClientSeq, changeGameTimeRsp)
+	g.SendMsg(cmd.ChangeGameTimeRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // NpcTalkReq npc对话请求
@@ -477,8 +480,9 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 }
 
 func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.EnterTransPointRegionNotify)
-	_ = req
+	ntf := payloadMsg.(*proto.EnterTransPointRegionNotify)
+	_ = ntf
+
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		return
@@ -499,8 +503,8 @@ func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.M
 }
 
 func (g *Game) ExitTransPointRegionNotify(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.ExitTransPointRegionNotify)
-	_ = req
+	ntf := payloadMsg.(*proto.ExitTransPointRegionNotify)
+	_ = ntf
 }
 
 /************************************************** 游戏功能 **************************************************/
@@ -519,12 +523,33 @@ func (g *Game) UnlockPlayerTransPoint(player *model.Player, sceneId uint32, poin
 		return proto.Retcode_RET_POINT_ALREAY_UNLOCKED
 	}
 	dbScene.UnlockPoint(pointId)
-	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
+	g.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
 		SceneId:   sceneId,
 		PointList: []uint32{pointId},
 	})
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_TRANS_POINT, "", int32(sceneId), int32(pointId))
 	return proto.Retcode_RET_SUCC
+}
+
+// UnlockPlayerSceneArea 解锁场景区域
+func (g *Game) UnlockPlayerSceneArea(player *model.Player, sceneId uint32, areaId uint32) {
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(sceneId)
+	if dbScene == nil {
+		logger.Error("get dbScene is nil, sceneId: %v, uid: %v", sceneId, player.PlayerId)
+		return
+	}
+	unlock := dbScene.CheckAreaUnlock(areaId)
+	if unlock {
+		logger.Error("area already unlock, sceneId: %v, areaId: %v, uid: %v", sceneId, areaId, player.PlayerId)
+		return
+	}
+	dbScene.UnlockArea(areaId)
+	g.SendMsg(cmd.SceneAreaUnlockNotify, player.PlayerId, player.ClientSeq, &proto.SceneAreaUnlockNotify{
+		SceneId:  sceneId,
+		AreaList: []uint32{areaId},
+	})
+	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_AREA, "", int32(sceneId), int32(areaId))
 }
 
 // ChangeGameTime 修改游戏场景时间

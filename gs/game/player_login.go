@@ -6,6 +6,7 @@ import (
 	"hk4e/gdconf"
 	"hk4e/gs/model"
 	"hk4e/pkg/logger"
+	"hk4e/pkg/object"
 	"hk4e/protocol/cmd"
 	"hk4e/protocol/proto"
 
@@ -57,6 +58,8 @@ func (g *Game) SetPlayerBornDataReq(player *model.Player, payloadMsg pb.Message)
 
 	g.AcceptQuest(player, false)
 
+	g.TriggerOpenState(player.PlayerId)
+
 	g.LoginNotify(player.PlayerId, player.ClientSeq, player)
 
 	// 创建世界
@@ -91,7 +94,6 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 
 	SELF = player
 
-	// 初始化
 	player.InitOnlineData()
 
 	if player.GetSceneId() > 100 {
@@ -109,6 +111,8 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 			g.StartQuest(player, quest.QuestId, false)
 		}
 	}
+
+	g.TriggerOpenState(userId)
 
 	if player.IsBorn {
 		g.LoginNotify(userId, clientSeq, player)
@@ -136,7 +140,7 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	clientVersion, _ := region.GetClientVersionByName(req.ChecksumClientVersion)
 	player.ClientVersion = clientVersion
 
-	playerLoginRsp := &proto.PlayerLoginRsp{
+	rsp := &proto.PlayerLoginRsp{
 		IsUseAbilityHash:        true,
 		AbilityHashCode:         0,
 		IsEnableClientHashDebug: true,
@@ -148,13 +152,14 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 		CountryCode:             "US",
 		Birthday:                "2000-01-01",
 	}
-	g.SendMsg(cmd.PlayerLoginRsp, userId, clientSeq, playerLoginRsp)
+	g.SendMsg(cmd.PlayerLoginRsp, userId, clientSeq, rsp)
 
 	SELF = nil
 }
 
 func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player := new(model.Player)
+	player.IsBorn = false
 	player.PlayerId = userId
 	player.NickName = "旅行者"
 	player.Signature = ""
@@ -162,7 +167,6 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.PropMap = make(map[uint32]uint32)
 	player.OpenStateMap = make(map[uint32]uint32)
 	player.ChatMsgMap = make(map[uint32][]*model.ChatMsg)
-
 	player.SceneId = 3
 
 	player.PropMap[constant.PLAYER_PROP_PLAYER_WORLD_LEVEL] = 0
@@ -197,25 +201,11 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
 	player.PropMap[constant.PLAYER_PROP_MAX_STAMINA] = 10000
 
-	player.OpenStateMap[constant.OPEN_STATE_DERIVATIVE_MALL] = 1
-	player.OpenStateMap[constant.OPEN_STATE_PHOTOGRAPH] = 1
-	player.OpenStateMap[constant.OPEN_STATE_GUIDE_RELIC_PROM] = 1
-	player.OpenStateMap[constant.OPEN_STATE_GUIDE_TALENT] = 1
-	player.OpenStateMap[constant.OPEN_STATE_RELIQUARY_PROMOTE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_RECOMMANDED] = 1
-	player.OpenStateMap[constant.OPEN_STATE_RELIQUARY_UPGRADE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_WEAPON_AWAKEN] = 1
-	player.OpenStateMap[constant.OPEN_STATE_WEAPON_PROMOTE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_WEAPON_UPGRADE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_AVATAR_TALENT] = 1
-	player.OpenStateMap[constant.OPEN_STATE_AVATAR_PROMOTE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_RESIN] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_GENESISCRYSTAL] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_GIFTPACKAGE] = 1
-	player.OpenStateMap[constant.OPEN_STATE_BATTLE_PASS] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_BLACKSMITH] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_PAIMON] = 1
-	player.OpenStateMap[constant.OPEN_STATE_SHOP_TYPE_VIRTUAL_SHOP] = 1
+	for _, openStateDataConfig := range gdconf.GetOpenStateDataMap() {
+		if object.ConvInt64ToBool(int64(openStateDataConfig.DefaultOpen)) {
+			player.OpenStateMap[uint32(openStateDataConfig.OpenStateId)] = 1
+		}
+	}
 
 	sceneLuaConfig := gdconf.GetSceneLuaConfigById(int32(player.GetSceneId()))
 	if sceneLuaConfig != nil {

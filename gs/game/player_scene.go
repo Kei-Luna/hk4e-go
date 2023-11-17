@@ -130,10 +130,10 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	g.SendMsg(cmd.EnterScenePeerNotify, player.PlayerId, player.ClientSeq, enterScenePeerNotify)
 
-	enterSceneReadyRsp := &proto.EnterSceneReadyRsp{
+	rsp := &proto.EnterSceneReadyRsp{
 		EnterSceneToken: req.EnterSceneToken,
 	}
-	g.SendMsg(cmd.EnterSceneReadyRsp, player.PlayerId, player.ClientSeq, enterSceneReadyRsp)
+	g.SendMsg(cmd.EnterSceneReadyRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 // SceneInitFinishReq 场景初始化完成
@@ -191,6 +191,7 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		worldDataNotify.WorldPropMap[2] = g.PacketPropValue(2, object.ConvBoolToInt64(world.IsMultiplayerWorld()))
 		g.SendMsg(cmd.WorldDataNotify, player.PlayerId, player.ClientSeq, worldDataNotify)
 
+		// TODO 暂时先解锁全部场景和场景标签 看着喜庆
 		playerWorldSceneInfoListNotify := &proto.PlayerWorldSceneInfoListNotify{
 			InfoList: []*proto.PlayerWorldSceneInfo{
 				{SceneId: 1, IsLocked: false, SceneTagIdList: []uint32{}},
@@ -305,10 +306,10 @@ func (g *Game) SceneInitFinishReq(player *model.Player, payloadMsg pb.Message) {
 		}
 	}
 
-	SceneInitFinishRsp := &proto.SceneInitFinishRsp{
+	rsp := &proto.SceneInitFinishRsp{
 		EnterSceneToken: req.EnterSceneToken,
 	}
-	g.SendMsg(cmd.SceneInitFinishRsp, player.PlayerId, player.ClientSeq, SceneInitFinishRsp)
+	g.SendMsg(cmd.SceneInitFinishRsp, player.PlayerId, player.ClientSeq, rsp)
 
 	player.SceneLoadState = model.SceneInitFinish
 }
@@ -356,6 +357,33 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 			groupConfig := gdconf.GetSceneGroup(triggerDataConfig.GroupId)
 			g.AddSceneGroup(player, scene, groupConfig)
 		}
+		// TODO 七天神像的group太远不加载的临时解决方案
+		if player.GetSceneId() == 3 {
+			groupSuiteNotify := &proto.GroupSuiteNotify{
+				GroupMap: map[uint32]uint32{
+					// 不属于任何group的七天神像及其npc_id
+					// 1209 1276 1280 4904 4905
+					// 包含七天神像npc的group及其npc_id
+					133004001: 1, // 1201 1202 1203 1204
+					133107001: 1, // 1205 1206 1207 1208
+					133105279: 1, // 1268
+					133008051: 2, // 1272
+					133205002: 1, // 1273 1274 1275
+					133217159: 1, // 1277
+					133210213: 1, // 1278
+					133223052: 1, // 1279
+					133106438: 1, // 1281
+					133302001: 1, // 1282 1283 1285 1286 1288
+					133301642: 2, // 1284
+					133301641: 2, // 1287
+					133303649: 1, // 4900
+					133309184: 1, // 4901
+					133310355: 1, // 4902
+					133307014: 1, // 4903
+				},
+			}
+			g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, groupSuiteNotify)
+		}
 	}
 
 	// 同步客户端视野内的场景实体
@@ -389,10 +417,10 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 	}
 	g.SendMsg(cmd.SceneAreaWeatherNotify, player.PlayerId, player.ClientSeq, sceneAreaWeatherNotify)
 
-	enterSceneDoneRsp := &proto.EnterSceneDoneRsp{
+	rsp := &proto.EnterSceneDoneRsp{
 		EnterSceneToken: req.EnterSceneToken,
 	}
-	g.SendMsg(cmd.EnterSceneDoneRsp, player.PlayerId, player.ClientSeq, enterSceneDoneRsp)
+	g.SendMsg(cmd.EnterSceneDoneRsp, player.PlayerId, player.ClientSeq, rsp)
 
 	player.SceneLoadState = model.SceneEnterDone
 
@@ -428,10 +456,10 @@ func (g *Game) PostEnterSceneReq(player *model.Player, payloadMsg pb.Message) {
 
 	world.PlayerEnter(player.PlayerId)
 
-	postEnterSceneRsp := &proto.PostEnterSceneRsp{
+	rsp := &proto.PostEnterSceneRsp{
 		EnterSceneToken: req.EnterSceneToken,
 	}
-	g.SendMsg(cmd.PostEnterSceneRsp, player.PlayerId, player.ClientSeq, postEnterSceneRsp)
+	g.SendMsg(cmd.PostEnterSceneRsp, player.PlayerId, player.ClientSeq, rsp)
 
 	// 触发事件
 	if PLUGIN_MANAGER.TriggerEvent(PluginEventIdPostEnterScene, &PluginEventPostEnterScene{
@@ -453,10 +481,10 @@ func (g *Game) SceneEntityDrownReq(player *model.Player, payloadMsg pb.Message) 
 	scene := world.GetSceneById(player.GetSceneId())
 	g.KillEntity(player, scene, req.EntityId, proto.PlayerDieType_PLAYER_DIE_DRAWN)
 
-	sceneEntityDrownRsp := &proto.SceneEntityDrownRsp{
+	rsp := &proto.SceneEntityDrownRsp{
 		EntityId: req.EntityId,
 	}
-	g.SendMsg(cmd.SceneEntityDrownRsp, player.PlayerId, player.ClientSeq, sceneEntityDrownRsp)
+	g.SendMsg(cmd.SceneEntityDrownRsp, player.PlayerId, player.ClientSeq, rsp)
 }
 
 func (g *Game) EntityForceSyncReq(player *model.Player, payloadMsg pb.Message) {
@@ -1426,6 +1454,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player) *proto.Pl
 		strconv.Itoa(int(player.PlayerId)) + "-" +
 		strconv.Itoa(int(time.Now().Unix())) + "-" +
 		strconv.Itoa(int(SceneTransactionSeq))
+	// TODO 暂时先解锁全部场景标签 看着喜庆
 	for _, sceneTagDataConfig := range gdconf.GetSceneTagDataMap() {
 		if uint32(sceneTagDataConfig.SceneId) == player.GetSceneId() {
 			playerEnterSceneNotify.SceneTagIdList = append(playerEnterSceneNotify.SceneTagIdList, uint32(sceneTagDataConfig.SceneTagId))
@@ -1491,6 +1520,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		strconv.Itoa(int(player.PlayerId)) + "-" +
 		strconv.Itoa(int(time.Now().Unix())) + "-" +
 		strconv.Itoa(int(SceneTransactionSeq))
+	// TODO 暂时先解锁全部场景标签 看着喜庆
 	for _, sceneTagDataConfig := range gdconf.GetSceneTagDataMap() {
 		if uint32(sceneTagDataConfig.SceneId) == sceneId {
 			playerEnterSceneNotify.SceneTagIdList = append(playerEnterSceneNotify.SceneTagIdList, uint32(sceneTagDataConfig.SceneTagId))

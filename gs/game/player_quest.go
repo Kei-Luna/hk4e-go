@@ -183,8 +183,23 @@ func (g *Game) AcceptQuest(player *model.Player, notifyClient bool) {
 			if questData.QuestId == 35721 {
 				// TODO 由于风龙任务进入秘境客户端会无限重连相关原因暂时屏蔽
 				// 直接福瑞
-				COMMAND_MANAGER.gmCmd.GMFreeMode(player.PlayerId)
+				if player.OpenStateMap[constant.OPEN_STATE_LIMIT_REGION_FRESHMEAT] == 0 {
+					COMMAND_MANAGER.gmCmd.GMFreeMode(player.PlayerId)
+					for _, openStateData := range gdconf.GetOpenStateDataMap() {
+						player.OpenStateMap[uint32(openStateData.OpenStateId)] = 1
+					}
+					GAME.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
+						OpenStateMap: player.OpenStateMap,
+					})
+				}
 				continue
+			}
+			if questData.QuestId == 36301 {
+				// TODO 懒得搞
+				g.SendMsg(cmd.ChapterStateNotify, player.PlayerId, player.ClientSeq, &proto.ChapterStateNotify{
+					ChapterState: proto.ChapterState_CHAPTER_STATE_BEGIN,
+					ChapterId:    1001,
+				})
 			}
 			dbQuest.AddQuest(uint32(questData.QuestId))
 			addQuestIdList = append(addQuestIdList, uint32(questData.QuestId))
@@ -251,7 +266,9 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 	for _, questExec := range questExecList {
 		switch questExec.Type {
 		case constant.QUEST_EXEC_TYPE_NOTIFY_GROUP_LUA:
+			// 通知LUA侧
 		case constant.QUEST_EXEC_TYPE_REFRESH_GROUP_SUITE:
+			// 刷新场景小组
 			if len(questExec.Param) != 2 {
 				continue
 			}
@@ -269,6 +286,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			}
 			g.RefreshSceneGroupSuite(player, uint32(groupId), uint8(suiteId))
 		case constant.QUEST_EXEC_TYPE_SET_OPEN_STATE:
+			// 设置游戏功能开放状态
 			if len(questExec.Param) != 2 {
 				continue
 			}
@@ -282,6 +300,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			}
 			g.ChangePlayerOpenState(player.PlayerId, uint32(key), uint32(value))
 		case constant.QUEST_EXEC_TYPE_UNLOCK_POINT:
+			// 解锁传送点
 			if len(questExec.Param) != 2 {
 				continue
 			}
@@ -295,7 +314,21 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			}
 			g.UnlockPlayerTransPoint(player, uint32(sceneId), uint32(pointId))
 		case constant.QUEST_EXEC_TYPE_UNLOCK_AREA:
+			// 解锁场景区域
+			if len(questExec.Param) != 2 {
+				continue
+			}
+			sceneId, err := strconv.Atoi(questExec.Param[0])
+			if err != nil {
+				continue
+			}
+			areaId, err := strconv.Atoi(questExec.Param[1])
+			if err != nil {
+				continue
+			}
+			g.UnlockPlayerSceneArea(player, uint32(sceneId), uint32(areaId))
 		case constant.QUEST_EXEC_TYPE_CHANGE_AVATAR_ELEMET:
+			// 改变主角元素类型
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -306,6 +339,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			dbAvatar := player.GetDbAvatar()
 			g.ChangePlayerAvatarSkillDepot(player.PlayerId, dbAvatar.MainCharAvatarId, 0, elementType)
 		case constant.QUEST_EXEC_TYPE_SET_IS_FLYABLE:
+			// 设置允许飞行状态
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -316,6 +350,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = uint32(value)
 			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_FLYABLE))
 		case constant.QUEST_EXEC_TYPE_SET_IS_WEATHER_LOCKED:
+			// 设置天气锁定状态
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -326,6 +361,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			player.PropMap[constant.PLAYER_PROP_IS_WEATHER_LOCKED] = uint32(value)
 			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_WEATHER_LOCKED))
 		case constant.QUEST_EXEC_TYPE_SET_IS_GAME_TIME_LOCKED:
+			// 设置游戏时间锁定状态
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -336,6 +372,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			player.PropMap[constant.PLAYER_PROP_IS_GAME_TIME_LOCKED] = uint32(value)
 			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_GAME_TIME_LOCKED))
 		case constant.QUEST_EXEC_TYPE_SET_IS_TRANSFERABLE:
+			// 设置允许传送状态
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -346,6 +383,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = uint32(value)
 			g.SendMsg(cmd.PlayerPropNotify, player.PlayerId, player.ClientSeq, g.PacketPlayerPropNotify(player, constant.PLAYER_PROP_IS_TRANSFERABLE))
 		case constant.QUEST_EXEC_TYPE_SET_GAME_TIME:
+			// 设置游戏时间
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -365,6 +403,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			}
 			g.ChangeGameTime(scene, uint32(hour*60))
 		case constant.QUEST_EXEC_TYPE_ROLLBACK_QUEST:
+			// 回滚任务
 			if len(questExec.Param) != 1 {
 				continue
 			}
@@ -376,6 +415,8 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			rollbackQuest := dbQuest.GetQuestById(uint32(rollbackQuestId))
 			rollbackQuest.State = constant.QUEST_STATE_UNSTARTED
 			g.StartQuest(player, rollbackQuest.QuestId, true)
+		default:
+			logger.Error("not support quest exec type: %v, uid: %v", questExec.Type, player.PlayerId)
 		}
 	}
 }
@@ -471,6 +512,10 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 				}
 				dbQuest.ForceFinishQuest(quest.QuestId)
 				updateQuestIdList = append(updateQuestIdList, quest.QuestId)
+			case constant.QUEST_FINISH_COND_TYPE_UNLOCK_AREA:
+				// 解锁场景区域 参数1:场景id 参数2:场景区域id
+			default:
+				logger.Error("not support quest cond type: %v, uid: %v", cond, player.PlayerId)
 			}
 		}
 	}
@@ -514,6 +559,7 @@ func (g *Game) TriggerQuest(player *model.Player, cond int32, complexParam strin
 			}
 		}
 		g.AcceptQuest(player, true)
+		g.TriggerOpenState(player.PlayerId)
 	}
 }
 

@@ -258,8 +258,8 @@ func (g *GMCmd) GMKillAllMonster(userId uint32) {
 		logger.Error("scene is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
 		return
 	}
-	// 杀死所有怪物实体
-	for _, entity := range scene.GetAllEntity() {
+	// 杀死视野内所有怪物实体
+	for _, entity := range GAME.GetVisionEntity(scene, GAME.GetPlayerPos(player)) {
 		// 确保为怪物
 		if entity.GetEntityType() != constant.ENTITY_TYPE_MONSTER {
 			continue
@@ -504,24 +504,20 @@ func (g *GMCmd) GMFreeMode(userId uint32) {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
+
 	player.PropMap[constant.PLAYER_PROP_IS_FLYABLE] = 1
+	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
 	player.PropMap[constant.PLAYER_PROP_IS_WEATHER_LOCKED] = 0
 	player.PropMap[constant.PLAYER_PROP_IS_GAME_TIME_LOCKED] = 0
-	player.PropMap[constant.PLAYER_PROP_IS_TRANSFERABLE] = 1
-	player.PropMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
 	player.PropMap[constant.PLAYER_PROP_PLAYER_CAN_DIVE] = 1
 	player.PropMap[constant.PLAYER_PROP_DIVE_MAX_STAMINA] = 10000
 	player.PropMap[constant.PLAYER_PROP_DIVE_CUR_STAMINA] = 10000
+	player.PropMap[constant.PLAYER_PROP_IS_MP_MODE_AVAILABLE] = 1
 	GAME.SendMsg(cmd.PlayerPropNotify, userId, player.ClientSeq, GAME.PacketPlayerPropNotify(player))
-	for _, openStateData := range gdconf.GetOpenStateDataMap() {
-		player.OpenStateMap[uint32(openStateData.OpenStateId)] = 1
-	}
-	GAME.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
-		OpenStateMap: player.OpenStateMap,
-	})
-	for _, sceneData := range gdconf.GetSceneDataMap() {
-		g.GMUnlockAllPoint(userId, uint32(sceneData.SceneId))
-	}
+
+	GAME.ChangePlayerOpenState(player.PlayerId, constant.OPEN_STATE_LIMIT_REGION_FRESHMEAT, 1)
+	GAME.ChangePlayerOpenState(player.PlayerId, constant.OPEN_STATE_LIMIT_REGION_GLOBAL, 1)
+	GAME.ChangePlayerOpenState(player.PlayerId, constant.OPEN_STATE_MULTIPLAYER, 1)
 }
 
 // GMChangeSkillDepot 切换当前角色技能库

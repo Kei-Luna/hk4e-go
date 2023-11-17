@@ -3,6 +3,7 @@ package game
 import (
 	"time"
 
+	"hk4e/pkg/object"
 	"hk4e/protocol/cmd"
 
 	"hk4e/common/constant"
@@ -39,7 +40,7 @@ func (g *Game) SetOpenStateReq(player *model.Player, payloadMsg pb.Message) {
 		logger.Error("get open state data config is nil, key: %v", req.Key)
 		return
 	}
-	if openStateDataConfig.AllowClientReq == 0 {
+	if !object.ConvInt64ToBool(int64(openStateDataConfig.AllowClientReq)) {
 		g.SendError(cmd.SetOpenStateRsp, player, &proto.SetOpenStateRsp{})
 		return
 	}
@@ -88,8 +89,74 @@ func (g *Game) HandlePlayerExpAdd(userId uint32) {
 		constant.PLAYER_PROP_PLAYER_LEVEL,
 		constant.PLAYER_PROP_PLAYER_EXP,
 	))
+	g.TriggerOpenState(userId)
 }
 
+// TriggerOpenState 触发检测功能开放状态更新
+func (g *Game) TriggerOpenState(userId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	updateOpenStateMap := make(map[uint32]uint32)
+	for _, openStateDataConfig := range gdconf.GetOpenStateDataMap() {
+		if len(openStateDataConfig.OpenStateCondList) == 0 {
+			continue
+		}
+		if player.OpenStateMap[uint32(openStateDataConfig.OpenStateId)] == 1 {
+			continue
+		}
+		finish := true
+		for _, openStateCond := range openStateDataConfig.OpenStateCondList {
+			switch openStateCond.Type {
+			case constant.OPEN_STATE_COND_PLAYER_LEVEL:
+				if len(openStateCond.Param) != 1 {
+					finish = false
+					continue
+				}
+				if player.PropMap[constant.PLAYER_PROP_PLAYER_LEVEL] < uint32(openStateCond.Param[0]) {
+					finish = false
+					continue
+				}
+			case constant.OPEN_STATE_COND_QUEST:
+				if len(openStateCond.Param) != 1 {
+					finish = false
+					continue
+				}
+				dbQuest := player.GetDbQuest()
+				quest := dbQuest.GetQuestById(uint32(openStateCond.Param[0]))
+				if quest == nil {
+					finish = false
+					continue
+				}
+				if quest.State != constant.QUEST_STATE_FINISHED {
+					finish = false
+					continue
+				}
+			case constant.OPEN_STATE_COND_OFFERING_LEVEL:
+				finish = false
+				continue
+			case constant.OPEN_STATE_COND_CITY_REPUTATION_LEVEL:
+				finish = false
+				continue
+			case constant.OPEN_STATE_COND_PARENT_QUEST:
+				finish = false
+				continue
+			}
+		}
+		if finish {
+			logger.Debug("open state change to open, id: %v, uid: %v", openStateDataConfig.OpenStateId, player.PlayerId)
+			updateOpenStateMap[uint32(openStateDataConfig.OpenStateId)] = 1
+			player.OpenStateMap[uint32(openStateDataConfig.OpenStateId)] = 1
+		}
+	}
+	g.SendMsg(cmd.OpenStateChangeNotify, player.PlayerId, player.ClientSeq, &proto.OpenStateChangeNotify{
+		OpenStateMap: updateOpenStateMap,
+	})
+}
+
+// ChangePlayerOpenState 修改功能开放状态
 func (g *Game) ChangePlayerOpenState(userId uint32, key uint32, value uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
@@ -147,10 +214,7 @@ func (g *Game) PacketPlayerPropNotify(player *model.Player, propList ...uint32) 
 
 func (g *Game) PacketOpenStateUpdateNotify(player *model.Player) *proto.OpenStateUpdateNotify {
 	ntf := &proto.OpenStateUpdateNotify{
-		OpenStateMap: make(map[uint32]uint32),
-	}
-	for k, v := range player.OpenStateMap {
-		ntf.OpenStateMap[k] = v
+		OpenStateMap: player.OpenStateMap,
 	}
 	return ntf
 }
