@@ -312,7 +312,7 @@ func (g *Game) ExecQuest(player *model.Player, questId uint32, questExecType int
 			if err != nil {
 				continue
 			}
-			g.UnlockPlayerTransPoint(player, uint32(sceneId), uint32(pointId))
+			g.UnlockPlayerScenePoint(player, uint32(sceneId), uint32(pointId))
 		case constant.QUEST_EXEC_TYPE_UNLOCK_AREA:
 			// 解锁场景区域
 			if len(questExec.Param) != 2 {

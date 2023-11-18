@@ -325,14 +325,14 @@ func (g *GMCmd) GMForceFinishAllQuest(userId uint32) {
 	GAME.SendMsg(cmd.QuestListUpdateNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
-// GMUnlockPoint 解锁场景某个锚点
+// GMUnlockPoint 解锁场景锚点
 func (g *GMCmd) GMUnlockPoint(userId uint32, sceneId uint32, pointId uint32) {
 	player := USER_MANAGER.GetOnlineUser(userId)
 	if player == nil {
 		logger.Error("player is nil, uid: %v", userId)
 		return
 	}
-	GAME.UnlockPlayerTransPoint(player, sceneId, pointId)
+	GAME.UnlockPlayerScenePoint(player, sceneId, pointId)
 }
 
 // GMUnlockAllPoint 解锁场景全部锚点
@@ -356,10 +356,52 @@ func (g *GMCmd) GMUnlockAllPoint(userId uint32, sceneId uint32) {
 	for _, pointData := range scenePointMapConfig {
 		dbScene.UnlockPoint(uint32(pointData.Id))
 	}
-	GAME.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	GAME.SendToSceneA(scene, cmd.ScenePointUnlockNotify, player.ClientSeq, &proto.ScenePointUnlockNotify{
 		SceneId:   sceneId,
 		PointList: dbScene.GetUnlockPointList(),
-	})
+	}, 0)
+}
+
+// GMUnlockArea 解锁场景区域
+func (g *GMCmd) GMUnlockArea(userId uint32, sceneId uint32, areaId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	GAME.UnlockPlayerSceneArea(player, sceneId, areaId)
+}
+
+// GMUnlockAllArea 解锁场景全部区域
+func (g *GMCmd) GMUnlockAllArea(userId uint32, sceneId uint32) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(sceneId)
+	if dbScene == nil {
+		logger.Error("db scene is nil, sceneId: %v, uid: %v", sceneId, userId)
+		return
+	}
+	for _, worldAreaDataConfig := range gdconf.GetWorldAreaDataMap() {
+		dbScene.UnlockArea(uint32(worldAreaDataConfig.AreaId1))
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	GAME.SendToSceneA(scene, cmd.SceneAreaUnlockNotify, player.ClientSeq, &proto.SceneAreaUnlockNotify{
+		SceneId:  sceneId,
+		AreaList: dbScene.GetUnlockAreaList(),
+	}, 0)
 }
 
 // GMSetWeather 设置天气

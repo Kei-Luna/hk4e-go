@@ -4,7 +4,7 @@ import (
 	"hk4e/pkg/logger"
 )
 
-// TriggerData 场景LUA触发器配置表
+// TriggerData 场景区域触发器配置表
 type TriggerData struct {
 	TriggerId   int32  `csv:"ID"`
 	SceneId     int32  `csv:"场景ID,omitempty"`

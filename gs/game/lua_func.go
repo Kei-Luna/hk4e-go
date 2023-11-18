@@ -124,6 +124,8 @@ func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("PrintContextLog", PrintContextLog)
 	gdconf.RegScriptLibFunc("BeginCameraSceneLook", BeginCameraSceneLook)
 	gdconf.RegScriptLibFunc("GetGroupMonsterCount", GetGroupMonsterCount)
+	gdconf.RegScriptLibFunc("GetGroupMonsterCountByGroupId", GetGroupMonsterCountByGroupId)
+	gdconf.RegScriptLibFunc("CheckRemainGadgetCountByGroupId", CheckRemainGadgetCountByGroupId)
 	gdconf.RegScriptLibFunc("ChangeGroupGadget", ChangeGroupGadget)
 	gdconf.RegScriptLibFunc("GetGadgetStateByConfigId", GetGadgetStateByConfigId)
 	gdconf.RegScriptLibFunc("SetGadgetStateByConfigId", SetGadgetStateByConfigId)
@@ -143,6 +145,18 @@ func RegLuaScriptLibFunc() {
 	gdconf.RegScriptLibFunc("CreateGroupTimerEvent", CreateGroupTimerEvent)
 	gdconf.RegScriptLibFunc("EnterWeatherArea", EnterWeatherArea)
 	gdconf.RegScriptLibFunc("SetWeatherAreaState", SetWeatherAreaState)
+	gdconf.RegScriptLibFunc("RefreshGroup", RefreshGroup)
+	gdconf.RegScriptLibFunc("RemoveExtraGroupSuite", RemoveExtraGroupSuite)
+	gdconf.RegScriptLibFunc("ShowReminder", ShowReminder)
+}
+
+type CommonLuaTableParam struct {
+	ConfigId   int32 `json:"config_id"`
+	DelayTime  int32 `json:"delay_time"`
+	RegionEid  int32 `json:"region_eid"`
+	EntityType int32 `json:"entity_type"`
+	GroupId    int32 `json:"group_id"`
+	Suite      int32 `json:"suite"`
 }
 
 func GetEntityType(luaState *lua.LState) int {
@@ -245,6 +259,78 @@ func GetGroupMonsterCount(luaState *lua.LState) int {
 		}
 	}
 	luaState.Push(lua.LNumber(monsterCount))
+	return 1
+}
+
+func GetGroupMonsterCountByGroupId(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	scene := world.GetSceneById(player.GetSceneId())
+	groupId := luaState.ToInt(2)
+	group := scene.GetGroupById(uint32(groupId))
+	if group == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	monsterCount := 0
+	for _, entity := range group.GetAllEntity() {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_MONSTER {
+			monsterCount++
+		}
+	}
+	luaState.Push(lua.LNumber(monsterCount))
+	return 1
+}
+
+func CheckRemainGadgetCountByGroupId(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	scene := world.GetSceneById(player.GetSceneId())
+	luaTable, ok := luaState.Get(2).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
+	group := scene.GetGroupById(uint32(luaTableParam.GroupId))
+	if group == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	gadgetCount := 0
+	for _, entity := range group.GetAllEntity() {
+		if entity.GetEntityType() == constant.ENTITY_TYPE_GADGET {
+			gadgetCount++
+		}
+	}
+	luaState.Push(lua.LNumber(gadgetCount))
 	return 1
 }
 
@@ -379,13 +465,6 @@ func AddQuestProgress(luaState *lua.LState) int {
 	return 1
 }
 
-type LuaTableParam struct {
-	ConfigId   int32 `json:"config_id"`
-	DelayTime  int32 `json:"delay_time"`
-	RegionEid  int32 `json:"region_eid"`
-	EntityType int32 `json:"entity_type"`
-}
-
 func CreateMonster(luaState *lua.LState) int {
 	ctx, ok := luaState.Get(1).(*lua.LTable)
 	if !ok {
@@ -407,8 +486,8 @@ func CreateMonster(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	luaTableParam := new(LuaTableParam)
-	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
 	TICK_MANAGER.CreateUserTimer(player.PlayerId, UserTimerActionLuaCreateMonster, uint32(luaTableParam.DelayTime),
 		uint32(groupId), uint32(luaTableParam.ConfigId))
 	luaState.Push(lua.LNumber(0))
@@ -436,8 +515,8 @@ func CreateGadget(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	luaTableParam := new(LuaTableParam)
-	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
 	GAME.SceneGroupCreateEntity(player, uint32(groupId), uint32(luaTableParam.ConfigId), constant.ENTITY_TYPE_GADGET)
 	luaState.Push(lua.LNumber(0))
 	return 1
@@ -464,8 +543,8 @@ func KillEntityByConfigId(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	luaTableParam := new(LuaTableParam)
-	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
 		luaState.Push(lua.LNumber(-1))
@@ -473,7 +552,15 @@ func KillEntityByConfigId(luaState *lua.LState) int {
 	}
 	scene := world.GetSceneById(player.GetSceneId())
 	group := scene.GetGroupById(uint32(groupId))
+	if group == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	entity := group.GetEntityByConfigId(uint32(luaTableParam.ConfigId))
+	if entity == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
 	GAME.KillEntity(player, scene, entity.GetId(), proto.PlayerDieType_PLAYER_DIE_NONE)
 	luaState.Push(lua.LNumber(0))
 	return 1
@@ -674,8 +761,8 @@ func GetRegionEntityCount(luaState *lua.LState) int {
 		luaState.Push(lua.LNumber(-1))
 		return 1
 	}
-	luaTableParam := new(LuaTableParam)
-	gdconf.ParseLuaTableToObject[*LuaTableParam](luaTable, luaTableParam)
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
 	groupConfig := gdconf.GetSceneGroup(int32(groupId))
 	if groupConfig == nil {
 		luaState.Push(lua.LNumber(-1))
@@ -779,6 +866,52 @@ func SetWeatherAreaState(luaState *lua.LState) int {
 	weatherAreaId := luaState.ToInt(2)
 	climateType := luaState.ToInt(3)
 	GAME.SetPlayerWeather(player, uint32(weatherAreaId), uint32(climateType))
+	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func RefreshGroup(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	luaTable, ok := luaState.Get(2).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	luaTableParam := new(CommonLuaTableParam)
+	gdconf.ParseLuaTableToObject[*CommonLuaTableParam](luaTable, luaTableParam)
+	GAME.RefreshSceneGroupSuite(player, uint32(luaTableParam.GroupId), uint8(luaTableParam.Suite))
+	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func RemoveExtraGroupSuite(luaState *lua.LState) int {
+	ctx, ok := luaState.Get(1).(*lua.LTable)
+	if !ok {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	player := GetContextPlayer(ctx, luaState)
+	if player == nil {
+		luaState.Push(lua.LNumber(-1))
+		return 1
+	}
+	groupId := luaState.ToInt(2)
+	suiteId := luaState.ToInt(3)
+	GAME.RemoveSceneGroupSuite(player, uint32(groupId), uint8(suiteId))
+	luaState.Push(lua.LNumber(0))
+	return 1
+}
+
+func ShowReminder(luaState *lua.LState) int {
 	luaState.Push(lua.LNumber(0))
 	return 1
 }

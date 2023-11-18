@@ -21,8 +21,10 @@ func (g *Game) PingReq(player *model.Player, payloadMsg pb.Message) {
 	player.ClientTime = req.ClientTime
 	now := uint32(time.Now().Unix())
 	// 客户端与服务器时间相差太过严重
-	if math.Abs(float64(now-player.ClientTime)) > 600.0 {
-		logger.Debug("abs of client time and server time above 600s, clientTime: %v, uid: %v", player.ClientTime, player.PlayerId)
+	max := math.Max(float64(now), float64(player.ClientTime))
+	min := math.Min(float64(now), float64(player.ClientTime))
+	if math.Abs(max-min) > 600.0 {
+		logger.Error("abs of client time and server time above 600s, clientTime: %v, uid: %v", player.ClientTime, player.PlayerId)
 	}
 	player.LastKeepaliveTime = now
 
@@ -292,12 +294,6 @@ func (g *Game) GmTalkReq(player *model.Player, payloadMsg pb.Message) {
 		}
 	}
 	g.SendMsg(cmd.GmTalkRsp, player.PlayerId, player.ClientSeq, &proto.GmTalkRsp{Retmsg: "执行成功", Msg: req.Msg})
-}
-
-func (g *Game) GetChatEmojiCollectionReq(player *model.Player, payloadMsg pb.Message) {
-	req := payloadMsg.(*proto.GetChatEmojiCollectionReq)
-	_ = req
-	g.SendMsg(cmd.GetChatEmojiCollectionRsp, player.PlayerId, player.ClientSeq, new(proto.GetChatEmojiCollectionRsp))
 }
 
 func (g *Game) PacketPropValue(key uint32, value any) *proto.PropValue {

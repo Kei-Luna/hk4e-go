@@ -803,6 +803,7 @@ func (c *CommandManager) NewDebugCommandController() *CommandController {
 		UsageList: []string{
 			"{alias} freemode 自由探索模式",
 			"{alias} openstate 解锁全部功能",
+			"{alias} unlockarea 解锁全部地图区域",
 			"{alias} clearworld 清除大世界数据",
 			"{alias} notsave 本次离线回档",
 			"{alias} xluaswitch 开关xLua",
@@ -829,6 +830,16 @@ func (c *CommandManager) DebugCommand(content *CommandContent) bool {
 		case "openstate":
 			c.gmCmd.GMUnlockAllOpenState(content.AssignPlayer.PlayerId)
 			content.SendSuccMessage(content.Executor, "已解锁全部功能，指定UID：%v。", content.AssignPlayer.PlayerId)
+			return true
+		case "unlockarea":
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 1)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 3)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 4)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 5)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 6)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 7)
+			c.gmCmd.GMUnlockAllArea(content.AssignPlayer.PlayerId, 9)
+			content.SendSuccMessage(content.Executor, "已解锁全部地图区域，指定UID：%v。", content.AssignPlayer.PlayerId)
 			return true
 		case "clearworld":
 			c.gmCmd.GMClearWorld(content.AssignPlayer.PlayerId)

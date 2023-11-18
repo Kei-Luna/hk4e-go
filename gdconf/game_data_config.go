@@ -36,7 +36,7 @@ type GameDataConfig struct {
 	SceneLuaConfigMap          map[int32]*SceneLuaConfig               // 场景LUA配置
 	GroupMap                   map[int32]*Group                        // 场景LUA区块group索引
 	LuaStateLruMap             map[int32]*LuaStateLru                  // 场景LUA虚拟机LRU内存淘汰
-	TriggerDataMap             map[int32]*TriggerData                  // 场景LUA触发器
+	TriggerDataMap             map[int32]*TriggerData                  // 场景区域触发器
 	ScenePointMap              map[int32]*ScenePoint                   // 场景传送点
 	SceneTagDataMap            map[int32]*SceneTagData                 // 场景标签
 	GatherDataMap              map[int32]*GatherData                   // 采集物
@@ -150,7 +150,7 @@ func (g *GameDataConfig) loadAll(loadSceneLua bool) {
 func (g *GameDataConfig) load(loadSceneLua bool) {
 	g.loadSceneData()                  // 场景
 	g.loadSceneLuaConfig(loadSceneLua) // 场景LUA配置
-	g.loadTriggerData()                // 场景LUA触发器
+	g.loadTriggerData()                // 场景区域触发器
 	g.loadScenePoint()                 // 场景传送点
 	g.loadSceneTagData()               // 场景标签
 	g.loadGatherData()                 // 采集物

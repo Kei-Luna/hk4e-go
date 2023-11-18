@@ -293,7 +293,7 @@ func (g *Game) EndlessLoopCheck(checkType int) {
 			EndlessLoopHandleFunc()
 		}
 	case EndlessLoopCheckTypeCallLuaFunc:
-		if checkCount > 100 {
+		if checkCount > 1000 {
 			EndlessLoopHandleFunc()
 		}
 	default:
@@ -304,7 +304,7 @@ var EXIT_SAVE_FIN_CHAN chan bool
 
 func (g *Game) ServerStopNotify() {
 	go func() {
-		info := "服务器即将关闭。"
+		info := "停服维护"
 		GAME.ServerAnnounceNotify(1, info)
 		logger.Warn("stop game server last 1 minute")
 		time.Sleep(time.Minute)

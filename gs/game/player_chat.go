@@ -178,6 +178,12 @@ func (g *Game) PlayerChatReq(player *model.Player, payloadMsg pb.Message) {
 	g.SendMsg(cmd.PlayerChatRsp, player.PlayerId, player.ClientSeq, new(proto.PlayerChatRsp))
 }
 
+func (g *Game) GetChatEmojiCollectionReq(player *model.Player, payloadMsg pb.Message) {
+	req := payloadMsg.(*proto.GetChatEmojiCollectionReq)
+	_ = req
+	g.SendMsg(cmd.GetChatEmojiCollectionRsp, player.PlayerId, player.ClientSeq, new(proto.GetChatEmojiCollectionRsp))
+}
+
 /************************************************** 游戏功能 **************************************************/
 
 // SendPrivateChat 发送私聊文本消息给玩家

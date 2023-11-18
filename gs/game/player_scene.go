@@ -355,7 +355,9 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 		}
 		for _, triggerDataConfig := range gdconf.GetTriggerDataMap() {
 			groupConfig := gdconf.GetSceneGroup(triggerDataConfig.GroupId)
-			g.AddSceneGroup(player, scene, groupConfig)
+			if groupConfig != nil {
+				g.AddSceneGroup(player, scene, groupConfig)
+			}
 		}
 		// TODO 七天神像的group太远不加载的临时解决方案
 		if player.GetSceneId() == 3 {
@@ -939,7 +941,7 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 	// g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
 }
 
-// AddSceneGroupSuite 向场景组中添加场景小组
+// AddSceneGroupSuite 场景组中添加场景小组
 func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
 	// logger.Debug("add scene group suite, groupId: %v, suiteId: %v, uid: %v", groupId, suiteId, player.PlayerId)
 	groupConfig := gdconf.GetSceneGroup(int32(groupId))
@@ -970,6 +972,37 @@ func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId 
 		entityIdList = append(entityIdList, entity.GetId())
 	}
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, entityIdList, true, false)
+}
+
+// RemoveSceneGroupSuite 场景组中移除场景小组
+func (g *Game) RemoveSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.GetSceneId())
+	group := scene.GetGroupById(groupId)
+	if group != nil {
+		suite := group.GetSuiteById(suiteId)
+		if suite != nil {
+			entityIdList := make([]uint32, 0)
+			for _, entity := range suite.GetAllEntity() {
+				entityIdList = append(entityIdList, entity.GetId())
+			}
+			g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, entityIdList, 0)
+			scene.RemoveGroupSuite(groupId, suiteId)
+		}
+	}
+}
+
+// RefreshSceneGroupSuite 刷新场景小组
+func (g *Game) RefreshSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(player.GetSceneId())
+	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	dbSceneGroup.RemoveAllKill()
+	g.RemoveSceneGroupSuite(player, groupId, suiteId)
+	g.AddSceneGroupSuite(player, groupId, suiteId)
 }
 
 func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupId uint32, suiteId uint8) {
@@ -1032,34 +1065,6 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 		entityMap[entityId] = entity
 	}
 	scene.AddGroupSuite(groupId, suiteId, entityMap)
-}
-
-func (g *Game) RefreshSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
-	world := WORLD_MANAGER.GetWorldById(player.WorldId)
-	if world == nil {
-		return
-	}
-
-	scene := world.GetSceneById(player.GetSceneId())
-	group := scene.GetGroupById(groupId)
-	if group != nil {
-		suite := group.GetSuiteById(suiteId)
-		if suite != nil {
-			entityIdList := make([]uint32, 0)
-			for _, entity := range suite.GetAllEntity() {
-				entityIdList = append(entityIdList, entity.GetId())
-			}
-			g.RemoveSceneEntityNotifyBroadcast(scene, proto.VisionType_VISION_MISS, entityIdList, 0)
-			scene.RemoveGroupSuite(groupId, suiteId)
-
-			dbWorld := player.GetDbWorld()
-			dbScene := dbWorld.GetSceneById(player.GetSceneId())
-			dbSceneGroup := dbScene.GetSceneGroupById(groupId)
-			dbSceneGroup.RemoveAllKill()
-		}
-	}
-
-	g.AddSceneGroupSuite(player, groupId, suiteId)
 }
 
 // CreateConfigEntity 创建配置表里的实体

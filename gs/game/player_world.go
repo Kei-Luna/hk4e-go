@@ -71,7 +71,7 @@ func (g *Game) SceneTransToPointReq(player *model.Player, payloadMsg pb.Message)
 func (g *Game) UnlockTransPointReq(player *model.Player, payloadMsg pb.Message) {
 	req := payloadMsg.(*proto.UnlockTransPointReq)
 
-	ret := g.UnlockPlayerTransPoint(player, req.SceneId, req.PointId)
+	ret := g.UnlockPlayerScenePoint(player, req.SceneId, req.PointId)
 	if ret != proto.Retcode_RET_SUCC {
 		g.SendError(cmd.UnlockTransPointRsp, player, &proto.UnlockTransPointRsp{}, ret)
 		return
@@ -509,13 +509,13 @@ func (g *Game) ExitTransPointRegionNotify(player *model.Player, payloadMsg pb.Me
 
 /************************************************** 游戏功能 **************************************************/
 
-// UnlockPlayerTransPoint 解锁锚点
-func (g *Game) UnlockPlayerTransPoint(player *model.Player, sceneId uint32, pointId uint32) proto.Retcode {
+// UnlockPlayerScenePoint 解锁场景锚点
+func (g *Game) UnlockPlayerScenePoint(player *model.Player, sceneId uint32, pointId uint32) proto.Retcode {
 	dbWorld := player.GetDbWorld()
 	dbScene := dbWorld.GetSceneById(sceneId)
 	if dbScene == nil {
 		logger.Error("get dbScene is nil, sceneId: %v, uid: %v", sceneId, player.PlayerId)
-		return proto.Retcode_RET_POINT_NOT_UNLOCKED
+		return proto.Retcode_RET_SVR_ERROR
 	}
 	unlock := dbScene.CheckPointUnlock(pointId)
 	if unlock {
@@ -523,10 +523,15 @@ func (g *Game) UnlockPlayerTransPoint(player *model.Player, sceneId uint32, poin
 		return proto.Retcode_RET_POINT_ALREAY_UNLOCKED
 	}
 	dbScene.UnlockPoint(pointId)
-	g.SendMsg(cmd.ScenePointUnlockNotify, player.PlayerId, player.ClientSeq, &proto.ScenePointUnlockNotify{
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return proto.Retcode_RET_SVR_ERROR
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.ScenePointUnlockNotify, player.ClientSeq, &proto.ScenePointUnlockNotify{
 		SceneId:   sceneId,
 		PointList: []uint32{pointId},
-	})
+	}, 0)
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_TRANS_POINT, "", int32(sceneId), int32(pointId))
 	return proto.Retcode_RET_SUCC
 }
@@ -545,10 +550,15 @@ func (g *Game) UnlockPlayerSceneArea(player *model.Player, sceneId uint32, areaI
 		return
 	}
 	dbScene.UnlockArea(areaId)
-	g.SendMsg(cmd.SceneAreaUnlockNotify, player.PlayerId, player.ClientSeq, &proto.SceneAreaUnlockNotify{
+	world := WORLD_MANAGER.GetWorldById(player.WorldId)
+	if world == nil {
+		return
+	}
+	scene := world.GetSceneById(player.SceneId)
+	g.SendToSceneA(scene, cmd.SceneAreaUnlockNotify, player.ClientSeq, &proto.SceneAreaUnlockNotify{
 		SceneId:  sceneId,
 		AreaList: []uint32{areaId},
-	})
+	}, 0)
 	g.TriggerQuest(player, constant.QUEST_FINISH_COND_TYPE_UNLOCK_AREA, "", int32(sceneId), int32(areaId))
 }
 
