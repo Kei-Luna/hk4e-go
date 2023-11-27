@@ -137,6 +137,12 @@ func (r *RouteManager) initRoute() {
 		cmd.UnlockAvatarTalentReq:             GAME.UnlockAvatarTalentReq,
 		cmd.ReliquaryUpgradeReq:               GAME.ReliquaryUpgradeReq,
 		cmd.ReliquaryPromoteReq:               GAME.ReliquaryPromoteReq,
+		cmd.GetAllMailReq:                     GAME.GetAllMailReq,
+		cmd.GetAllMailNotify:                  GAME.GetAllMailNotify,
+		cmd.DelMailReq:                        GAME.DelMailReq,
+		cmd.GetMailItemReq:                    GAME.GetMailItemReq,
+		cmd.ReadMailNotify:                    GAME.ReadMailNotify,
+		cmd.ChangeMailStarNotify:              GAME.ChangeMailStarNotify,
 	}
 }
 

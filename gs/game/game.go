@@ -53,6 +53,7 @@ type Game struct {
 	isStop             bool                 // 停服标志
 	dispatchCancel     bool                 // 取消调度标志
 	endlessLoopCounter map[int]uint64       // 死循环保护计数器
+	transactionSeq     uint32               // 事务序列号
 	ai                 *model.Player        // 本服的Ai玩家对象
 }
 
@@ -68,6 +69,7 @@ func NewGameCore(discoveryClient *rpc.DiscoveryClient, db *dao.Dao, messageQueue
 	r.isStop = false
 	r.dispatchCancel = false
 	r.endlessLoopCounter = make(map[int]uint64)
+	r.transactionSeq = 0
 	GAME = r
 	LOCAL_EVENT_MANAGER = NewLocalEventManager()
 	ROUTE_MANAGER = NewRouteManager()
@@ -298,6 +300,11 @@ func (g *Game) EndlessLoopCheck(checkType int) {
 		}
 	default:
 	}
+}
+
+func (g *Game) NewTransaction(uid uint32) string {
+	g.transactionSeq++
+	return strconv.Itoa(int(uid)) + "-" + strconv.Itoa(int(time.Now().Unix())) + "-" + strconv.Itoa(int(g.transactionSeq))
 }
 
 var EXIT_SAVE_FIN_CHAN chan bool

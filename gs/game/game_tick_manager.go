@@ -66,6 +66,12 @@ func (t *TickManager) CreateUserGlobalTick(userId uint32) {
 
 // DestroyUserGlobalTick 销毁玩家tick对象
 func (t *TickManager) DestroyUserGlobalTick(userId uint32) {
+	userTick, exist := t.userTickMap[userId]
+	if !exist {
+		logger.Error("user not exist, uid: %v", userId)
+		return
+	}
+	userTick.globalTick.Stop()
 	delete(t.userTickMap, userId)
 }
 

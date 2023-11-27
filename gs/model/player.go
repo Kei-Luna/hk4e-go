@@ -89,8 +89,9 @@ type Player struct {
 	MpPos                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界坐标
 	MpRot                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界朝向
 	// 特殊数据
-	ChatMsgMap           map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 数据量偏大 只从db读写 不保存到redis
-	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 在线同步到redis 不保存到db
+	ChatMsgMap           map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 只从db读写 不保存到redis
+	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 不保存到db 在线同步到redis
+	MailMap              map[uint32]*Mail      `bson:"-" msgpack:"-"` // 邮件信息 只从db读写 不保存到redis
 }
 
 // 存档场景
@@ -179,6 +180,8 @@ func (p *Player) InitOnlineData() {
 	dbWeapon.InitDbWeapon(p)
 	dbItem := p.GetDbItem()
 	dbItem.InitDbItem(p)
+
+	p.MailMap = make(map[uint32]*Mail)
 }
 
 type Vector struct {

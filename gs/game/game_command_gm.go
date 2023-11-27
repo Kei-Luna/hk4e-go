@@ -501,7 +501,6 @@ func (g *GMCmd) GMClearQuest(userId uint32) {
 		return
 	}
 	player.DbQuest = nil
-	GAME.AcceptQuest(player, false)
 	GAME.LogoutPlayer(userId)
 }
 
@@ -852,4 +851,13 @@ func (g *GMCmd) GetPlayerPos(userId uint32) (*model.Vector, *model.Vector) {
 		return nil, nil
 	}
 	return GAME.GetPlayerPos(player), player.GetPos()
+}
+
+func (g *GMCmd) SendMail(userId uint32, title string, content string) {
+	player := USER_MANAGER.GetOnlineUser(userId)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", userId)
+		return
+	}
+	GAME.AddPlayerMail(userId, title, content)
 }

@@ -446,6 +446,19 @@ func (c *CmdProtoMap) registerMessage() {
 	c.regMsg(ServerLogNotify, func() any { return new(proto.ServerLogNotify) })
 	c.regMsg(MarkEntityInMinMapNotify, func() any { return new(proto.MarkEntityInMinMapNotify) })
 	c.regMsg(UnmarkEntityInMinMapNotify, func() any { return new(proto.UnmarkEntityInMinMapNotify) })
+
+	// 邮件
+	c.regMsg(GetAllMailReq, func() any { return new(proto.GetAllMailReq) })                   // 获取邮件列表请求
+	c.regMsg(GetAllMailRsp, func() any { return new(proto.GetAllMailRsp) })                   // 获取邮件列表响应
+	c.regMsg(GetAllMailNotify, func() any { return new(proto.GetAllMailNotify) })             // 获取邮件列表通知
+	c.regMsg(GetAllMailResultNotify, func() any { return new(proto.GetAllMailResultNotify) }) // 获取邮件列表结果通知
+	c.regMsg(MailChangeNotify, func() any { return new(proto.MailChangeNotify) })             // 新邮件通知
+	c.regMsg(DelMailReq, func() any { return new(proto.DelMailReq) })                         // 删除邮件请求
+	c.regMsg(DelMailRsp, func() any { return new(proto.DelMailRsp) })                         // 删除邮件响应
+	c.regMsg(GetMailItemReq, func() any { return new(proto.GetMailItemReq) })                 // 邮件领奖请求
+	c.regMsg(GetMailItemRsp, func() any { return new(proto.GetMailItemRsp) })                 // 邮件领奖响应
+	c.regMsg(ReadMailNotify, func() any { return new(proto.ReadMailNotify) })                 // 邮件阅读通知
+	c.regMsg(ChangeMailStarNotify, func() any { return new(proto.ChangeMailStarNotify) })     // 邮件收藏通知
 }
 
 func (c *CmdProtoMap) regMsg(cmdId uint16, protoObjNewFunc func() any) {

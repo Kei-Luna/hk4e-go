@@ -104,12 +104,11 @@ func (g *Game) OnLogin(userId uint32, clientSeq uint32, gateAppId string, player
 	player.MpPos = new(model.Vector)
 	player.MpRot = new(model.Vector)
 
-	dbQuest := player.GetDbQuest()
-	for _, quest := range dbQuest.GetQuestMap() {
-		if quest.State == constant.QUEST_STATE_UNFINISHED {
-			quest.State = constant.QUEST_STATE_UNSTARTED
-			g.StartQuest(player, quest.QuestId, false)
-		}
+	if player.DbQuest == nil {
+		player.SceneId = 3
+		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
+		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
+		g.AcceptQuest(player, false)
 	}
 
 	g.TriggerOpenState(userId)

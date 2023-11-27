@@ -1427,8 +1427,6 @@ func (g *Game) SetPlayerWeather(player *model.Player, weatherAreaId uint32, clim
 
 /************************************************** 打包封装 **************************************************/
 
-var SceneTransactionSeq uint32 = 0
-
 func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player) *proto.PlayerEnterSceneNotify {
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
@@ -1454,11 +1452,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyLogin(player *model.Player) *proto.Pl
 		WorldType:              1,
 		SceneTagIdList:         make([]uint32, 0),
 	}
-	SceneTransactionSeq++
-	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(player.GetSceneId())) + "-" +
-		strconv.Itoa(int(player.PlayerId)) + "-" +
-		strconv.Itoa(int(time.Now().Unix())) + "-" +
-		strconv.Itoa(int(SceneTransactionSeq))
+	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(player.GetSceneId())) + "-" + g.NewTransaction(player.PlayerId)
 	// TODO 暂时先解锁全部场景标签 看着喜庆
 	for _, sceneTagDataConfig := range gdconf.GetSceneTagDataMap() {
 		if uint32(sceneTagDataConfig.SceneId) == player.GetSceneId() {
@@ -1520,11 +1514,7 @@ func (g *Game) PacketPlayerEnterSceneNotifyCore(
 		DungeonId:       dungeonId,
 		SceneTagIdList:  make([]uint32, 0),
 	}
-	SceneTransactionSeq++
-	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(sceneId)) + "-" +
-		strconv.Itoa(int(player.PlayerId)) + "-" +
-		strconv.Itoa(int(time.Now().Unix())) + "-" +
-		strconv.Itoa(int(SceneTransactionSeq))
+	playerEnterSceneNotify.SceneTransaction = strconv.Itoa(int(sceneId)) + "-" + g.NewTransaction(player.PlayerId)
 	// TODO 暂时先解锁全部场景标签 看着喜庆
 	for _, sceneTagDataConfig := range gdconf.GetSceneTagDataMap() {
 		if uint32(sceneTagDataConfig.SceneId) == sceneId {
