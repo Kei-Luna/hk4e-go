@@ -318,7 +318,7 @@ func UpdateFrame(fileData []byte, basePos *model.Vector, rgb bool) {
 						Z: leftTopPos.Z,
 					}, new(model.Vector),
 					uint32(FRAME_COLOR[w][h]), uint32(constant.GADGET_STATE_DEFAULT),
-					new(GadgetNormalEntity), 0, 0)
+					new(GadgetNormalEntity), 0, 0, constant.VISION_LEVEL_SUPER)
 				SCREEN_ENTITY_ID_LIST = append(SCREEN_ENTITY_ID_LIST, entityId)
 			} else {
 				if !FRAME[w][h] {
@@ -329,7 +329,7 @@ func UpdateFrame(fileData []byte, basePos *model.Vector, rgb bool) {
 							Z: leftTopPos.Z,
 						}, new(model.Vector),
 						uint32(GADGET_ID), uint32(constant.GADGET_STATE_DEFAULT),
-						new(GadgetNormalEntity), 0, 0)
+						new(GadgetNormalEntity), 0, 0, constant.VISION_LEVEL_SUPER)
 					SCREEN_ENTITY_ID_LIST = append(SCREEN_ENTITY_ID_LIST, entityId)
 				}
 			}

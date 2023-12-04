@@ -1,7 +1,6 @@
 package model
 
 import (
-	"hk4e/common/constant"
 	"hk4e/gdconf"
 )
 
@@ -15,13 +14,6 @@ type DbScene struct {
 	UnlockPointMap map[uint32]bool
 	UnHidePointMap map[uint32]bool
 	UnlockAreaMap  map[uint32]bool
-	SceneGroupMap  map[uint32]*DbSceneGroup
-}
-
-type DbSceneGroup struct {
-	VariableMap    map[string]int32
-	KillConfigMap  map[uint32]bool
-	GadgetStateMap map[uint32]uint8
 }
 
 type MapMark struct {
@@ -67,9 +59,6 @@ func (w *DbWorld) GetSceneById(sceneId uint32) *DbScene {
 	}
 	if scene.UnlockAreaMap == nil {
 		scene.UnlockAreaMap = make(map[uint32]bool)
-	}
-	if scene.SceneGroupMap == nil {
-		scene.SceneGroupMap = make(map[uint32]*DbSceneGroup)
 	}
 	return scene
 }
@@ -131,61 +120,5 @@ func (s *DbScene) UnlockArea(areaId uint32) {
 
 func (s *DbScene) CheckAreaUnlock(areaId uint32) bool {
 	_, exist := s.UnlockAreaMap[areaId]
-	return exist
-}
-
-func (s *DbScene) GetSceneGroupById(groupId uint32) *DbSceneGroup {
-	dbSceneGroup, exist := s.SceneGroupMap[groupId]
-	if !exist {
-		dbSceneGroup = &DbSceneGroup{
-			VariableMap:    make(map[string]int32),
-			KillConfigMap:  make(map[uint32]bool),
-			GadgetStateMap: make(map[uint32]uint8),
-		}
-		s.SceneGroupMap[groupId] = dbSceneGroup
-	}
-	return dbSceneGroup
-}
-
-func (g *DbSceneGroup) GetVariableByName(name string) int32 {
-	return g.VariableMap[name]
-}
-
-func (g *DbSceneGroup) SetVariable(name string, value int32) {
-	g.VariableMap[name] = value
-}
-
-func (g *DbSceneGroup) CheckVariableExist(name string) bool {
-	_, exist := g.VariableMap[name]
-	return exist
-}
-
-func (g *DbSceneGroup) AddKill(configId uint32) {
-	g.KillConfigMap[configId] = true
-}
-
-func (g *DbSceneGroup) CheckIsKill(configId uint32) bool {
-	_, exist := g.KillConfigMap[configId]
-	return exist
-}
-
-func (g *DbSceneGroup) RemoveAllKill() {
-	g.KillConfigMap = make(map[uint32]bool)
-}
-
-func (g *DbSceneGroup) GetGadgetState(configId uint32) uint8 {
-	state, exist := g.GadgetStateMap[configId]
-	if !exist {
-		return constant.GADGET_STATE_DEFAULT
-	}
-	return state
-}
-
-func (g *DbSceneGroup) ChangeGadgetState(configId uint32, state uint8) {
-	g.GadgetStateMap[configId] = state
-}
-
-func (g *DbSceneGroup) CheckGadgetExist(configId uint32) bool {
-	_, exist := g.GadgetStateMap[configId]
 	return exist
 }

@@ -481,7 +481,6 @@ func (g *Game) GadgetInteractReq(player *model.Player, payloadMsg pb.Message) {
 
 func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.Message) {
 	ntf := payloadMsg.(*proto.EnterTransPointRegionNotify)
-	_ = ntf
 
 	world := WORLD_MANAGER.GetWorldById(player.WorldId)
 	if world == nil {
@@ -492,13 +491,20 @@ func (g *Game) EnterTransPointRegionNotify(player *model.Player, payloadMsg pb.M
 		return
 	}
 
+	dbWorld := player.GetDbWorld()
+	dbScene := dbWorld.GetSceneById(ntf.SceneId)
+	unlock := dbScene.CheckPointUnlock(ntf.PointId)
+	if !unlock {
+		return
+	}
+
 	dbAvatar := player.GetDbAvatar()
 	for _, worldAvatar := range world.GetPlayerWorldAvatarList(player) {
 		avatar := dbAvatar.GetAvatarById(worldAvatar.GetAvatarId())
 		if avatar.LifeState == constant.LIFE_STATE_DEAD {
 			g.RevivePlayerAvatar(player, worldAvatar.GetAvatarId())
 		}
-		g.AddPlayerAvatarHp(player.PlayerId, worldAvatar.GetAvatarId(), 0.0, true, proto.ChangHpReason_CHANGE_HP_ADD_GM)
+		g.AddPlayerAvatarHp(player.PlayerId, worldAvatar.GetAvatarId(), 0.0, true, proto.ChangHpReason_CHANGE_HP_ADD_STATUE)
 	}
 }
 

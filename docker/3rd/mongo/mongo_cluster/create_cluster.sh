@@ -35,9 +35,6 @@ sleep 5
 
 echo "init hk4e database table"
 mongo --host "${IP}" --port 27117 <<EOF
-sh.enableSharding("node_hk4e")
-sh.shardCollection("node_hk4e.region", {"region_id": "hashed"})
-sh.enableBalancing("node_hk4e.region")
 sh.enableSharding("dispatch_hk4e")
 sh.shardCollection("dispatch_hk4e.account", {"account_id": "hashed"})
 sh.enableBalancing("dispatch_hk4e.account")
@@ -51,6 +48,8 @@ sh.shardCollection("gs_hk4e.player", {"player_id": "hashed"})
 sh.enableBalancing("gs_hk4e.player")
 sh.shardCollection("gs_hk4e.chat_msg", {"uid": "hashed"})
 sh.enableBalancing("gs_hk4e.chat_msg")
+sh.shardCollection("gs_hk4e.scene_block", {"uid": "hashed"})
+sh.enableBalancing("gs_hk4e.scene_block")
 sh.startBalancer()
 db.adminCommand("flushRouterConfig")
 EOF

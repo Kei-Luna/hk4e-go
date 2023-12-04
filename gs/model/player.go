@@ -88,10 +88,12 @@ type Player struct {
 	MpSceneId             uint32                                   `bson:"-" msgpack:"-"` // 多人世界场景
 	MpPos                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界坐标
 	MpRot                 *Vector                                  `bson:"-" msgpack:"-"` // 多人世界朝向
+	SceneBlockAsyncLoad   bool                                     `bson:"-" msgpack:"-"` // 是否正在异步加载场景区块存档
 	// 特殊数据
-	ChatMsgMap           map[uint32][]*ChatMsg `bson:"-" msgpack:"-"` // 聊天信息 只从db读写 不保存到redis
-	RemoteWorldPlayerNum uint32                `bson:"-"`             // 远程展示世界内人数 不保存到db 在线同步到redis
-	MailMap              map[uint32]*Mail      `bson:"-" msgpack:"-"` // 邮件信息 只从db读写 不保存到redis
+	ChatMsgMap           map[uint32][]*ChatMsg  `bson:"-" msgpack:"-"` // 聊天信息 只从db读写 不保存到redis
+	RemoteWorldPlayerNum uint32                 `bson:"-"`             // 远程展示世界内人数 不保存到db 在线同步到redis
+	MailMap              map[uint32]*Mail       `bson:"-" msgpack:"-"` // 邮件信息 只从db读写 不保存到redis
+	SceneBlockMap        map[uint32]*SceneBlock `bson:"-" msgpack:"-"` // 场景区块存档 只从db读写 不保存到redis
 }
 
 // 存档场景

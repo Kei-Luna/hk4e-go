@@ -69,6 +69,7 @@ type Group struct {
 	SuiteMap        map[int32]*Suite     `json:"-"` // 小组配置
 	LuaStr          string               `json:"-"` // LUA原始字符串缓存
 	LuaState        *lua.LState          `json:"-"` // LUA虚拟机实例
+	BlockId         int32                `json:"-"`
 }
 
 type GroupInitConfig struct {
@@ -84,15 +85,16 @@ type Replaceable struct {
 }
 
 type Monster struct {
-	ConfigId  int32   `json:"config_id"`
-	MonsterId int32   `json:"monster_id"`
-	Pos       *Vector `json:"pos"`
-	Rot       *Vector `json:"rot"`
-	Level     int32   `json:"level"`
-	AreaId    int32   `json:"area_id"`
-	DropTag   string  `json:"drop_tag"` // 关联MonsterDropData表
-	DropId    int32   `json:"drop_id"`
-	IsOneOff  bool    `json:"isOneoff"`
+	ConfigId    int32   `json:"config_id"`
+	MonsterId   int32   `json:"monster_id"`
+	Pos         *Vector `json:"pos"`
+	Rot         *Vector `json:"rot"`
+	Level       int32   `json:"level"`
+	AreaId      int32   `json:"area_id"`
+	DropTag     string  `json:"drop_tag"` // 关联MonsterDropData表
+	DropId      int32   `json:"drop_id"`
+	IsOneOff    bool    `json:"isOneoff"`
+	VisionLevel int32   `json:"vision_level"`
 }
 
 type Npc struct {
@@ -301,6 +303,7 @@ func (g *GameDataConfig) loadGroup(group *Group, block *Block, sceneId int32, bl
 		group.SuiteMap[int32(len(suiteLuaTableList)-index)] = suite
 	}
 	luaState.Close()
+	group.BlockId = blockId
 	block.groupMapLoadLock.Lock()
 	block.GroupMap[group.Id] = group
 	block.groupMapLoadLock.Unlock()

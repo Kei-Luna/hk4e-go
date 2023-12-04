@@ -21,9 +21,6 @@ import (
 
 const (
 	ENTITY_MAX_BATCH_SEND_NUM = 1000 // 单次同步客户端的最大实体数量
-	BLOCK_SIZE                = 1024 // 区块大小
-	GROUP_LOAD_DISTANCE       = 250  // 场景组加载距离 取值范围(0,BLOCK_SIZE)
-	ENTITY_VISION_DISTANCE    = 100  // 实体视野距离 取值范围(0,GROUP_LOAD_DISTANCE)
 )
 
 /************************************************** 接口请求 **************************************************/
@@ -73,29 +70,21 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 
 		if !WORLD_MANAGER.IsAiWorld(world) {
 			// 卸载旧位置附近的group
+			otherPlayerNeighborGroupMap := make(map[uint32]*gdconf.Group)
+			for _, otherPlayer := range oldScene.GetAllPlayer() {
+				otherPlayerPos := g.GetPlayerPos(otherPlayer)
+				for k, v := range g.GetNeighborGroup(oldSceneId, otherPlayerPos) {
+					otherPlayerNeighborGroupMap[k] = v
+				}
+			}
 			for _, groupConfig := range g.GetNeighborGroup(oldSceneId, oldPos) {
 				if !world.IsMultiplayerWorld() {
 					// 单人世界直接卸载group
 					g.RemoveSceneGroup(player, oldScene, groupConfig)
 				} else {
 					// 多人世界group附近没有任何玩家则卸载
-					remove := true
-					for _, otherPlayer := range oldScene.GetAllPlayer() {
-						pos := g.GetPlayerPos(otherPlayer)
-						dx := int32(pos.X) - int32(groupConfig.Pos.X)
-						if dx < 0 {
-							dx *= -1
-						}
-						dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
-						if dy < 0 {
-							dy *= -1
-						}
-						if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
-							remove = false
-							break
-						}
-					}
-					if remove {
+					_, exist := otherPlayerNeighborGroupMap[uint32(groupConfig.Id)]
+					if !exist {
 						g.RemoveSceneGroup(player, oldScene, groupConfig)
 					}
 				}
@@ -120,15 +109,32 @@ func (g *Game) EnterSceneReadyReq(player *model.Player, payloadMsg pb.Message) {
 				entity.SetRot(newRot)
 			}
 		}
+
+		ntf := &proto.EnterScenePeerNotify{
+			DestSceneId:     player.GetSceneId(),
+			PeerId:          world.GetPlayerPeerId(player),
+			HostPeerId:      world.GetPlayerPeerId(world.GetOwner()),
+			EnterSceneToken: req.EnterSceneToken,
+		}
+		rsp := &proto.EnterSceneReadyRsp{
+			EnterSceneToken: req.EnterSceneToken,
+		}
+		wait := g.LoadSceneBlockAsync(player, oldScene, newScene, oldPos, newPos, "EnterSceneReadyReq", &SceneBlockLoadInfoCtx{
+			EnterScenePeerNotify: ntf,
+			EnterSceneReadyRsp:   rsp,
+		})
+		if wait {
+			return
+		}
 	}
 
-	enterScenePeerNotify := &proto.EnterScenePeerNotify{
+	ntf := &proto.EnterScenePeerNotify{
 		DestSceneId:     player.GetSceneId(),
 		PeerId:          world.GetPlayerPeerId(player),
 		HostPeerId:      world.GetPlayerPeerId(world.GetOwner()),
 		EnterSceneToken: req.EnterSceneToken,
 	}
-	g.SendMsg(cmd.EnterScenePeerNotify, player.PlayerId, player.ClientSeq, enterScenePeerNotify)
+	g.SendMsg(cmd.EnterScenePeerNotify, player.PlayerId, player.ClientSeq, ntf)
 
 	rsp := &proto.EnterSceneReadyRsp{
 		EnterSceneToken: req.EnterSceneToken,
@@ -359,33 +365,6 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 				g.AddSceneGroup(player, scene, groupConfig)
 			}
 		}
-		// TODO 七天神像的group太远不加载的临时解决方案
-		if player.GetSceneId() == 3 {
-			groupSuiteNotify := &proto.GroupSuiteNotify{
-				GroupMap: map[uint32]uint32{
-					// 不属于任何group的七天神像及其npc_id
-					// 1209 1276 1280 4904 4905
-					// 包含七天神像npc的group及其npc_id
-					133004001: 1, // 1201 1202 1203 1204
-					133107001: 1, // 1205 1206 1207 1208
-					133105279: 1, // 1268
-					133008051: 2, // 1272
-					133205002: 1, // 1273 1274 1275
-					133217159: 1, // 1277
-					133210213: 1, // 1278
-					133223052: 1, // 1279
-					133106438: 1, // 1281
-					133302001: 1, // 1282 1283 1285 1286 1288
-					133301642: 2, // 1284
-					133301641: 2, // 1287
-					133303649: 1, // 4900
-					133309184: 1, // 4901
-					133310355: 1, // 4902
-					133307014: 1, // 4903
-				},
-			}
-			g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, groupSuiteNotify)
-		}
 	}
 
 	// 同步客户端视野内的场景实体
@@ -403,7 +382,7 @@ func (g *Game) EnterSceneDoneReq(player *model.Player, payloadMsg pb.Message) {
 
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z), 1)
 		entityIdList := make([]uint32, 0)
 		for _, otherWorldAvatarAny := range otherWorldAvatarMap {
 			otherWorldAvatar := otherWorldAvatarAny.(*WorldAvatar)
@@ -521,6 +500,185 @@ func (g *Game) EntityForceSyncReq(player *model.Player, payloadMsg pb.Message) {
 }
 
 /************************************************** 游戏功能 **************************************************/
+
+type SceneBlockLoadInfo struct {
+	Uid            uint32
+	SceneBlockList []*model.SceneBlock
+	Origin         string
+	Ctx            *SceneBlockLoadInfoCtx
+}
+
+type SceneBlockLoadInfoCtx struct {
+	World                *World
+	Scene                *Scene
+	OldPos               *model.Vector
+	NewPos               *model.Vector
+	AvatarEntityId       uint32
+	EnterScenePeerNotify *proto.EnterScenePeerNotify
+	EnterSceneReadyRsp   *proto.EnterSceneReadyRsp
+}
+
+// LoadSceneBlockAsync 异步加载场景区块存档
+func (g *Game) LoadSceneBlockAsync(player *model.Player, oldScene *Scene, newScene *Scene, oldPos *model.Vector, newPos *model.Vector, origin string, ctx *SceneBlockLoadInfoCtx) bool {
+	oldSceneBlockAoi := WORLD_MANAGER.GetSceneBlockAoiMap()[oldScene.GetId()]
+	if oldSceneBlockAoi == nil {
+		logger.Error("scene not exist in aoi, sceneId: %v", oldScene.GetId())
+		return false
+	}
+	newSceneBlockAoi := WORLD_MANAGER.GetSceneBlockAoiMap()[newScene.GetId()]
+	if newSceneBlockAoi == nil {
+		logger.Error("scene not exist in aoi, sceneId: %v", newScene.GetId())
+		return false
+	}
+	oldGid := oldSceneBlockAoi.GetGidByPos(float32(oldPos.X), 0.0, float32(oldPos.Z))
+	newGid := newSceneBlockAoi.GetGidByPos(float32(newPos.X), 0.0, float32(newPos.Z))
+	if oldGid == newGid {
+		return false
+	}
+	// 跨越了block格子
+	logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
+	if player.SceneBlockAsyncLoad {
+		return true
+	}
+	logger.Info("async load player scene block from db, uid: %v", player.PlayerId)
+	player.SceneBlockAsyncLoad = true
+	oldGridList := oldSceneBlockAoi.GetSurrGridListByGid(oldGid, 1)
+	newGridList := newSceneBlockAoi.GetSurrGridListByGid(newGid, 1)
+	delGridIdList := make([]uint32, 0)
+	for _, oldGrid := range oldGridList {
+		exist := false
+		for _, newGrid := range newGridList {
+			if oldGrid.GetGid() == newGrid.GetGid() {
+				exist = true
+				break
+			}
+		}
+		if exist {
+			continue
+		}
+		delGridIdList = append(delGridIdList, oldGrid.GetGid())
+	}
+	addGridIdList := make([]uint32, 0)
+	for _, newGrid := range newGridList {
+		exist := false
+		for _, oldGrid := range oldGridList {
+			if newGrid.GetGid() == oldGrid.GetGid() {
+				exist = true
+				break
+			}
+		}
+		if exist {
+			continue
+		}
+		addGridIdList = append(addGridIdList, newGrid.GetGid())
+	}
+	loadSceneBlockMap := make(map[uint32]*gdconf.Block)
+	for _, addGridId := range addGridIdList {
+		for _, blockAny := range newSceneBlockAoi.GetObjectListByGid(addGridId) {
+			block := blockAny.(*gdconf.Block)
+			_, exist := player.SceneBlockMap[uint32(block.Id)]
+			if exist {
+				continue
+			}
+			loadSceneBlockMap[uint32(block.Id)] = block
+		}
+	}
+	if len(loadSceneBlockMap) == 0 {
+		return false
+	}
+	go func() {
+		loadSceneBlockList := make([]*model.SceneBlock, 0)
+		for _, block := range loadSceneBlockMap {
+			sceneBlock, err := g.db.LoadSceneBlockByUidAndBlockId(player.PlayerId, uint32(block.Id))
+			if err != nil {
+				logger.Error("load scene block from db error: %v, uid: %v", err, player.PlayerId)
+				continue
+			}
+			if sceneBlock == nil {
+				sceneBlock = &model.SceneBlock{
+					Uid:           player.PlayerId,
+					BlockId:       uint32(block.Id),
+					SceneGroupMap: make(map[uint32]*model.SceneGroup),
+					IsNew:         true,
+				}
+			}
+			loadSceneBlockList = append(loadSceneBlockList, sceneBlock)
+		}
+		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
+			EventId: AsyncLoadSceneBlockFinish,
+			Msg: &SceneBlockLoadInfo{
+				Uid:            player.PlayerId,
+				SceneBlockList: loadSceneBlockList,
+				Origin:         origin,
+				Ctx:            ctx,
+			},
+		}
+	}()
+	return true
+}
+
+func (g *Game) OnSceneBlockLoad(sceneBlockLoadInfo *SceneBlockLoadInfo) {
+	player := USER_MANAGER.GetOnlineUser(sceneBlockLoadInfo.Uid)
+	if player == nil {
+		logger.Error("player is nil, uid: %v", sceneBlockLoadInfo.Uid)
+		return
+	}
+	logger.Info("async load player scene block ok, uid: %v", player.PlayerId)
+	for _, sceneBlock := range sceneBlockLoadInfo.SceneBlockList {
+		player.SceneBlockMap[sceneBlock.BlockId] = sceneBlock
+	}
+	ctx := sceneBlockLoadInfo.Ctx
+	switch sceneBlockLoadInfo.Origin {
+	case "SceneBlockAoiPlayerMove":
+		g.SceneBlockAoiPlayerMove(player, ctx.World, ctx.Scene, ctx.OldPos, ctx.NewPos, ctx.AvatarEntityId)
+		entity := ctx.Scene.GetEntity(ctx.AvatarEntityId)
+		entity.SetPos(ctx.NewPos)
+	case "EnterSceneReadyReq":
+		g.SendMsg(cmd.EnterScenePeerNotify, player.PlayerId, player.ClientSeq, ctx.EnterScenePeerNotify)
+		g.SendMsg(cmd.EnterSceneReadyRsp, player.PlayerId, player.ClientSeq, ctx.EnterSceneReadyRsp)
+	}
+	player.SceneBlockAsyncLoad = false
+}
+
+func (g *Game) LoadSceneBlockSync(uid uint32, sceneId uint32, pos *model.Vector) map[uint32]*model.SceneBlock {
+	sceneBlockAoi, exist := WORLD_MANAGER.GetSceneBlockAoiMap()[sceneId]
+	if !exist {
+		logger.Error("scene not exist in aoi, sceneId: %v", sceneId)
+		return nil
+	}
+	loadSceneBlockMap := sceneBlockAoi.GetObjectListByPos(float32(pos.X), 0.0, float32(pos.Z), 1)
+	sceneBlockMap := make(map[uint32]*model.SceneBlock)
+	for _, blockAny := range loadSceneBlockMap {
+		block := blockAny.(*gdconf.Block)
+		sceneBlock, err := g.db.LoadSceneBlockByUidAndBlockId(uid, uint32(block.Id))
+		if err != nil {
+			logger.Error("load scene block from db error: %v, uid: %v", err, uid)
+			return nil
+		}
+		if sceneBlock == nil {
+			sceneBlock = &model.SceneBlock{
+				Uid:           uid,
+				BlockId:       uint32(block.Id),
+				SceneGroupMap: make(map[uint32]*model.SceneGroup),
+				IsNew:         true,
+			}
+		}
+		sceneBlockMap[sceneBlock.BlockId] = sceneBlock
+	}
+	logger.Info("sync load player scene block ok, uid: %v", uid)
+	return sceneBlockMap
+}
+
+func (g *Game) SaveSceneBlockSync(uid uint32, sceneBlockMap map[uint32]*model.SceneBlock) {
+	for _, sceneBlock := range sceneBlockMap {
+		err := g.db.SaveSceneBlock(sceneBlock)
+		if err != nil {
+			logger.Error("save scene block to db error: %v, uid: %v", err, uid)
+			continue
+		}
+	}
+	logger.Info("sync save player scene block ok, uid: %v", uid)
+}
 
 // AddSceneEntityNotifyToPlayer 添加的场景实体同步给玩家
 func (g *Game) AddSceneEntityNotifyToPlayer(player *model.Player, visionType proto.VisionType, entityList []*proto.SceneEntityInfo) {
@@ -740,10 +898,11 @@ func (g *Game) KillEntity(player *model.Player, scene *Scene, entityId uint32, d
 
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	dbSceneGroup := dbScene.GetSceneGroupById(entity.GetGroupId())
-	dbSceneGroup.AddKill(entity.GetConfigId())
+	sceneGroup := owner.GetSceneGroupById(entity.GetGroupId())
+	if sceneGroup == nil {
+		return
+	}
+	sceneGroup.AddKill(entity.GetConfigId())
 
 	group.DestroyEntity(entity.GetId())
 
@@ -792,10 +951,11 @@ func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state ui
 	}
 
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
-	dbSceneGroup.ChangeGadgetState(entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
+	sceneGroup := owner.GetSceneGroupById(groupId)
+	if sceneGroup == nil {
+		return
+	}
+	sceneGroup.ChangeGadgetState(entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
 
 	// 物件状态变更触发器检测
 	g.GadgetStateChangeTriggerCheck(player, group, entity.GetConfigId(), uint8(gadgetEntity.GetGadgetState()))
@@ -804,10 +964,9 @@ func (g *Game) ChangeGadgetState(player *model.Player, entityId uint32, state ui
 // GetVisionEntity 获取某位置视野内的全部实体
 func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Entity {
 	allEntityMap := scene.GetAllEntity()
-	ratio := float32(ENTITY_VISION_DISTANCE*ENTITY_VISION_DISTANCE) / float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE)
-	visionEntity := make(map[uint32]*Entity, int(float32(len(allEntityMap))*ratio))
+	visionEntity := make(map[uint32]*Entity)
 	for _, entity := range allEntityMap {
-		if !g.IsInVision(pos, entity.GetPos()) {
+		if !g.IsInVision(pos, entity.GetPos(), entity.GetVisionLevel()) {
 			continue
 		}
 		if entity.GetEntityType() == constant.ENTITY_TYPE_AVATAR {
@@ -828,7 +987,11 @@ func (g *Game) GetVisionEntity(scene *Scene, pos *model.Vector) map[uint32]*Enti
 	return visionEntity
 }
 
-func (g *Game) IsInVision(p1 *model.Vector, p2 *model.Vector) bool {
+func (g *Game) IsInVision(p1 *model.Vector, p2 *model.Vector, visionLevel int) bool {
+	vision, exist := constant.VISION_LEVEL[visionLevel]
+	if !exist {
+		return false
+	}
 	dx := int32(p1.X) - int32(p2.X)
 	if dx < 0 {
 		dx *= -1
@@ -837,7 +1000,7 @@ func (g *Game) IsInVision(p1 *model.Vector, p2 *model.Vector) bool {
 	if dy < 0 {
 		dy *= -1
 	}
-	if dx > ENTITY_VISION_DISTANCE || dy > ENTITY_VISION_DISTANCE {
+	if uint32(dx) > vision.VisionRange || uint32(dy) > vision.VisionRange {
 		return false
 	}
 	return true
@@ -845,31 +1008,53 @@ func (g *Game) IsInVision(p1 *model.Vector, p2 *model.Vector) bool {
 
 // GetNeighborGroup 获取某位置附近的场景组
 func (g *Game) GetNeighborGroup(sceneId uint32, pos *model.Vector) map[uint32]*gdconf.Group {
-	aoiManager, exist := WORLD_MANAGER.GetSceneBlockAoiMap()[sceneId]
+	sceneEntityAoi, exist := WORLD_MANAGER.GetSceneEntityAoiMap()[sceneId]
 	if !exist {
 		logger.Error("scene not exist in aoi, sceneId: %v", sceneId)
 		return nil
 	}
-	objectList := aoiManager.GetObjectListByPos(float32(pos.X), 0.0, float32(pos.Z))
-	ratio := float32(GROUP_LOAD_DISTANCE*GROUP_LOAD_DISTANCE) / float32(BLOCK_SIZE*BLOCK_SIZE*9)
-	neighborGroup := make(map[uint32]*gdconf.Group, int(float32(len(objectList))*ratio))
-	for _, groupAny := range objectList {
-		groupConfig := groupAny.(*gdconf.Group)
-		dx := int32(pos.X) - int32(groupConfig.Pos.X)
-		if dx < 0 {
-			dx *= -1
+	neighborGroup := make(map[uint32]*gdconf.Group)
+	for visionLevel, aoiManager := range sceneEntityAoi {
+		vision := constant.VISION_LEVEL[visionLevel]
+		objectMap := aoiManager.GetObjectListByPos(float32(pos.X), 0.0, float32(pos.Z), vision.VisionRange/vision.GridWidth+1)
+		for objectId, obj := range objectMap {
+			var objPos *gdconf.Vector = nil
+			switch obj.(type) {
+			case *gdconf.Monster:
+				monster := obj.(*gdconf.Monster)
+				objPos = monster.Pos
+			case *gdconf.Npc:
+				npc := obj.(*gdconf.Npc)
+				objPos = npc.Pos
+			case *gdconf.Gadget:
+				gadget := obj.(*gdconf.Gadget)
+				objPos = gadget.Pos
+			case *gdconf.Region:
+				region := obj.(*gdconf.Region)
+				objPos = region.Pos
+			}
+			dx := int32(pos.X) - int32(objPos.X)
+			if dx < 0 {
+				dx *= -1
+			}
+			dy := int32(pos.Z) - int32(objPos.Z)
+			if dy < 0 {
+				dy *= -1
+			}
+			if uint32(dx) > vision.VisionRange+vision.GridWidth || uint32(dy) > vision.VisionRange+vision.GridWidth {
+				continue
+			}
+			groupId := int32(objectId >> 32)
+			_, exist = neighborGroup[uint32(groupId)]
+			if exist {
+				continue
+			}
+			groupConfig := gdconf.GetSceneGroup(groupId)
+			if groupConfig.DynamicLoad {
+				continue
+			}
+			neighborGroup[uint32(groupConfig.Id)] = groupConfig
 		}
-		dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
-		if dy < 0 {
-			dy *= -1
-		}
-		if dx > GROUP_LOAD_DISTANCE || dy > GROUP_LOAD_DISTANCE {
-			continue
-		}
-		if groupConfig.DynamicLoad {
-			continue
-		}
-		neighborGroup[uint32(groupConfig.Id)] = groupConfig
 	}
 	return neighborGroup
 }
@@ -890,23 +1075,26 @@ func (g *Game) AddSceneGroup(player *model.Player, scene *Scene, groupConfig *gd
 	}
 	// logger.Debug("add scene group, groupId: %v, initSuiteId: %v, uid: %v", groupConfig.Id, initSuiteId, player.PlayerId)
 	g.AddSceneGroupSuiteCore(player, scene, uint32(groupConfig.Id), uint8(initSuiteId))
-	// ntf := &proto.GroupSuiteNotify{
-	// 	GroupMap: make(map[uint32]uint32),
-	// }
-	// ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
-	// g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
+	if len(groupConfig.NpcMap) > 0 {
+		ntf := &proto.GroupSuiteNotify{
+			GroupMap: make(map[uint32]uint32),
+		}
+		ntf.GroupMap[uint32(groupConfig.Id)] = uint32(initSuiteId)
+		g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
+	}
 
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	dbSceneGroup := dbScene.GetSceneGroupById(uint32(groupConfig.Id))
+	sceneGroup := owner.GetSceneGroupById(uint32(groupConfig.Id))
+	if sceneGroup == nil {
+		return
+	}
 	for _, variable := range groupConfig.VariableMap {
-		exist := dbSceneGroup.CheckVariableExist(variable.Name)
+		exist := sceneGroup.CheckVariableExist(variable.Name)
 		if exist && variable.NoRefresh {
 			continue
 		}
-		dbSceneGroup.SetVariable(variable.Name, variable.Value)
+		sceneGroup.SetVariable(variable.Name, variable.Value)
 	}
 
 	group = scene.GetGroupById(uint32(groupConfig.Id))
@@ -934,11 +1122,12 @@ func (g *Game) RemoveSceneGroup(player *model.Player, scene *Scene, groupConfig 
 	for suiteId := range group.GetAllSuite() {
 		scene.RemoveGroupSuite(uint32(groupConfig.Id), suiteId)
 	}
-	// ntf := &proto.GroupUnloadNotify{
-	// 	GroupList: make([]uint32, 0),
-	// }
-	// ntf.GroupList = append(ntf.GroupList, uint32(groupConfig.Id))
-	// g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
+	if len(groupConfig.NpcMap) > 0 {
+		ntf := &proto.GroupUnloadNotify{
+			GroupList: []uint32{uint32(groupConfig.Id)},
+		}
+		g.SendMsg(cmd.GroupUnloadNotify, player.PlayerId, player.ClientSeq, ntf)
+	}
 }
 
 // AddSceneGroupSuite 场景组中添加场景小组
@@ -960,11 +1149,6 @@ func (g *Game) AddSceneGroupSuite(player *model.Player, groupId uint32, suiteId 
 	}
 	scene := world.GetSceneById(player.GetSceneId())
 	g.AddSceneGroupSuiteCore(player, scene, groupId, suiteId)
-	// ntf := &proto.GroupSuiteNotify{
-	// 	GroupMap: make(map[uint32]uint32),
-	// }
-	// ntf.GroupMap[uint32(groupConfig.Id)] = uint32(suiteId)
-	// g.SendMsg(cmd.GroupSuiteNotify, player.PlayerId, player.ClientSeq, ntf)
 	group := scene.GetGroupById(groupId)
 	suite := group.GetSuiteById(suiteId)
 	entityIdList := make([]uint32, 0)
@@ -997,10 +1181,11 @@ func (g *Game) RemoveSceneGroupSuite(player *model.Player, groupId uint32, suite
 
 // RefreshSceneGroupSuite 刷新场景小组
 func (g *Game) RefreshSceneGroupSuite(player *model.Player, groupId uint32, suiteId uint8) {
-	dbWorld := player.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(player.GetSceneId())
-	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
-	dbSceneGroup.RemoveAllKill()
+	sceneGroup := player.GetSceneGroupById(groupId)
+	if sceneGroup == nil {
+		return
+	}
+	sceneGroup.RemoveAllKill()
 	g.RemoveSceneGroupSuite(player, groupId, suiteId)
 	g.AddSceneGroupSuite(player, groupId, suiteId)
 }
@@ -1018,9 +1203,10 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 	}
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	sceneGroup := owner.GetSceneGroupById(groupId)
+	if sceneGroup == nil {
+		return
+	}
 	entityMap := make(map[uint32]*Entity)
 	for _, monsterConfigId := range suiteConfig.MonsterConfigIdList {
 		monsterConfig, exist := groupConfig.MonsterMap[monsterConfigId]
@@ -1028,7 +1214,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 			logger.Error("monster config not exist, monsterConfigId: %v", monsterConfigId)
 			continue
 		}
-		isKill := dbSceneGroup.CheckIsKill(uint32(monsterConfig.ConfigId))
+		isKill := sceneGroup.CheckIsKill(uint32(monsterConfig.ConfigId))
 		if isKill {
 			continue
 		}
@@ -1045,7 +1231,7 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 			logger.Error("gadget config not exist, gadgetConfigId: %v", gadgetConfigId)
 			continue
 		}
-		isKill := dbSceneGroup.CheckIsKill(uint32(gadgetConfig.ConfigId))
+		isKill := sceneGroup.CheckIsKill(uint32(gadgetConfig.ConfigId))
 		if isKill {
 			continue
 		}
@@ -1071,16 +1257,17 @@ func (g *Game) AddSceneGroupSuiteCore(player *model.Player, scene *Scene, groupI
 func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any) uint32 {
 	world := scene.GetWorld()
 	owner := world.GetOwner()
-	dbWorld := owner.GetDbWorld()
-	dbScene := dbWorld.GetSceneById(scene.GetId())
-	dbSceneGroup := dbScene.GetSceneGroupById(groupId)
+	sceneGroup := owner.GetSceneGroupById(groupId)
+	if sceneGroup == nil {
+		return 0
+	}
 	switch entityConfig.(type) {
 	case *gdconf.Monster:
 		monster := entityConfig.(*gdconf.Monster)
 		return scene.CreateEntityMonster(
 			&model.Vector{X: float64(monster.Pos.X), Y: float64(monster.Pos.Y), Z: float64(monster.Pos.Z)},
 			&model.Vector{X: float64(monster.Rot.X), Y: float64(monster.Rot.Y), Z: float64(monster.Rot.Z)},
-			uint32(monster.MonsterId), uint8(monster.Level), uint32(monster.ConfigId), groupId,
+			uint32(monster.MonsterId), uint8(monster.Level), uint32(monster.ConfigId), groupId, int(monster.VisionLevel),
 		)
 	case *gdconf.Npc:
 		npc := entityConfig.(*gdconf.Npc)
@@ -1109,12 +1296,13 @@ func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any
 				},
 				uint32(gadget.ConfigId),
 				groupId,
+				int(gadget.VisionLevel),
 			)
 		} else {
 			state := uint8(gadget.State)
-			exist := dbSceneGroup.CheckGadgetExist(uint32(gadget.ConfigId))
+			exist := sceneGroup.CheckGadgetExist(uint32(gadget.ConfigId))
 			if exist {
-				state = dbSceneGroup.GetGadgetState(uint32(gadget.ConfigId))
+				state = sceneGroup.GetGadgetState(uint32(gadget.ConfigId))
 			}
 			return scene.CreateEntityGadgetNormal(
 				&model.Vector{X: float64(gadget.Pos.X), Y: float64(gadget.Pos.Y), Z: float64(gadget.Pos.Z)},
@@ -1124,6 +1312,7 @@ func (g *Game) CreateConfigEntity(scene *Scene, groupId uint32, entityConfig any
 				new(GadgetNormalEntity),
 				uint32(gadget.ConfigId),
 				groupId,
+				int(gadget.VisionLevel),
 			)
 		}
 	}
@@ -1215,7 +1404,7 @@ func (g *Game) CreateMonster(player *model.Player, pos *model.Vector, monsterId 
 	entityId := scene.CreateEntityMonster(
 		pos, rot,
 		monsterId, uint8(random.GetRandomInt32(1, 90)),
-		0, 0,
+		0, 0, constant.VISION_LEVEL_NORMAL,
 	)
 	entity := scene.GetEntity(entityId)
 	if entity == nil {
@@ -1254,7 +1443,7 @@ func (g *Game) CreateGadget(player *model.Player, pos *model.Vector, gadgetId ui
 	entityId := scene.CreateEntityGadgetNormal(
 		pos, rot,
 		gadgetId, constant.GADGET_STATE_DEFAULT, normalEntity,
-		0, 0,
+		0, 0, constant.VISION_LEVEL_NORMAL,
 	)
 	g.AddSceneEntityNotify(player, proto.VisionType_VISION_BORN, []uint32{entityId}, true, false)
 	return entityId
@@ -1800,22 +1989,24 @@ func (g *Game) PacketSceneAvatarInfo(scene *Scene, player *model.Player, avatarI
 		WearingFlycloakId:      avatar.FlyCloak,
 		CostumeId:              avatar.Costume,
 		BornTime:               uint32(avatar.BornTime),
-		TeamResonanceList:      make([]uint32, 0),
+		TeamResonanceList:      make([]uint32, 0), // 队伍元素共鸣
 	}
-	// for id := range player.TeamConfig.TeamResonances {
-	//	sceneAvatarInfo.TeamResonanceList = append(sceneAvatarInfo.TeamResonanceList, uint32(id))
-	// }
 	return sceneAvatarInfo
 }
 
 func (g *Game) PacketSceneMonsterInfo(entity *Entity) *proto.SceneMonsterInfo {
+	blockId := uint32(0)
+	if entity.GetGroupId() != 0 {
+		groupConfig := gdconf.GetSceneGroup(int32(entity.GetGroupId()))
+		blockId = uint32(groupConfig.BlockId)
+	}
 	sceneMonsterInfo := &proto.SceneMonsterInfo{
 		MonsterId:       entity.GetMonsterEntity().GetMonsterId(),
 		AuthorityPeerId: 1,
 		BornType:        proto.MonsterBornType_MONSTER_BORN_DEFAULT,
-		// BlockId:         3001,
-		// TitleId:         3001,
-		// SpecialNameId:   40,
+		BlockId:         blockId,
+		TitleId:         blockId,
+		SpecialNameId:   0,
 	}
 	return sceneMonsterInfo
 }

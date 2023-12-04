@@ -350,10 +350,19 @@ func initLuaState(luaState *lua.LState) {
 
 	visionLevelType := luaState.NewTable()
 	luaState.SetGlobal("VisionLevelType", visionLevelType)
-	luaState.SetField(visionLevelType, "VISION_LEVEL_NEARBY", lua.LNumber(1))
-	luaState.SetField(visionLevelType, "VISION_LEVEL_NORMAL", lua.LNumber(2))
-	luaState.SetField(visionLevelType, "VISION_LEVEL_REMOTE", lua.LNumber(3))
-	luaState.SetField(visionLevelType, "VISION_LEVEL_LITTLE_REMOTE", lua.LNumber(4))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_NORMAL", lua.LNumber(constant.VISION_LEVEL_NORMAL))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_LITTLE_REMOTE", lua.LNumber(constant.VISION_LEVEL_LITTLE_REMOTE))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_REMOTE", lua.LNumber(constant.VISION_LEVEL_REMOTE))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_SUPER", lua.LNumber(constant.VISION_LEVEL_SUPER))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_NEARBY", lua.LNumber(constant.VISION_LEVEL_NEARBY))
+	luaState.SetField(visionLevelType, "VISION_LEVEL_SUPER_NEARBY", lua.LNumber(constant.VISION_LEVEL_SUPER_NEARBY))
+
+	groupKillPolicy := luaState.NewTable()
+	luaState.SetGlobal("GroupKillPolicy", groupKillPolicy)
+	luaState.SetField(groupKillPolicy, "GROUP_KILL_ALL", lua.LNumber(constant.GROUP_KILL_ALL))
+	luaState.SetField(groupKillPolicy, "GROUP_KILL_MONSTER", lua.LNumber(constant.GROUP_KILL_MONSTER))
+	luaState.SetField(groupKillPolicy, "GROUP_KILL_NPC", lua.LNumber(constant.GROUP_KILL_NPC))
+	luaState.SetField(groupKillPolicy, "GROUP_KILL_GADGET", lua.LNumber(constant.GROUP_KILL_GADGET))
 }
 
 func newLuaState(luaStr string) *lua.LState {

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"hk4e/common/constant"
 	"hk4e/common/mq"
 	"hk4e/common/rpc"
 	"hk4e/gate/kcp"
@@ -477,7 +478,7 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
 		aiWorldAoi := world.GetAiWorldAoi()
 		pos := g.GetPlayerPos(SELF)
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z), 1)
 		for uid := range otherWorldAvatarMap {
 			if aecUid == uint32(uid) {
 				continue
@@ -492,7 +493,7 @@ func (g *Game) SendToSceneA(scene *Scene, cmdId uint16, seq uint32, msg pb.Messa
 			if SELF != nil {
 				p1 := g.GetPlayerPos(SELF)
 				p2 := g.GetPlayerPos(v)
-				if !g.IsInVision(p1, p2) {
+				if !g.IsInVision(p1, p2, constant.VISION_LEVEL_NORMAL) {
 					continue
 				}
 			}
@@ -507,7 +508,7 @@ func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 	if WORLD_MANAGER.IsAiWorld(world) && SELF != nil {
 		aiWorldAoi := world.GetAiWorldAoi()
 		pos := g.GetPlayerPos(SELF)
-		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z))
+		otherWorldAvatarMap := aiWorldAoi.GetObjectListByPos(float32(pos.X), float32(pos.Y), float32(pos.Z), 1)
 		for uid := range otherWorldAvatarMap {
 			player := USER_MANAGER.GetOnlineUser(uint32(uid))
 			if player == nil {
@@ -533,7 +534,7 @@ func (g *Game) SendToSceneACV(scene *Scene, cmdId uint16, seq uint32, msg pb.Mes
 			if SELF != nil {
 				p1 := g.GetPlayerPos(SELF)
 				p2 := g.GetPlayerPos(v)
-				if !g.IsInVision(p1, p2) {
+				if !g.IsInVision(p1, p2, constant.VISION_LEVEL_NORMAL) {
 					continue
 				}
 			}

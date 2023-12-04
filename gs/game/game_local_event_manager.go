@@ -16,6 +16,7 @@ const (
 	ExitRunUserCopyAndSave            // 停服时执行全部玩家保存操作
 	ReloadGameDataConfig              // 执行热更表
 	ReloadGameDataConfigFinish        // 热更表完成
+	AsyncLoadSceneBlockFinish         // 异步加载场景区块存档完成
 )
 
 type LocalEvent struct {
@@ -68,9 +69,12 @@ func (l *LocalEventManager) LocalEventHandle(localEvent *LocalEvent) {
 	case ReloadGameDataConfigFinish:
 		gdconf.ReplaceGameDataConfig()
 		startTime := time.Now().UnixNano()
-		WORLD_MANAGER.LoadSceneBlockAoiMap()
+		WORLD_MANAGER.LoadSceneAoi()
 		endTime := time.Now().UnixNano()
 		costTime := endTime - startTime
-		logger.Info("run [LoadSceneBlockAoiMap], cost time: %v ns", costTime)
+		logger.Info("run [LoadSceneAoi], cost time: %v ns", costTime)
+	case AsyncLoadSceneBlockFinish:
+		sceneBlockLoadInfo := localEvent.Msg.(*SceneBlockLoadInfo)
+		GAME.OnSceneBlockLoad(sceneBlockLoadInfo)
 	}
 }

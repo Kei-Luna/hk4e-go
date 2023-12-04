@@ -217,6 +217,24 @@ func (g *Game) CreatePlayer(userId uint32) *model.Player {
 		player.Pos = &model.Vector{X: 2747, Y: 194, Z: -1719}
 		player.Rot = &model.Vector{X: 0, Y: 307, Z: 0}
 	}
+
+	player.SceneBlockMap = make(map[uint32]*model.SceneBlock)
+	sceneBlockAoi, exist := WORLD_MANAGER.GetSceneBlockAoiMap()[player.SceneId]
+	if !exist {
+		logger.Error("scene not exist in aoi, sceneId: %v", player.SceneId)
+		return player
+	}
+	for _, blockAny := range sceneBlockAoi.GetObjectListByPos(float32(player.Pos.X), 0.0, float32(player.Pos.Z), 1) {
+		block := blockAny.(*gdconf.Block)
+		sceneBlock := &model.SceneBlock{
+			Uid:           player.PlayerId,
+			BlockId:       uint32(block.Id),
+			SceneGroupMap: make(map[uint32]*model.SceneGroup),
+			IsNew:         true,
+		}
+		player.SceneBlockMap[sceneBlock.BlockId] = sceneBlock
+	}
+
 	return player
 }
 

@@ -122,6 +122,7 @@ func (s *Scene) CreateEntityAvatar(player *model.Player, avatarId uint32) uint32
 			uid:      player.PlayerId,
 			avatarId: avatarId,
 		},
+		visionLevel: constant.VISION_LEVEL_NORMAL,
 	}
 	return s.CreateEntity(entity)
 }
@@ -142,12 +143,13 @@ func (s *Scene) CreateEntityWeapon(pos, rot *model.Vector) uint32 {
 			constant.FIGHT_PROP_MAX_HP:  math.MaxFloat32,
 			constant.FIGHT_PROP_BASE_HP: float32(1),
 		},
-		entityType: constant.ENTITY_TYPE_WEAPON,
+		entityType:  constant.ENTITY_TYPE_WEAPON,
+		visionLevel: constant.VISION_LEVEL_NORMAL,
 	}
 	return s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, level uint8, configId, groupId uint32) uint32 {
+func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, level uint8, configId, groupId uint32, visionLevel int) uint32 {
 	fpm := map[uint32]float32{
 		constant.FIGHT_PROP_BASE_ATTACK:       float32(50.0),
 		constant.FIGHT_PROP_CUR_ATTACK:        float32(50.0),
@@ -193,8 +195,9 @@ func (s *Scene) CreateEntityMonster(pos, rot *model.Vector, monsterId uint32, le
 		monsterEntity: &MonsterEntity{
 			monsterId: monsterId,
 		},
-		configId: configId,
-		groupId:  groupId,
+		configId:    configId,
+		groupId:     groupId,
+		visionLevel: visionLevel,
 	}
 	return s.CreateEntity(entity)
 }
@@ -222,13 +225,14 @@ func (s *Scene) CreateEntityNpc(pos, rot *model.Vector, npcId, roomId, parentQue
 			parentQuestId: parentQuestId,
 			blockId:       blockId,
 		},
-		configId: configId,
-		groupId:  groupId,
+		configId:    configId,
+		groupId:     groupId,
+		visionLevel: constant.VISION_LEVEL_NORMAL,
 	}
 	return s.CreateEntity(entity)
 }
 
-func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadgetState uint32, gadgetNormalEntity *GadgetNormalEntity, configId, groupId uint32) uint32 {
+func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadgetState uint32, gadgetNormalEntity *GadgetNormalEntity, configId, groupId uint32, visionLevel int) uint32 {
 	entityId := s.world.GetNextWorldEntityId(constant.ENTITY_TYPE_GADGET)
 	entity := &Entity{
 		id:                  entityId,
@@ -251,8 +255,9 @@ func (s *Scene) CreateEntityGadgetNormal(pos, rot *model.Vector, gadgetId, gadge
 			gadgetType:         GADGET_TYPE_NORMAL,
 			gadgetNormalEntity: gadgetNormalEntity,
 		},
-		configId: configId,
-		groupId:  groupId,
+		configId:    configId,
+		groupId:     groupId,
+		visionLevel: visionLevel,
 	}
 	return s.CreateEntity(entity)
 }
@@ -284,6 +289,7 @@ func (s *Scene) CreateEntityGadgetClient(pos, rot *model.Vector, entityId, confi
 				propOwnerEntityId: propOwnerEntityId,
 			},
 		},
+		visionLevel: constant.VISION_LEVEL_NORMAL,
 	}
 	if s.CreateEntity(entity) == 0 {
 		return false
@@ -327,6 +333,7 @@ func (s *Scene) CreateEntityGadgetVehicle(ownerUid uint32, pos, rot *model.Vecto
 				memberMap:    make(map[uint32]*model.Player),
 			},
 		},
+		visionLevel: constant.VISION_LEVEL_NORMAL,
 	}
 	return s.CreateEntity(entity)
 }
@@ -481,6 +488,7 @@ type Entity struct {
 	gadgetEntity  *GadgetEntity
 	configId      uint32 // LUA配置相关
 	groupId       uint32
+	visionLevel   int
 }
 
 func (e *Entity) GetId() uint32 {
@@ -581,6 +589,10 @@ func (e *Entity) GetConfigId() uint32 {
 
 func (e *Entity) GetGroupId() uint32 {
 	return e.groupId
+}
+
+func (e *Entity) GetVisionLevel() int {
+	return e.visionLevel
 }
 
 type AvatarEntity struct {

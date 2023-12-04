@@ -38,7 +38,6 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 	if invokeHandler.AllLen() == 0 && invokeHandler.AllExceptCurLen() == 0 && invokeHandler.HostLen() == 0 {
 		return
 	}
-	// TODO aoi漏移除玩家的bug解决了就删掉
 	if WORLD_MANAGER.IsAiWorld(world) {
 		aiWorldAoi := world.GetAiWorldAoi()
 		pos := GAME.GetPlayerPos(player)
@@ -46,7 +45,7 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 		if gid == math.MaxUint32 {
 			return
 		}
-		gridList := aiWorldAoi.GetSurrGridListByGid(gid)
+		gridList := aiWorldAoi.GetSurrGridListByGid(gid, 1)
 		for _, grid := range gridList {
 			objectList := grid.GetObjectList()
 			for uid, wa := range objectList {
@@ -59,7 +58,6 @@ func DoForward[IET model.InvokeEntryType](player *model.Player, invokeHandler *m
 			}
 		}
 	}
-	// TODO aoi漏移除玩家的bug解决了就删掉
 	if WORLD_MANAGER.IsAiWorld(world) && cmdId != cmd.CombatInvocationsNotify {
 		if invokeHandler.AllLen() > 0 {
 			reflection.SetStructFieldValue(newNtf, forwardField, invokeHandler.EntryListForwardAll)
@@ -256,8 +254,24 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 		}
 		oldPos := g.GetPlayerPos(player)
 		if !WORLD_MANAGER.IsAiWorld(world) {
+			if !world.IsValidScenePos(scene.GetId(), float32(pos.X), 0.0, float32(pos.Z)) {
+				return
+			}
+			wait := g.LoadSceneBlockAsync(player, scene, scene, oldPos, pos, "SceneBlockAoiPlayerMove", &SceneBlockLoadInfoCtx{
+				World:          world,
+				Scene:          scene,
+				OldPos:         oldPos,
+				NewPos:         pos,
+				AvatarEntityId: entity.GetId(),
+			})
+			if wait {
+				return
+			}
 			g.SceneBlockAoiPlayerMove(player, world, scene, oldPos, pos, entity.GetId())
 		} else {
+			if !world.IsValidAiWorldPos(scene.GetId(), float32(pos.X), float32(pos.Y), float32(pos.Z)) {
+				return
+			}
 			g.AiWorldAoiPlayerMove(player, world, scene, oldPos, pos)
 		}
 		// 场景天气区域变更检测
@@ -343,26 +357,18 @@ func (g *Game) handleEntityMove(player *model.Player, world *World, scene *Scene
 }
 
 func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector, avatarEntityId uint32) {
-	if !world.IsValidSceneBlockPos(scene.GetId(), float32(newPos.X), 0.0, float32(newPos.Z)) {
-		return
-	}
-	sceneBlockAoiMap := WORLD_MANAGER.GetSceneBlockAoiMap()
-	aoiManager, exist := sceneBlockAoiMap[player.GetSceneId()]
-	if !exist {
-		logger.Error("get scene block aoi is nil, sceneId: %v, uid: %v", player.GetSceneId(), player.PlayerId)
-		return
-	}
-	oldGid := aoiManager.GetGidByPos(float32(oldPos.X), 0.0, float32(oldPos.Z))
-	newGid := aoiManager.GetGidByPos(float32(newPos.X), 0.0, float32(newPos.Z))
-	if oldGid != newGid {
-		// 跨越了block格子
-		logger.Debug("player cross scene block grid, oldGid: %v, newGid: %v, uid: %v", oldGid, newGid, player.PlayerId)
-	}
 	// 加载和卸载的group
 	oldNeighborGroupMap := g.GetNeighborGroup(player.GetSceneId(), oldPos)
 	newNeighborGroupMap := g.GetNeighborGroup(player.GetSceneId(), newPos)
+	otherPlayerNeighborGroupMap := make(map[uint32]*gdconf.Group)
+	for _, otherPlayer := range scene.GetAllPlayer() {
+		otherPlayerPos := g.GetPlayerPos(otherPlayer)
+		for k, v := range g.GetNeighborGroup(player.GetSceneId(), otherPlayerPos) {
+			otherPlayerNeighborGroupMap[k] = v
+		}
+	}
 	for groupId, groupConfig := range oldNeighborGroupMap {
-		_, exist = newNeighborGroupMap[groupId]
+		_, exist := newNeighborGroupMap[groupId]
 		if exist {
 			continue
 		}
@@ -372,29 +378,14 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 			g.RemoveSceneGroup(player, scene, groupConfig)
 		} else {
 			// 多人世界group附近没有任何玩家则卸载
-			remove := true
-			for _, otherPlayer := range scene.GetAllPlayer() {
-				pos := g.GetPlayerPos(otherPlayer)
-				dx := int32(pos.X) - int32(groupConfig.Pos.X)
-				if dx < 0 {
-					dx *= -1
-				}
-				dy := int32(pos.Z) - int32(groupConfig.Pos.Z)
-				if dy < 0 {
-					dy *= -1
-				}
-				if dx <= GROUP_LOAD_DISTANCE || dy <= GROUP_LOAD_DISTANCE {
-					remove = false
-					break
-				}
-			}
-			if remove {
+			_, exist = otherPlayerNeighborGroupMap[uint32(groupConfig.Id)]
+			if !exist {
 				g.RemoveSceneGroup(player, scene, groupConfig)
 			}
 		}
 	}
 	for groupId, groupConfig := range newNeighborGroupMap {
-		_, exist = oldNeighborGroupMap[groupId]
+		_, exist := oldNeighborGroupMap[groupId]
 		if exist {
 			continue
 		}
@@ -406,7 +397,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	newVisionEntityMap := g.GetVisionEntity(scene, newPos)
 	delEntityIdList := make([]uint32, 0)
 	for entityId := range oldVisionEntityMap {
-		_, exist = newVisionEntityMap[entityId]
+		_, exist := newVisionEntityMap[entityId]
 		if exist {
 			continue
 		}
@@ -415,7 +406,7 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 	}
 	addEntityIdList := make([]uint32, 0)
 	for entityId := range newVisionEntityMap {
-		_, exist = oldVisionEntityMap[entityId]
+		_, exist := oldVisionEntityMap[entityId]
 		if exist {
 			continue
 		}
@@ -459,9 +450,6 @@ func (g *Game) SceneBlockAoiPlayerMove(player *model.Player, world *World, scene
 }
 
 func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *Scene, oldPos *model.Vector, newPos *model.Vector) {
-	if !world.IsValidAiWorldPos(scene.GetId(), float32(newPos.X), float32(newPos.Y), float32(newPos.Z)) {
-		return
-	}
 	aiWorldAoi := world.GetAiWorldAoi()
 	oldGid := aiWorldAoi.GetGidByPos(float32(oldPos.X), float32(oldPos.Y), float32(oldPos.Z))
 	newGid := aiWorldAoi.GetGidByPos(float32(newPos.X), float32(newPos.Y), float32(newPos.Z))
@@ -470,8 +458,8 @@ func (g *Game) AiWorldAoiPlayerMove(player *model.Player, world *World, scene *S
 		logger.Debug("player cross ai world aoi grid, oldGid: %v, oldPos: %+v, newGid: %v, newPos: %+v, uid: %v",
 			oldGid, oldPos, newGid, newPos, player.PlayerId)
 		// 找出本次移动所带来的消失和出现的格子
-		oldGridList := aiWorldAoi.GetSurrGridListByGid(oldGid)
-		newGridList := aiWorldAoi.GetSurrGridListByGid(newGid)
+		oldGridList := aiWorldAoi.GetSurrGridListByGid(oldGid, 1)
+		newGridList := aiWorldAoi.GetSurrGridListByGid(newGid, 1)
 		delGridIdList := make([]uint32, 0)
 		for _, oldGrid := range oldGridList {
 			exist := false

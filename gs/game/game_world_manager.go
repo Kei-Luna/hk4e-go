@@ -24,16 +24,17 @@ const (
 type WorldManager struct {
 	worldMap            map[uint64]*World
 	snowflake           *alg.SnowflakeWorker
-	aiWorld             *World                     // 本服的Ai玩家世界
-	sceneBlockAoiMap    map[uint32]*alg.AoiManager // 全局各场景地图的aoi管理器
-	multiplayerWorldNum uint32                     // 本服务器的多人世界数量
+	aiWorld             *World                             // 本服的Ai玩家世界
+	sceneBlockAoiMap    map[uint32]*alg.AoiManager         // 场景区块aoi
+	sceneEntityAoiMap   map[uint32]map[int]*alg.AoiManager // 场景实体aoi
+	multiplayerWorldNum uint32                             // 本服当前的多人世界数量
 }
 
 func NewWorldManager(snowflake *alg.SnowflakeWorker) (r *WorldManager) {
 	r = new(WorldManager)
 	r.worldMap = make(map[uint64]*World)
 	r.snowflake = snowflake
-	r.LoadSceneBlockAoiMap()
+	r.LoadSceneAoi()
 	r.multiplayerWorldNum = 0
 	return r
 }
@@ -112,17 +113,19 @@ func (w *WorldManager) GetSceneBlockAoiMap() map[uint32]*alg.AoiManager {
 	return w.sceneBlockAoiMap
 }
 
-func (w *WorldManager) LoadSceneBlockAoiMap() {
+func (w *WorldManager) GetSceneEntityAoiMap() map[uint32]map[int]*alg.AoiManager {
+	return w.sceneEntityAoiMap
+}
+
+func (w *WorldManager) LoadSceneAoi() {
 	w.sceneBlockAoiMap = make(map[uint32]*alg.AoiManager)
+	w.sceneEntityAoiMap = make(map[uint32]map[int]*alg.AoiManager)
 	for _, sceneLuaConfig := range gdconf.GetSceneLuaConfigMap() {
-		// 检查各block大小是否相同 并提取出block大小
+		sceneId := uint32(sceneLuaConfig.Id)
 		minX := int32(math.MaxInt32)
 		maxX := int32(math.MinInt32)
 		minZ := int32(math.MaxInt32)
 		maxZ := int32(math.MinInt32)
-		blockXLen := uint32(0)
-		blockZLen := uint32(0)
-		ok := true
 		for _, blockConfig := range sceneLuaConfig.BlockMap {
 			if int32(blockConfig.BlockRange.Min.X) < minX {
 				minX = int32(blockConfig.BlockRange.Min.X)
@@ -136,61 +139,60 @@ func (w *WorldManager) LoadSceneBlockAoiMap() {
 			if int32(blockConfig.BlockRange.Max.Z) > maxZ {
 				maxZ = int32(blockConfig.BlockRange.Max.Z)
 			}
-			xLen := uint32(int32(blockConfig.BlockRange.Max.X) - int32(blockConfig.BlockRange.Min.X))
-			zLen := uint32(int32(blockConfig.BlockRange.Max.Z) - int32(blockConfig.BlockRange.Min.Z))
-			if blockXLen == 0 {
-				blockXLen = xLen
-			} else {
-				if blockXLen != xLen {
-					logger.Error("scene block x len not same, scene id: %v", sceneLuaConfig.Id)
-					ok = false
-					break
-				}
-			}
-			if blockZLen == 0 {
-				blockZLen = zLen
-			} else {
-				if blockZLen != zLen {
-					logger.Error("scene block z len not same, scene id: %v", sceneLuaConfig.Id)
-					ok = false
-					break
-				}
-			}
 		}
-		if !ok {
-			continue
-		}
-		numX := uint32(0)
-		if blockXLen == 0 {
-			logger.Debug("scene block x len is zero, scene id: %v", sceneLuaConfig.Id)
+		numX := uint32(maxX-minX) / 1024
+		if numX == 0 {
 			numX = 1
-		} else {
-			numX = uint32(maxX-minX) / blockXLen
 		}
-		numZ := uint32(0)
-		if blockZLen == 0 {
-			logger.Debug("scene block z len is zero, scene id: %v", sceneLuaConfig.Id)
+		numZ := uint32(maxZ-minZ) / 1024
+		if numZ == 0 {
 			numZ = 1
-		} else {
-			numZ = uint32(maxZ-minZ) / blockZLen
 		}
-		// 将每个block作为aoi格子 并在格子中放入block拥有的所有group
 		aoiManager := alg.NewAoiManager()
 		aoiManager.SetAoiRange(minX, maxX, -1000, 1000, minZ, maxZ)
 		aoiManager.Init3DRectAoiManager(numX, 1, numZ, true)
+		w.sceneBlockAoiMap[sceneId] = aoiManager
+		w.sceneEntityAoiMap[sceneId] = make(map[int]*alg.AoiManager)
+		for visionLevel, vision := range constant.VISION_LEVEL {
+			numX = uint32(maxX-minX) / vision.GridWidth
+			if numX == 0 {
+				numX = 1
+			}
+			numZ = uint32(maxZ-minZ) / vision.GridWidth
+			if numZ == 0 {
+				numZ = 1
+			}
+			aoiManager = alg.NewAoiManager()
+			aoiManager.SetAoiRange(minX, maxX, -1000, 1000, minZ, maxZ)
+			aoiManager.Init3DRectAoiManager(numX, 1, numZ, true)
+			w.sceneEntityAoiMap[sceneId][visionLevel] = aoiManager
+		}
 		for _, block := range sceneLuaConfig.BlockMap {
+			blockCenter := &gdconf.Vector{X: (block.BlockRange.Min.X + block.BlockRange.Max.X) / 2.0, Y: 0.0, Z: (block.BlockRange.Min.Z + block.BlockRange.Max.Z) / 2.0}
+			w.sceneBlockAoiMap[sceneId].AddObjectToGridByPos(int64(block.Id), block, blockCenter.X, 0.0, blockCenter.Z)
 			for _, group := range block.GroupMap {
-				aoiManager.AddObjectToGridByPos(int64(group.Id), group,
-					group.Pos.X,
-					0.0,
-					group.Pos.Z)
+				for _, monster := range group.MonsterMap {
+					objectId := int64(group.Id)<<32 + int64(monster.ConfigId)
+					w.sceneEntityAoiMap[sceneId][int(monster.VisionLevel)].AddObjectToGridByPos(objectId, monster, monster.Pos.X, 0.0, monster.Pos.Z)
+				}
+				for _, npc := range group.NpcMap {
+					objectId := int64(group.Id)<<32 + int64(npc.ConfigId)
+					w.sceneEntityAoiMap[sceneId][constant.VISION_LEVEL_NORMAL].AddObjectToGridByPos(objectId, npc, npc.Pos.X, 0.0, npc.Pos.Z)
+				}
+				for _, gadget := range group.GadgetMap {
+					objectId := int64(group.Id)<<32 + int64(gadget.ConfigId)
+					w.sceneEntityAoiMap[sceneId][int(gadget.VisionLevel)].AddObjectToGridByPos(objectId, gadget, gadget.Pos.X, 0.0, gadget.Pos.Z)
+				}
+				for _, region := range group.RegionMap {
+					objectId := int64(group.Id)<<32 + int64(region.ConfigId)
+					w.sceneEntityAoiMap[sceneId][constant.VISION_LEVEL_NORMAL].AddObjectToGridByPos(objectId, region, region.Pos.X, 0.0, region.Pos.Z)
+				}
 			}
 		}
-		w.sceneBlockAoiMap[uint32(sceneLuaConfig.Id)] = aoiManager
 	}
 }
 
-func (w *World) IsValidSceneBlockPos(sceneId uint32, x, y, z float32) bool {
+func (w *World) IsValidScenePos(sceneId uint32, x, y, z float32) bool {
 	aoiManager, exist := WORLD_MANAGER.sceneBlockAoiMap[sceneId]
 	if !exist {
 		return false

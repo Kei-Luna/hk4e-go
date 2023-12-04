@@ -146,6 +146,10 @@ func (u *UserManager) UserLoginLoad(userId uint32, clientSeq uint32, gateAppId s
 			u.SaveUserToRedisSync(player)
 			u.ChangeUserDbState(player, model.DbNormal)
 			player.ChatMsgMap = u.LoadUserChatMsgFromDbSync(userId)
+			sceneBlockMap := GAME.LoadSceneBlockSync(player.PlayerId, player.GetSceneId(), player.GetPos())
+			if sceneBlockMap != nil {
+				player.SceneBlockMap = sceneBlockMap
+			}
 		}
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserLoginLoadFromDbFinish,
@@ -214,21 +218,45 @@ func (u *UserManager) UserOfflineSave(player *model.Player, changeGsInfo *Change
 	playerData, err := msgpack.Marshal(player)
 	if err != nil {
 		logger.Error("marshal player data error: %v", err)
-		return
+		playerData = nil
 	}
 	endTime := time.Now().UnixNano()
 	costTime := endTime - startTime
 	logger.Info("offline copy player data cost time: %v ns", costTime)
+	startTime = time.Now().UnixNano()
+	sceneBlockData, err := msgpack.Marshal(player.SceneBlockMap)
+	if err != nil {
+		logger.Error("marshal scene block data error: %v", err)
+		sceneBlockData = nil
+	}
+	endTime = time.Now().UnixNano()
+	costTime = endTime - startTime
+	logger.Info("offline copy scene block data cost time: %v ns", costTime)
 	go func() {
-		playerCopy := new(model.Player)
-		err := msgpack.Unmarshal(playerData, playerCopy)
-		if err != nil {
-			logger.Error("unmarshal player data error: %v", err)
-			return
+		if playerData != nil {
+			playerCopy := new(model.Player)
+			err := msgpack.Unmarshal(playerData, playerCopy)
+			if err != nil {
+				logger.Error("unmarshal player data error: %v", err)
+				playerCopy = nil
+			}
+			if playerCopy != nil {
+				playerCopy.DbState = player.DbState
+				u.SaveUserToDbSync(playerCopy)
+				u.SaveUserToRedisSync(playerCopy)
+			}
 		}
-		playerCopy.DbState = player.DbState
-		u.SaveUserToDbSync(playerCopy)
-		u.SaveUserToRedisSync(playerCopy)
+		if sceneBlockData != nil {
+			sceneBlockMapCopy := make(map[uint32]*model.SceneBlock)
+			err = msgpack.Unmarshal(sceneBlockData, &sceneBlockMapCopy)
+			if err != nil {
+				logger.Error("unmarshal scene block data error: %v", err)
+				sceneBlockMapCopy = nil
+			}
+			if sceneBlockMapCopy != nil {
+				GAME.SaveSceneBlockSync(player.PlayerId, sceneBlockMapCopy)
+			}
+		}
 		LOCAL_EVENT_MANAGER.GetLocalEventChan() <- &LocalEvent{
 			EventId: UserOfflineSaveToDbFinish,
 			Msg: &PlayerOfflineInfo{
