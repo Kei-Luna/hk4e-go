@@ -1,7 +1,9 @@
-# hk4e
+# hk4e-go
 
 [English](README-EN.md)
 ***
+
+#### [hkrpg-go](https://github.com/gucooing/hkrpg-go) 朋友的项目，欢迎支持
 
 ## 简介
 
@@ -11,11 +13,7 @@
 
 #### 项目的客户端协议、配置表主要基于3.2版本修改而来，因此请尽量使用3.2版本的客户端，但不是必须的
 
-[3.2.0国际服客户端下载链接](https://autopatchhk.yuanshen.com/client_app/download/pc_zip/20221024103618_h2e3o3zijYKEqHnQ/GenshinImpact_3.2.0.zip)
-
-#### 客户端需要本地https代理和打破解补丁才能正常使用，详情请参考目前主流私服连接方法
-
-#### 可以使用新版补丁避免https代理，支持自定义密钥和连接任意地址的服务器，感谢[Jx2f/mhypbase](https://github.com/Jx2f/mhypbase)
+#### 客户端需要打破解补丁才能正常使用，详情请参考目前主流私服连接方法，如[Grasscutter](https://github.com/Grasscutters/Grasscutter)
 
 ## 特性
 
@@ -82,7 +80,7 @@ docker-compose up -d # 启动服务器
 
 #### 其它
 
-* 独立运行需要配置环境变量
+* 部分服务器组件以本地原生进程方式启动需要添加以下环境变量
 
 ```shell
 GOLANG_PROTOBUF_REGISTRATION_CONFLICT=ignore
@@ -90,7 +88,7 @@ GOLANG_PROTOBUF_REGISTRATION_CONFLICT=ignore
 
 ## 代码提交规范
 
-* 提交前**必须**进行go fmt(GoLand可在commit窗口的设置里勾选，默认是启用的)
-* 进行全局格式化时，请跳过gdconf目录，这是配置表数据，包含大量的json、lua、txt等文件
-* 单行注释的注释符与注释内容之间需要加一个空格(GoLand可在设置Editor/CodeStyle/Go/Other里打开)
-* 导入包时需要将标准库、本地包、第三方包用空行分开(GoLand可在设置Editor/CodeStyle/Go/Imports里打开)
+#### 欢迎提交PR
+
+* 提交前**必须**格式化你的代码，如运行`go fmt`
+* 进行全局格式化时，请跳过`gdconf/game_data_config`目录，这是配置表数据，包含大量的`json`、`lua`、`txt`等文件

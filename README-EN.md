@@ -1,4 +1,6 @@
-# hk4e
+# hk4e-go
+
+#### [hkrpg-go](https://github.com/gucooing/hkrpg-go) This is my friend's project, welcome to support.
 
 ## What's this
 
@@ -8,11 +10,7 @@
 
 #### The network protocols and configuration tables are mainly from version 3.2, so we suggest you to use a v3.2 client, although it is not necessary
 
-[Download version 3.2.0 from miHoYo](https://autopatchhk.yuanshen.com/client_app/download/pc_zip/20221024103618_h2e3o3zijYKEqHnQ/GenshinImpact_3.2.0.zip)
-
-#### You need to use a https proxy and a patch to use it. Grasscutter is a good example.
-
-#### You can use a newer patch to avoid using https proxies. It supports custom keys and multiple servers. Special thanks to [Jx2f/mhypbase](https://github.com/Jx2f/mhypbase)
+#### You need to use a patch to use it. [Grasscutter](https://github.com/Grasscutters/Grasscutter) is a good example.
 
 ## Features
 
@@ -84,7 +82,7 @@ docker-compose up -d # Launch server
 
 #### Misc
 
-* You need to add the following environment variable to run as standalone server
+* You need to add the following environment variable if you want to run some server component as native process
 
 ```shell
 GOLANG_PROTOBUF_REGISTRATION_CONFLICT=ignore
@@ -92,8 +90,8 @@ GOLANG_PROTOBUF_REGISTRATION_CONFLICT=ignore
 
 ## Code submission specifications
 
-* You **MUST** run `go fmt` before commit
-* Please ignore directory `gdconf` when running global formatting. These are config tables, including lots
-  of `json`, `loa`, `txt` files
-* Add a `space` between `//` and your comments when writing inline comments
-* Split standard packages, local packages and third-party packages with linebreaks
+#### Welcome to create a pull request
+
+* You **MUST** format your code before commit, such as run `go fmt`
+* Please ignore directory `gdconf/game_data_config` when running global formatting. These are config tables, including
+  lots of `json`, `lua`, `txt` files
