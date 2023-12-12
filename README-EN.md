@@ -1,6 +1,6 @@
 # hk4e-go
 
-#### [hkrpg-go](https://github.com/gucooing/hkrpg-go) This is my friend's project, welcome to support.
+#### [hkrpg-go](https://github.com/gucooing/hkrpg-go) This is my friend's project, welcome to support
 
 ## What's this
 
@@ -10,15 +10,14 @@
 
 #### The network protocols and configuration tables are mainly from version 3.2, so we suggest you to use a v3.2 client, although it is not necessary
 
-#### You need to use a patch to use it. [Grasscutter](https://github.com/Grasscutters/Grasscutter) is a good example.
+#### You need to use a patch to use it. [Grasscutter](https://github.com/Grasscutters/Grasscutter) is a good example
 
 ## Features
 
 * Native high-availability cluster architecture. Crashes on any node servers won't affect the whole system. So it is
   highly extendable
-* Player-level non-status game server. Non-lock single thread structure. Easy to develop. And fully-featured player
-  data exchanger(`Memory<->Cache<->Database`), say goodbye to
-* synchronization-blocked database access
+* Player-level non-status game server. Non-lock single thread structure. Easy to develop. And fully-featured player data
+  exchanger(`Memory<->Cache<->Database`), say goodbye to synchronization-blocked database access
 * Grand new cross-server player migration
 * Gateway server side client protocol proxy conversion. Never worry about code changes caused by confusions of message
   number and protocol number
